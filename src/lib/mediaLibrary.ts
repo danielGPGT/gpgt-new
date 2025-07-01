@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { ImageUploadService } from './imageUpload';
 import { gemini } from './gemini';
 
 export interface MediaItem {
@@ -26,6 +25,13 @@ export interface AITaggingResult {
   confidence: number;
 }
 
+export interface UploadedImage {
+  url: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
 // Helper to fetch a remote image URL and convert it to a File object
 async function urlToFile(url: string, filename: string = 'image.png'): Promise<File> {
   const response = await fetch(url);
@@ -35,6 +41,55 @@ async function urlToFile(url: string, filename: string = 'image.png'): Promise<F
 
 export class MediaLibraryService {
   private static BUCKET_NAME = 'media-library';
+  private static MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  private static ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+  /**
+   * Upload an image to the media library bucket
+   */
+  private static async uploadImage(file: File, userId: string): Promise<UploadedImage> {
+    // Validate file
+    if (!this.ALLOWED_TYPES.includes(file.type)) {
+      throw new Error('Invalid file type. Please upload a JPEG, PNG, WebP, or GIF image.');
+    }
+
+    if (file.size > this.MAX_FILE_SIZE) {
+      throw new Error('File too large. Please upload an image smaller than 10MB.');
+    }
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const fileExtension = file.name.split('.').pop();
+    const fileName = `${userId}/${timestamp}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+    
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(this.BUCKET_NAME)
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('Upload error:', error);
+      if (error.message.includes('bucket not found')) {
+        throw new Error('Storage bucket not found. Please set up the media library storage bucket first.');
+      }
+      throw new Error('Failed to upload image. Please try again.');
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(this.BUCKET_NAME)
+      .getPublicUrl(fileName);
+
+    return {
+      url: urlData.publicUrl,
+      path: fileName,
+      size: file.size,
+      type: file.type
+    };
+  }
 
   /**
    * Upload image and generate AI tags
@@ -44,8 +99,8 @@ export class MediaLibraryService {
     userId: string,
   ): Promise<MediaItem> {
     try {
-      // Upload image to storage
-      const uploadedImage = await ImageUploadService.uploadImage(file, userId);
+      // Upload image to storage using the media library bucket
+      const uploadedImage = await this.uploadImage(file, userId);
       
       // Generate AI tags using the actual image file
       const aiResult = await this.generateAITagsWithGemini(file);
@@ -367,7 +422,7 @@ Respond with ONLY valid JSON in this exact format:
       const imageFile = await urlToFile(unsplashImage.urls.regular, `unsplash-${unsplashImage.id}.jpg`);
       
       // Upload image to storage
-      const uploadedImage = await ImageUploadService.uploadImage(imageFile, userId);
+      const uploadedImage = await this.uploadImage(imageFile, userId);
       
       // Generate AI tags using the downloaded image file
       const aiResult = await this.generateAITagsWithGemini(imageFile);

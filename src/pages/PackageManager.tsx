@@ -14,7 +14,13 @@ import {
   Trash2,
   Edit,
   Eye,
-  Globe
+  Globe,
+  Download,
+  Car,
+  Circle,
+  Target,
+  Zap,
+  Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -155,15 +161,15 @@ export default function PackageManager() {
   }) || [];
 
   const getSportIcon = (sportName: string) => {
-    const icons: { [key: string]: string } = {
-      'Formula 1': '🏎️',
-      'Tennis': '🎾',
-      'Football': '⚽',
-      'Basketball': '🏀',
-      'Golf': '⛳',
-      'Rugby': '🏉',
+    const icons: { [key: string]: React.ReactNode } = {
+      'Formula 1': <Car className="h-6 w-6" />,
+      'Tennis': <Circle className="h-6 w-6" />,
+      'Football': <Target className="h-6 w-6" />,
+      'Basketball': <Circle className="h-6 w-6" />,
+      'Golf': <Target className="h-6 w-6" />,
+      'Rugby': <Zap className="h-6 w-6" />,
     };
-    return icons[sportName] || '🏆';
+    return icons[sportName] || <Trophy className="h-6 w-6" />;
   };
 
   const getEventStatus = (event: any) => {
@@ -180,139 +186,162 @@ export default function PackageManager() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[var(--background)] p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-[var(--foreground)]">Formula 1 Travel Packages</h1>
-            <p className="text-[var(--muted-foreground)] mt-1">
-              Manage events, packages, and components
-            </p>
-          </div>
-          <Button onClick={() => setIsEventFormOpen(true)}>
+    return (
+    <div className="mx-auto px-8 pt-0 pb-8 space-y-8">
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--foreground)] mb-2">Package Manager</h1>
+          <p className="text-[var(--muted-foreground)] text-base">
+            Manage Formula 1 events, venues, and travel packages
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)]"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+          <Button 
+            onClick={() => setIsEventFormOpen(true)}
+            className="bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-[var(--primary-foreground)] shadow-sm"
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Event
           </Button>
         </div>
       </div>
 
-      {/* Filters Card */}
-      <Card className="mb-6 bg-[var(--card)] border-[var(--border)]">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Filter className="h-4 w-4" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Search */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-[var(--muted-foreground)]" />
-                <Label className="text-sm font-medium">Search</Label>
-              </div>
-              <Input
-                placeholder="Search events..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-[var(--background)] border-[var(--border)]"
-              />
-            </div>
+     
 
-            {/* Sport Filter */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
+      {/* Main Content with Left Column */}
+      <div className="flex gap-8">
+        {/* Left Column - Filters Card */}
+        <div className="w-80 flex-shrink-0">
+          <Card className="bg-gradient-to-b from-[var(--card)]/95 to-[var(--card)]/20 border-[var(--border)] shadow-sm sticky top-6">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2 text-[var(--foreground)]">
+                <Filter className="h-4 w-4 text-[var(--primary)]" />
+                Filters & Search
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Search */}
+              <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Trophy className="h-4 w-4 text-[var(--muted-foreground)]" />
-                  <Label className="text-sm font-medium">Sports</Label>
+                  <Search className="h-4 w-4 text-[var(--muted-foreground)]" />
+                  <Label className="text-sm font-medium text-[var(--foreground)]">Search Events</Label>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsSportFormOpen(true)}
-                  className="h-6 w-6 p-0"
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </div>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {sports?.map((sport) => (
-                  <div key={sport.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`sport-${sport.id}`}
-                      checked={filters.sport_ids?.includes(sport.id) || false}
-                      onCheckedChange={(checked) => {
-                        setFilters(prev => ({
-                          ...prev,
-                          sport_ids: checked 
-                            ? [...(prev.sport_ids || []), sport.id]
-                            : (prev.sport_ids || []).filter(id => id !== sport.id)
-                        }));
-                      }}
-                    />
-                    <Label 
-                      htmlFor={`sport-${sport.id}`}
-                      className="text-sm cursor-pointer"
-                    >
-                      {sport.name}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Venue Filter */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-[var(--muted-foreground)]" />
-                  <Label className="text-sm font-medium">Venues</Label>
+                <div className="relative">
+                  <Input
+                    placeholder="Search by name, venue, sport..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="bg-[var(--background)] border-[var(--border)] focus:border-[var(--primary)] focus:ring-[var(--primary)]/20"
+                  />
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsVenueFormOpen(true)}
-                  className="h-6 w-6 p-0"
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
               </div>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {venues?.map((venue) => (
-                  <div key={venue.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`venue-${venue.id}`}
-                      checked={filters.venue_ids?.includes(venue.id) || false}
-                      onCheckedChange={(checked) => {
-                        setFilters(prev => ({
-                          ...prev,
-                          venue_ids: checked 
-                            ? [...(prev.venue_ids || []), venue.id]
-                            : (prev.venue_ids || []).filter(id => id !== venue.id)
-                        }));
-                      }}
-                    />
-                    <Label 
-                      htmlFor={`venue-${venue.id}`}
-                      className="text-sm cursor-pointer"
-                    >
-                      {venue.name}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Date Range & Countries */}
-            <div className="space-y-6">
+              <Separator className="bg-[var(--border)]" />
+
+              {/* Sport Filter */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-[var(--primary)]" />
+                    <Label className="text-sm font-medium text-[var(--foreground)]">Sports</Label>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsSportFormOpen(true)}
+                    className="h-7 w-7 p-0 hover:bg-[var(--muted)]"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                  {sports?.map((sport) => (
+                    <div key={sport.id} className="flex items-center space-x-2 hover:bg-[var(--muted)]/50 rounded-md p-1 transition-colors">
+                      <Checkbox
+                        id={`sport-${sport.id}`}
+                        checked={filters.sport_ids?.includes(sport.id) || false}
+                        onCheckedChange={(checked) => {
+                          setFilters(prev => ({
+                            ...prev,
+                            sport_ids: checked 
+                              ? [...(prev.sport_ids || []), sport.id]
+                              : (prev.sport_ids || []).filter(id => id !== sport.id)
+                          }));
+                        }}
+                        className="data-[state=checked]:bg-[var(--primary)] data-[state=checked]:border-[var(--primary)]"
+                      />
+                      <Label 
+                        htmlFor={`sport-${sport.id}`}
+                        className="text-sm cursor-pointer text-[var(--foreground)] hover:text-[var(--primary)] transition-colors"
+                      >
+                        {sport.name}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Separator className="bg-[var(--border)]" />
+
+              {/* Venue Filter */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-[var(--secondary)]" />
+                    <Label className="text-sm font-medium text-[var(--foreground)]">Venues</Label>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsVenueFormOpen(true)}
+                    className="h-7 w-7 p-0 hover:bg-[var(--muted)]"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                  {venues?.map((venue) => (
+                    <div key={venue.id} className="flex items-center space-x-2 hover:bg-[var(--muted)]/50 rounded-md p-1 transition-colors">
+                      <Checkbox
+                        id={`venue-${venue.id}`}
+                        checked={filters.venue_ids?.includes(venue.id) || false}
+                        onCheckedChange={(checked) => {
+                          setFilters(prev => ({
+                            ...prev,
+                            venue_ids: checked 
+                              ? [...(prev.venue_ids || []), venue.id]
+                              : (prev.venue_ids || []).filter(id => id !== venue.id)
+                          }));
+                        }}
+                        className="data-[state=checked]:bg-[var(--secondary)] data-[state=checked]:border-[var(--secondary)]"
+                      />
+                      <Label 
+                        htmlFor={`venue-${venue.id}`}
+                        className="text-sm cursor-pointer text-[var(--foreground)] hover:text-[var(--secondary)] transition-colors"
+                      >
+                        {venue.name}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Separator className="bg-[var(--border)]" />
+
               {/* Date Range */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-[var(--muted-foreground)]" />
-                  <Label className="text-sm font-medium">Date Range</Label>
+                  <Calendar className="h-4 w-4 text-[var(--chart-4)]" />
+                  <Label className="text-sm font-medium text-[var(--foreground)]">Date Range</Label>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Popover>
@@ -320,7 +349,7 @@ export default function PackageManager() {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        className="bg-[var(--background)] border-[var(--border)]"
+                        className="bg-[var(--background)] border-[var(--border)] hover:bg-[var(--muted)] text-[var(--foreground)]"
                       >
                         <Calendar className="h-3 w-3 mr-1" />
                         From
@@ -340,7 +369,7 @@ export default function PackageManager() {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        className="bg-[var(--background)] border-[var(--border)]"
+                        className="bg-[var(--background)] border-[var(--border)] hover:bg-[var(--muted)] text-[var(--foreground)]"
                       >
                         <Calendar className="h-3 w-3 mr-1" />
                         To
@@ -358,20 +387,22 @@ export default function PackageManager() {
                 </div>
               </div>
 
+              <Separator className="bg-[var(--border)]" />
+
               {/* Country Filter */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-[var(--muted-foreground)]" />
-                  <Label className="text-sm font-medium">Countries</Label>
+                  <Globe className="h-4 w-4 text-[var(--chart-2)]" />
+                  <Label className="text-sm font-medium text-[var(--foreground)]">Countries</Label>
                 </div>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
                   {venues?.reduce((countries: string[], venue) => {
                     if (venue.country && !countries.includes(venue.country)) {
                       countries.push(venue.country);
                     }
                     return countries;
                   }, []).map((country) => (
-                    <div key={country} className="flex items-center space-x-2">
+                    <div key={country} className="flex items-center space-x-2 hover:bg-[var(--muted)]/50 rounded-md p-1 transition-colors">
                       <Checkbox
                         id={`country-${country}`}
                         checked={filters.countries?.includes(country) || false}
@@ -383,10 +414,11 @@ export default function PackageManager() {
                               : (prev.countries || []).filter(c => c !== country)
                           }));
                         }}
+                        className="data-[state=checked]:bg-[var(--chart-2)] data-[state=checked]:border-[var(--chart-2)]"
                       />
                       <Label 
                         htmlFor={`country-${country}`}
-                        className="text-sm cursor-pointer"
+                        className="text-sm cursor-pointer text-[var(--foreground)] hover:text-[var(--chart-2)] transition-colors"
                       >
                         {country}
                       </Label>
@@ -394,122 +426,151 @@ export default function PackageManager() {
                   ))}
                 </div>
               </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
 
-            {/* Events Grid */}
-      <div className="space-y-6">
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="animate-pulse">
-                <CardHeader>
-                  <div className="h-4 bg-[var(--muted)] rounded w-3/4"></div>
-                  <div className="h-3 bg-[var(--muted)] rounded w-1/2"></div>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-20 bg-[var(--muted)] rounded"></div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : filteredEvents.length === 0 ? (
-          <div className="text-center py-12">
-            <Package className="h-12 w-12 text-[var(--muted-foreground)] mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-[var(--foreground)] mb-2">No events found</h3>
-            <p className="text-[var(--muted-foreground)] mb-4">
-              Create your first event to get started with package management.
-            </p>
-            <Button onClick={() => setIsEventFormOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Event
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <AnimatePresence>
-              {filteredEvents.map((event) => (
-                <motion.div
-                  key={event.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-2xl">{getSportIcon(event.sport?.name || '')}</span>
-                          <div>
-                            <CardTitle className="text-lg">{event.name}</CardTitle>
-                            <p className="text-sm text-muted-foreground">
-                              {event.sport?.name}
-                            </p>
-                          </div>
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Settings className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => setSelectedEvent(event)}>
-                              <Eye className="h-4 w-4 mr-2" />
-                              View Packages
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setIsPackageFormOpen(true)}>
-                              <Plus className="h-4 w-4 mr-2" />
-                              Add Package
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit Event
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete Event
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+        {/* Right Column - Events Grid */}
+        <div className="flex-1">
+          <div className="space-y-6">
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <Card key={i} className="animate-pulse bg-gradient-to-br from-[var(--card)] to-[var(--card)]/80 border-[var(--border)]">
+                    <CardHeader>
+                      <div className="h-4 bg-[var(--muted)] rounded w-3/4"></div>
+                      <div className="h-3 bg-[var(--muted)] rounded w-1/2"></div>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <MapPin className="h-4 w-4" />
-                          <span>{event.venue?.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>
-                            {event.start_date && format(new Date(event.start_date), 'MMM dd, yyyy')}
-                            {event.end_date && event.end_date !== event.start_date && 
-                              ` - ${format(new Date(event.end_date), 'MMM dd, yyyy')}`
-                            }
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Badge variant={getEventStatus(event).status === 'ongoing' ? 'default' : 'secondary'}>
-                            {getEventStatus(event).label}
-                          </Badge>
-                          <Badge variant="outline">
-                            {packages?.filter(p => p.event_id === event.id).length || 0} packages
-                          </Badge>
-                        </div>
-                      </div>
+                      <div className="h-20 bg-[var(--muted)] rounded"></div>
                     </CardContent>
                   </Card>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                ))}
+              </div>
+            ) : filteredEvents.length === 0 ? (
+              <Card className="bg-gradient-to-b from-[var(--card)]/95 to-[var(--card)]/20 border-[var(--border)] shadow-sm">
+                <CardContent className="text-center py-16">
+                  <div className="h-16 w-16 rounded-full bg-[var(--muted)]/20 flex items-center justify-center mx-auto mb-4">
+                    <Package className="h-8 w-8 text-[var(--muted-foreground)]" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-[var(--foreground)] mb-2">No events found</h3>
+                  <p className="text-[var(--muted-foreground)] mb-6 max-w-md mx-auto">
+                    Create your first event to get started with package management and begin building travel experiences.
+                  </p>
+                  <Button 
+                    onClick={() => setIsEventFormOpen(true)}
+                    className="bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-[var(--primary-foreground)] shadow-sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Event
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <AnimatePresence>
+                  {filteredEvents.map((event) => (
+                    <motion.div
+                      key={event.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Card className="group hover:shadow-lg transition-all duration-200 cursor-pointer bg-gradient-to-br from-[var(--card)] to-[var(--card)]/80 border-[var(--border)] hover:border-[var(--primary)]/30">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-12 w-12 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center group-hover:bg-[var(--primary)]/20 transition-colors">
+                                {getSportIcon(event.sport?.name || '')}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <CardTitle className="text-lg text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors truncate">
+                                  {event.name}
+                                </CardTitle>
+                                <p className="text-sm text-[var(--muted-foreground)] mt-1">
+                                  {event.sport?.name}
+                                </p>
+                              </div>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--muted)]"
+                                >
+                                  <Settings className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-[var(--card)] border-[var(--border)]">
+                                <DropdownMenuLabel className="text-[var(--foreground)]">Actions</DropdownMenuLabel>
+                                <DropdownMenuItem 
+                                  onClick={() => setSelectedEvent(event)}
+                                  className="text-[var(--foreground)] hover:bg-[var(--muted)]"
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Packages
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => setIsPackageFormOpen(true)}
+                                  className="text-[var(--foreground)] hover:bg-[var(--muted)]"
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add Package
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="bg-[var(--border)]" />
+                                <DropdownMenuItem className="text-[var(--foreground)] hover:bg-[var(--muted)]">
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit Event
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Event
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+                              <MapPin className="h-4 w-4 text-[var(--secondary)]" />
+                              <span className="truncate">{event.venue?.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+                              <Calendar className="h-4 w-4 text-[var(--chart-4)]" />
+                              <span>
+                                {event.start_date && format(new Date(event.start_date), 'MMM dd, yyyy')}
+                                {event.end_date && event.end_date !== event.start_date && 
+                                  ` - ${format(new Date(event.end_date), 'MMM dd, yyyy')}`
+                                }
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between pt-2">
+                              <Badge 
+                                variant={getEventStatus(event).status === 'ongoing' ? 'default' : 'secondary'}
+                                className="bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20"
+                              >
+                                {getEventStatus(event).label}
+                              </Badge>
+                              <Badge 
+                                variant="outline" 
+                                className="border-[var(--border)] text-[var(--muted-foreground)]"
+                              >
+                                {packages?.filter(p => p.event_id === event.id).length || 0} packages
+                              </Badge>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Package Details Sheet */}

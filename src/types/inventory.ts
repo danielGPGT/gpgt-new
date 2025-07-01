@@ -5,6 +5,7 @@ export type Event = Database['public']['Tables']['events']['Row'];
 export type Sport = Database['public']['Tables']['sports']['Row'];
 export type Venue = Database['public']['Tables']['venues']['Row'];
 export type Ticket = Database['public']['Tables']['tickets']['Row'];
+export type TicketCategory = Database['public']['Tables']['ticket_categories']['Row'];
 export type HotelRoom = Database['public']['Tables']['hotel_rooms']['Row'];
 export type CircuitTransfer = Database['public']['Tables']['circuit_transfers']['Row'];
 export type AirportTransfer = Database['public']['Tables']['airport_transfers']['Row'];
@@ -19,6 +20,7 @@ export type EventInsert = Database['public']['Tables']['events']['Insert'];
 export type SportInsert = Database['public']['Tables']['sports']['Insert'];
 export type VenueInsert = Database['public']['Tables']['venues']['Insert'];
 export type TicketInsert = Database['public']['Tables']['tickets']['Insert'];
+export type TicketCategoryInsert = Database['public']['Tables']['ticket_categories']['Insert'];
 export type HotelRoomInsert = Database['public']['Tables']['hotel_rooms']['Insert'];
 export type CircuitTransferInsert = Database['public']['Tables']['circuit_transfers']['Insert'];
 export type AirportTransferInsert = Database['public']['Tables']['airport_transfers']['Insert'];
@@ -33,6 +35,7 @@ export type EventUpdate = Database['public']['Tables']['events']['Update'];
 export type SportUpdate = Database['public']['Tables']['sports']['Update'];
 export type VenueUpdate = Database['public']['Tables']['venues']['Update'];
 export type TicketUpdate = Database['public']['Tables']['tickets']['Update'];
+export type TicketCategoryUpdate = Database['public']['Tables']['ticket_categories']['Update'];
 export type HotelRoomUpdate = Database['public']['Tables']['hotel_rooms']['Update'];
 export type CircuitTransferUpdate = Database['public']['Tables']['circuit_transfers']['Update'];
 export type AirportTransferUpdate = Database['public']['Tables']['airport_transfers']['Update'];
@@ -410,6 +413,4 @@ export interface StandardHotelResult {
   tags: string[];
 }
 
-// TODO: Add Event and Flight types
-// export interface Event { ... }
-// export interface Flight { ... } 
+ 

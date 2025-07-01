@@ -53,6 +53,9 @@ import type {
   ComponentSummary,
   BulkUpdateData,
   BulkDeleteData,
+  TicketCategory,
+  TicketCategoryInsert,
+  TicketCategoryUpdate,
 } from '@/types/inventory';
 
 export class InventoryService {
@@ -184,6 +187,25 @@ export class InventoryService {
     return data;
   }
 
+  static async updateSport(id: string, updates: SportUpdate): Promise<Sport> {
+    const { data, error } = await supabase
+      .from('sports')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(`Failed to update sport: ${error.message}`);
+    return data;
+  }
+
+  static async deleteSport(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('sports')
+      .delete()
+      .eq('id', id);
+    if (error) throw new Error(`Failed to delete sport: ${error.message}`);
+  }
+
   // Venues
   static async getVenues(): Promise<Venue[]> {
     const { data, error } = await supabase
@@ -209,6 +231,17 @@ export class InventoryService {
       throw new Error(`Failed to create venue: ${error.message}`);
     }
 
+    return data;
+  }
+
+  static async updateVenue(id: string, updates: VenueUpdate): Promise<Venue> {
+    const { data, error } = await supabase
+      .from('venues')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(`Failed to update venue: ${error.message}`);
     return data;
   }
 
@@ -331,6 +364,51 @@ export class InventoryService {
     if (error) {
       throw new Error(`Failed to delete ticket: ${error.message}`);
     }
+  }
+
+  // Ticket Categories
+  static async getTicketCategories(filters?: { venue_id?: string; search?: string }): Promise<TicketCategory[]> {
+    let query = supabase
+      .from('ticket_categories')
+      .select('*');
+    if (filters?.venue_id) {
+      query = query.eq('venue_id', filters.venue_id);
+    }
+    if (filters?.search) {
+      query = query.ilike('category_name', `%${filters.search}%`);
+    }
+    const { data, error } = await query.order('category_name');
+    if (error) throw new Error(`Failed to fetch ticket categories: ${error.message}`);
+    return data || [];
+  }
+
+  static async createTicketCategory(category: TicketCategoryInsert): Promise<TicketCategory> {
+    const { data, error } = await supabase
+      .from('ticket_categories')
+      .insert(category)
+      .select()
+      .single();
+    if (error) throw new Error(`Failed to create ticket category: ${error.message}`);
+    return data;
+  }
+
+  static async updateTicketCategory(id: string, updates: TicketCategoryUpdate): Promise<TicketCategory> {
+    const { data, error } = await supabase
+      .from('ticket_categories')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(`Failed to update ticket category: ${error.message}`);
+    return data;
+  }
+
+  static async deleteTicketCategory(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('ticket_categories')
+      .delete()
+      .eq('id', id);
+    if (error) throw new Error(`Failed to delete ticket category: ${error.message}`);
   }
 
   // Hotel Rooms

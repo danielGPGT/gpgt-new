@@ -10,12 +10,14 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 // Import inventory components (we'll create these next)
-import { TicketsTable } from '@/components/inventory/TicketsTable';
+import { TicketsManager } from '@/components/inventory/TicketsManager';
 import { HotelRoomsTable } from '@/components/inventory/HotelRoomsTable';
 import { CircuitTransfersTable } from '@/components/inventory/CircuitTransfersTable';
 import { AirportTransfersTable } from '@/components/inventory/AirportTransfersTable';
 import { FlightsTable } from '@/components/inventory/FlightsTable';
 import { LoungePassesTable } from '@/components/inventory/LoungePassesTable';
+import { SportsEventsManager } from '@/components/inventory/SportsEventsManager';
+import { VenuesManager } from '@/components/inventory/VenuesManager';
 
 export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -41,7 +43,7 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="mx-auto py-6 space-y-6 px-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -60,7 +62,9 @@ export default function InventoryPage() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-10">
+          <TabsTrigger value="sports-events">Sports & Events</TabsTrigger>
+          <TabsTrigger value="venues">Venues & Ticket Categories</TabsTrigger>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tickets">
             <Ticket className="h-4 w-4 mr-2" />
@@ -91,6 +95,14 @@ export default function InventoryPage() {
             Packages
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="sports-events">
+          <SportsEventsManager />
+        </TabsContent>
+
+        <TabsContent value="venues">
+          <VenuesManager />
+        </TabsContent>
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -235,7 +247,7 @@ export default function InventoryPage() {
         </TabsContent>
 
         <TabsContent value="tickets">
-          <TicketsTable />
+          <TicketsManager />
         </TabsContent>
 
         <TabsContent value="hotels">

@@ -46,6 +46,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 import { InventoryService } from '@/lib/inventoryService';
 import type { TicketWithEvent, TicketFormData, TicketFilters } from '@/types/inventory';
+import { useRole } from '@/lib/RoleContext';
 
 export function TicketsTable() {
   const queryClient = useQueryClient();
@@ -54,6 +55,7 @@ export function TicketsTable() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<TicketWithEvent | null>(null);
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
+  const { role } = useRole(); // Role-based UI
 
   // Fetch tickets
   const { data: tickets, isLoading } = useQuery({
@@ -185,7 +187,8 @@ export function TicketsTable() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {selectedTickets.length > 0 && (
+          {/* Only show bulk delete for operations */}
+          {role === 'operations' && selectedTickets.length > 0 && (
             <Button
               variant="destructive"
               size="sm"
@@ -195,28 +198,32 @@ export function TicketsTable() {
               Delete Selected ({selectedTickets.length})
             </Button>
           )}
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Ticket
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create New Ticket</DialogTitle>
-                <DialogDescription>
-                  Add a new ticket to the inventory
-                </DialogDescription>
-              </DialogHeader>
-              <TicketForm
-                events={events || []}
-                onSubmit={handleCreateTicket}
-                onCancel={() => setIsCreateDialogOpen(false)}
-                isLoading={createTicketMutation.isPending}
-              />
-            </DialogContent>
-          </Dialog>
+          {/* Only show Add Ticket for operations */}
+          {role === 'operations' && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Ticket
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Create New Ticket</DialogTitle>
+                  <DialogDescription>
+                    Add a new ticket to the inventory
+                  </DialogDescription>
+                </DialogHeader>
+                <TicketForm
+                  events={events || []}
+                  onSubmit={handleCreateTicket}
+                  onCancel={() => setIsCreateDialogOpen(false)}
+                  isLoading={createTicketMutation.isPending}
+                  role={role}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
@@ -307,18 +314,21 @@ export function TicketsTable() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={selectedTickets.length === filteredTickets.length && filteredTickets.length > 0}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedTickets(filteredTickets.map(t => t.id));
-                      } else {
-                        setSelectedTickets([]);
-                      }
-                    }}
-                  />
-                </TableHead>
+                {/* Only show checkbox for operations */}
+                {role === 'operations' && (
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={selectedTickets.length === filteredTickets.length && filteredTickets.length > 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedTickets(filteredTickets.map(t => t.id));
+                        } else {
+                          setSelectedTickets([]);
+                        }
+                      }}
+                    />
+                  </TableHead>
+                )}
                 <TableHead>Event</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Quantity</TableHead>
@@ -326,37 +336,41 @@ export function TicketsTable() {
                 <TableHead>Status</TableHead>
                 <TableHead>Order Status</TableHead>
                 <TableHead>Supplier</TableHead>
-                <TableHead className="w-12">Actions</TableHead>
+                {/* Only show actions for operations */}
+                {role === 'operations' && <TableHead className="w-12">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
+                  <TableCell colSpan={role === 'operations' ? 9 : 8} className="text-center py-8">
                     Loading tickets...
                   </TableCell>
                 </TableRow>
               ) : filteredTickets.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
+                  <TableCell colSpan={role === 'operations' ? 9 : 8} className="text-center py-8">
                     No tickets found
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredTickets.map((ticket) => (
                   <TableRow key={ticket.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedTickets.includes(ticket.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedTickets(prev => [...prev, ticket.id]);
-                          } else {
-                            setSelectedTickets(prev => prev.filter(id => id !== ticket.id));
-                          }
-                        }}
-                      />
-                    </TableCell>
+                    {/* Only show checkbox for operations */}
+                    {role === 'operations' && (
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedTickets.includes(ticket.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedTickets(prev => [...prev, ticket.id]);
+                            } else {
+                              setSelectedTickets(prev => prev.filter(id => id !== ticket.id));
+                            }
+                          }}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <div>
                         <div className="font-medium">{ticket.event?.name}</div>
@@ -398,34 +412,37 @@ export function TicketsTable() {
                         {ticket.supplier || '-'}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => setEditingTicket(ticket)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteTicket(ticket.id)}
-                            className="text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {/* Only show actions for operations */}
+                    {role === 'operations' && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => setEditingTicket(ticket)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteTicket(ticket.id)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
@@ -435,7 +452,7 @@ export function TicketsTable() {
       </Card>
 
       {/* Edit Dialog */}
-      {editingTicket && (
+      {editingTicket && role === 'operations' && (
         <Dialog open={!!editingTicket} onOpenChange={() => setEditingTicket(null)}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -450,6 +467,7 @@ export function TicketsTable() {
               onSubmit={(data) => handleUpdateTicket(editingTicket.id, data)}
               onCancel={() => setEditingTicket(null)}
               isLoading={updateTicketMutation.isPending}
+              role={role}
             />
           </DialogContent>
         </Dialog>
@@ -465,9 +483,10 @@ interface TicketFormProps {
   onSubmit: (data: TicketFormData) => void;
   onCancel: () => void;
   isLoading: boolean;
+  role: 'operations' | 'sales';
 }
 
-function TicketForm({ events, ticket, onSubmit, onCancel, isLoading }: TicketFormProps) {
+function TicketForm({ events, ticket, onSubmit, onCancel, isLoading, role }: TicketFormProps) {
   const [formData, setFormData] = useState<TicketFormData>({
     event_id: ticket?.event_id || '',
     ticket_category_id: ticket?.ticket_category_id || '',
@@ -492,6 +511,7 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading }: TicketFor
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (role === 'sales') return; // Prevent submit for sales
     onSubmit(formData);
   };
 
@@ -503,6 +523,7 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading }: TicketFor
           <Select
             value={formData.event_id}
             onValueChange={(value) => setFormData(prev => ({ ...prev, event_id: value }))}
+            disabled={role === 'sales'}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select event" />
@@ -524,6 +545,7 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading }: TicketFor
             value={formData.ticket_type}
             onChange={(e) => setFormData(prev => ({ ...prev, ticket_type: e.target.value }))}
             placeholder="e.g., VIP, General Admission"
+            disabled={role === 'sales'}
           />
         </div>
 
@@ -535,49 +557,77 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading }: TicketFor
             value={formData.quantity_total}
             onChange={(e) => setFormData(prev => ({ ...prev, quantity_total: parseInt(e.target.value) }))}
             min="0"
+            disabled={role === 'sales'}
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="price">Base Price *</Label>
-          <Input
-            id="price"
-            type="number"
-            step="0.01"
-            value={formData.price}
-            onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) }))}
-            min="0"
-          />
-        </div>
+        {/* Hide/disable price, markup, supplier, supplier_ref for sales */}
+        {role === 'operations' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="price">Base Price *</Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                value={formData.price}
+                onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) }))}
+                min="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="markup_percent">Markup %</Label>
+              <Input
+                id="markup_percent"
+                type="number"
+                step="0.01"
+                value={formData.markup_percent}
+                onChange={(e) => setFormData(prev => ({ ...prev, markup_percent: parseFloat(e.target.value) }))}
+                min="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="supplier">Supplier</Label>
+              <Input
+                id="supplier"
+                value={formData.supplier}
+                onChange={(e) => setFormData(prev => ({ ...prev, supplier: e.target.value }))}
+                placeholder="Supplier name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="supplier_ref">Supplier Reference</Label>
+              <Input
+                id="supplier_ref"
+                value={formData.supplier_ref}
+                onChange={(e) => setFormData(prev => ({ ...prev, supplier_ref: e.target.value }))}
+                placeholder="Reference number"
+              />
+            </div>
+          </>
+        )}
 
-        <div className="space-y-2">
-          <Label htmlFor="markup_percent">Markup %</Label>
-          <Input
-            id="markup_percent"
-            type="number"
-            step="0.01"
-            value={formData.markup_percent}
-            onChange={(e) => setFormData(prev => ({ ...prev, markup_percent: parseFloat(e.target.value) }))}
-            min="0"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="currency">Currency</Label>
-          <Select
-            value={formData.currency}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="EUR">EUR</SelectItem>
-              <SelectItem value="USD">USD</SelectItem>
-              <SelectItem value="GBP">GBP</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {/* For sales, show these fields as read-only text if needed */}
+        {role === 'sales' && (
+          <>
+            <div className="space-y-2">
+              <Label>Base Price</Label>
+              <div className="p-2 border rounded bg-muted-foreground/5">{formData.price}</div>
+            </div>
+            <div className="space-y-2">
+              <Label>Markup %</Label>
+              <div className="p-2 border rounded bg-muted-foreground/5">{formData.markup_percent}</div>
+            </div>
+            <div className="space-y-2">
+              <Label>Supplier</Label>
+              <div className="p-2 border rounded bg-muted-foreground/5">{formData.supplier}</div>
+            </div>
+            <div className="space-y-2">
+              <Label>Supplier Reference</Label>
+              <div className="p-2 border rounded bg-muted-foreground/5">{formData.supplier_ref}</div>
+            </div>
+          </>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="delivery_method">Delivery Method</Label>
@@ -586,26 +636,7 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading }: TicketFor
             value={formData.delivery_method}
             onChange={(e) => setFormData(prev => ({ ...prev, delivery_method: e.target.value }))}
             placeholder="e.g., Email, Mobile, Physical"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="supplier">Supplier</Label>
-          <Input
-            id="supplier"
-            value={formData.supplier}
-            onChange={(e) => setFormData(prev => ({ ...prev, supplier: e.target.value }))}
-            placeholder="Supplier name"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="supplier_ref">Supplier Reference</Label>
-          <Input
-            id="supplier_ref"
-            value={formData.supplier_ref}
-            onChange={(e) => setFormData(prev => ({ ...prev, supplier_ref: e.target.value }))}
-            placeholder="Reference number"
+            disabled={role === 'sales'}
           />
         </div>
       </div>
@@ -615,6 +646,7 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading }: TicketFor
           id="refundable"
           checked={formData.refundable}
           onCheckedChange={(checked) => setFormData(prev => ({ ...prev, refundable: !!checked }))}
+          disabled={role === 'sales'}
         />
         <Label htmlFor="refundable">Refundable</Label>
       </div>
@@ -624,6 +656,7 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading }: TicketFor
           id="resellable"
           checked={formData.resellable}
           onCheckedChange={(checked) => setFormData(prev => ({ ...prev, resellable: !!checked }))}
+          disabled={role === 'sales'}
         />
         <Label htmlFor="resellable">Resellable</Label>
       </div>
@@ -632,9 +665,12 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading }: TicketFor
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Saving...' : ticket ? 'Update Ticket' : 'Create Ticket'}
-        </Button>
+        {/* Only show submit for operations */}
+        {role === 'operations' && (
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? 'Saving...' : ticket ? 'Update Ticket' : 'Create Ticket'}
+          </Button>
+        )}
       </DialogFooter>
     </form>
   );

@@ -23,6 +23,7 @@ import {
 
 import { PackageManagerService } from '@/lib/packageManagerService';
 import type { Event, EventInsert, EventUpdate, Sport, Venue } from '@/lib/packageManagerService';
+import { cleanEventUpdate } from '@/components/inventory/SportsEventsManager';
 
 interface EventFormProps {
   open: boolean;
@@ -70,11 +71,11 @@ export function EventForm({ open, onOpenChange, event, sports, venues }: EventFo
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+    const cleaned = cleanEventUpdate(formData);
     if (event) {
-      updateEventMutation.mutate({ id: event.id, data: formData });
+      updateEventMutation.mutate({ id: event.id, data: cleaned });
     } else {
-      createEventMutation.mutate(formData);
+      createEventMutation.mutate(cleaned);
     }
   };
 

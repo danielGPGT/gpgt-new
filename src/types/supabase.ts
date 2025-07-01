@@ -250,6 +250,10 @@ export interface Database {
           markup_percent: number
           price_with_markup: number
           currency: string
+          supplier_currency: string
+          supplier_price: number | null
+          price_gbp: number | null
+          ticket_days: string | null
           delivery_method: string | null
           ticket_format: string | null
           ticket_type: string | null
@@ -282,6 +286,9 @@ export interface Database {
           price: number
           markup_percent?: number
           currency?: string
+          supplier_currency?: string
+          supplier_price?: number | null
+          ticket_days?: string | null
           delivery_method?: string | null
           ticket_format?: string | null
           ticket_type?: string | null
@@ -314,6 +321,9 @@ export interface Database {
           price?: number
           markup_percent?: number
           currency?: string
+          supplier_currency?: string
+          supplier_price?: number | null
+          ticket_days?: string | null
           delivery_method?: string | null
           ticket_format?: string | null
           ticket_type?: string | null
@@ -724,6 +734,44 @@ export interface Database {
           is_active?: boolean
           created_at?: string
           updated_at?: string
+        }
+      }
+      ticket_categories: {
+        Row: {
+          id: string
+          category_name: string
+          venue_id: string | null
+          sport_type: string | null
+          category_type: string | null
+          description: Json | null
+          options: Json | null
+          ticket_delivery_days: number | null
+          media_files: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          category_name: string
+          venue_id?: string | null
+          sport_type?: string | null
+          category_type?: string | null
+          description?: Json | null
+          options?: Json | null
+          ticket_delivery_days?: number | null
+          media_files?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          category_name?: string
+          venue_id?: string | null
+          sport_type?: string | null
+          category_type?: string | null
+          description?: Json | null
+          options?: Json | null
+          ticket_delivery_days?: number | null
+          media_files?: Json | null
+          created_at?: string
         }
       }
       packages: {

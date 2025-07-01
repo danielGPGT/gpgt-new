@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { WandSparkles, Instagram, Github, Linkedin, User, Settings, LogOut, ChevronDown, Sun, Moon, Menu, X, Calendar, Clock, Phone, Mail, TrendingUp, Star, Search as SearchIcon, ChevronLeft, ChevronRight, PanelLeft, Crown, HelpCircle, Bell, Plus } from 'lucide-react';
+import { WandSparkles, Instagram, Github, Linkedin, User, Settings, LogOut, ChevronDown, Sun, Moon, Menu, X, Calendar, Clock, Phone, Mail, TrendingUp, Star, Search as SearchIcon, ChevronLeft, ChevronRight, PanelLeft, Crown, HelpCircle, Bell, Plus, ShieldCheck, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthProvider';
 import { supabase } from '@/lib/supabase';
@@ -16,9 +16,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import LuxeLogo from '@/assets/imgs/logo.svg';
-import { useTier } from '@/hooks/useTier';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useRole } from '@/lib/RoleContext';
 
 interface HeaderProps {
   showNavigation?: boolean;
@@ -31,9 +31,7 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
   const { theme, setTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const { currentPlan } = useTier();
-
-  const planLabel = currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1);
+  const { role, setRole, loading: roleLoading } = useRole();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -65,9 +63,8 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
             <span className="sr-only">Search</span>
           </Button>
         </div>
-        {/* Plan badge (desktop only) */}
+        {/* Role badge and switcher (desktop only) */}
         <div className="hidden sm:flex items-center gap-2">
-          {/* New icons next to plan */}
           <Button variant="ghost" size="icon" className="ml-1">
             <HelpCircle className="h-5 w-5" />
             <span className="sr-only">Help</span>
@@ -102,8 +99,32 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
             </TooltipTrigger>
             <TooltipContent variant="default">+ New Proposal</TooltipContent>
           </Tooltip>
+          {/* Role Switcher */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="px-3 py-1 shadow-sm font-semibold uppercase gap-1 flex items-center">
+                {role === 'operations' ? (
+                  <ShieldCheck className="w-4 h-4 text-green-600" />
+                ) : (
+                  <Briefcase className="w-4 h-4 text-blue-600" />
+                )}
+                {roleLoading ? 'Loading...' : role === 'operations' ? 'Operations' : 'Sales'}
+                <ChevronDown className="w-4 h-4 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Switch Role (Demo)</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setRole('operations')}>
+                <ShieldCheck className="w-4 h-4 mr-2 text-green-600" /> Operations (Full CRUD)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setRole('sales')}>
+                <Briefcase className="w-4 h-4 mr-2 text-blue-600" /> Sales (Read Only)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-                {/* Divider (desktop only) */}
+        {/* Divider (desktop only) */}
         <div className="hidden sm:block h-8 w-px bg-border mx-3" />
         {/* Right side actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -186,13 +207,6 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
               </Button>
             </div>
           )}
-                              <Badge variant="outline" className="bg-[] text-primary px-3 py-1 shadow-sm font-semibold uppercase gap-1 flex items-center">
-            {(planLabel !== 'Free' && planLabel !== 'Pro') && (
-              <Crown className="w-3.5 h-3.5 text-yellow-400" />
-            )}
-            {planLabel}
-            <span className="text-xs text-muted-foreground">plan</span>
-          </Badge>
         </div>
         {/* Mobile menu button - only show if navigation is enabled */}
         {showNavigation && (

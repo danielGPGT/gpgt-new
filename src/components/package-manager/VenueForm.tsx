@@ -14,9 +14,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog as ModalDialog,
+  DialogContent as ModalDialogContent,
+  DialogHeader as ModalDialogHeader,
+  DialogTitle as ModalDialogTitle,
+  DialogFooter as ModalDialogFooter,
+  DialogClose as ModalDialogClose,
+} from '@/components/ui/dialog';
 
 import { PackageManagerService } from '@/lib/packageManagerService';
 import type { Venue, VenueInsert, VenueUpdate } from '@/lib/packageManagerService';
+import MediaLibrarySelector from '../MediaLibrarySelector';
+import type { MediaItem } from '@/lib/mediaLibrary';
 
 interface VenueFormProps {
   open: boolean;
@@ -37,7 +47,10 @@ export function VenueForm({ open, onOpenChange, venue }: VenueFormProps) {
     description: venue?.description || '',
     map_url: venue?.map_url || '',
     website: venue?.website || '',
+    images: venue?.images || [],
   });
+  const [showImageSelector, setShowImageSelector] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const createVenueMutation = useMutation({
     mutationFn: (data: VenueInsert) => PackageManagerService.createVenue(data),
@@ -64,17 +77,49 @@ export function VenueForm({ open, onOpenChange, venue }: VenueFormProps) {
     },
   });
 
+  const handleDelete = async () => {
+    if (!venue) return;
+    if (!window.confirm('Are you sure you want to delete this venue? This action cannot be undone.')) return;
+    setDeleteLoading(true);
+    try {
+      await PackageManagerService.deleteVenue(venue.id);
+      queryClient.invalidateQueries({ queryKey: ['venues'] });
+      toast.success('Venue deleted successfully');
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error(`Failed to delete venue: ${error.message}`);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+    // Always send images as array of objects (id, image_url, thumbnail_url)
+    const images = (formData.images || []).map((img: any) => ({
+      id: img.id,
+      image_url: img.image_url,
+      thumbnail_url: img.thumbnail_url,
+      description: img.description,
+    }));
+    const payload = { ...formData, images };
     if (venue) {
-      updateVenueMutation.mutate({ id: venue.id, data: formData });
+      updateVenueMutation.mutate({ id: venue.id, data: payload });
     } else {
-      createVenueMutation.mutate(formData);
+      createVenueMutation.mutate(payload);
     }
   };
 
   const isLoading = createVenueMutation.isPending || updateVenueMutation.isPending;
+
+  // Handle image selection from media library
+  const handleImagesChange = (selected: MediaItem[]) => {
+    setFormData(prev => ({ ...prev, images: selected }));
+    setShowImageSelector(false);
+  };
+  const handleRemoveImage = (id: string) => {
+    setFormData(prev => ({ ...prev, images: (prev.images || []).filter((img: any) => img.id !== id) }));
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -202,10 +247,74 @@ export function VenueForm({ open, onOpenChange, venue }: VenueFormProps) {
             />
           </div>
 
+          {/* Images Section */}
+          <div className="space-y-2">
+            <Label>Venue Images</Label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {(formData.images || []).length > 0 ? (
+                (formData.images as MediaItem[]).map((img) => (
+                  <div key={img.id} className="relative group w-24 h-24 border rounded overflow-hidden">
+                    <img src={img.thumbnail_url || img.image_url} alt={img.description || ''} className="object-cover w-full h-full" />
+                    <button
+                      type="button"
+                      className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                      onClick={() => handleRemoveImage(img.id)}
+                      aria-label="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <span className="text-muted-foreground text-sm">No images selected</span>
+              )}
+            </div>
+            <Button type="button" variant="outline" onClick={() => setShowImageSelector(true)}>
+              {formData.images && formData.images.length > 0 ? 'Edit Images' : 'Select Images'}
+            </Button>
+            <ModalDialog open={showImageSelector} onOpenChange={setShowImageSelector}>
+              <ModalDialogContent className="!max-w-6xl">
+                <ModalDialogHeader>
+                  <ModalDialogTitle>Select Venue Images</ModalDialogTitle>
+                </ModalDialogHeader>
+                <MediaLibrarySelector
+                  multiple
+                  selectedItems={formData.images || []}
+                  onSelect={(item) => {
+                    let imgs = Array.isArray(formData.images) ? [...formData.images] : [];
+                    const exists = imgs.find((i: any) => i.id === item.id);
+                    if (exists) {
+                      imgs = imgs.filter((i: any) => i.id !== item.id);
+                    } else {
+                      imgs.push(item);
+                    }
+                    setFormData(prev => ({ ...prev, images: imgs }));
+                  }}
+                  maxItems={8}
+                />
+                <ModalDialogFooter>
+                  <Button type="button" onClick={() => setShowImageSelector(false)}>
+                    Done
+                  </Button>
+                </ModalDialogFooter>
+              </ModalDialogContent>
+            </ModalDialog>
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
+            {venue && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete'}
+              </Button>
+            )}
             <Button type="submit" disabled={isLoading}>
               {isLoading ? 'Saving...' : venue ? 'Update Venue' : 'Create Venue'}
             </Button>

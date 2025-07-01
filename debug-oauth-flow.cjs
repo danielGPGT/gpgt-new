@@ -1,0 +1,37 @@
+console.log('🔍 Debugging HubSpot OAuth Flow Issues');
+console.log('');
+
+console.log('📋 Common causes of BAD_AUTH_CODE error:');
+console.log('1. Authorization code expired (expires in ~10 minutes)');
+console.log('2. Authorization code used more than once');
+console.log('3. Redirect URI mismatch between OAuth URL and HubSpot app config');
+console.log('4. Client ID/Secret mismatch');
+console.log('');
+
+console.log('🔧 Troubleshooting steps:');
+console.log('');
+console.log('1. Check your HubSpot app redirect URI configuration:');
+console.log('   - Go to: https://developers.hubspot.com/');
+console.log('   - Find your app → Auth → OAuth');
+console.log('   - Verify the redirect URI is exactly: http://localhost:5173/auth/callback');
+console.log('');
+console.log('2. Clear browser cache and try again:');
+console.log('   - Clear all browser cache and cookies');
+console.log('   - Try the OAuth flow in an incognito/private window');
+console.log('');
+console.log('3. Check the OAuth URL being generated:');
+console.log('   - The redirect URI in the OAuth URL must match exactly');
+console.log('   - No extra spaces, different protocols, or port numbers');
+console.log('');
+console.log('4. Try the OAuth flow immediately after clicking "Connect":');
+console.log('   - Don\'t wait too long between clicking and completing authorization');
+console.log('   - Authorization codes expire quickly');
+console.log('');
+console.log('5. Check Edge Function logs:');
+console.log('   - Go to: https://supabase.com/dashboard/project/borzlwjczgskbcxkxxei/functions');
+console.log('   - Click on "hubspot-token" function');
+console.log('   - Check the "Logs" tab for detailed error information');
+console.log('');
+console.log('🎯 Most likely issue: Redirect URI mismatch');
+console.log('Make sure your HubSpot app has exactly this redirect URI configured:');
+console.log('http://localhost:5173/auth/callback'); 

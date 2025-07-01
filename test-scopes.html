@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HubSpot OAuth Scope Testing</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-link { display: block; margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; text-decoration: none; color: #333; }
+        .test-link:hover { background-color: #f0f0f0; }
+        .scope { font-weight: bold; color: #0066cc; }
+        .url { font-size: 12px; color: #666; word-break: break-all; }
+        .instructions { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 HubSpot OAuth Scope Testing</h1>
+    
+    <div class="instructions">
+        <h3>📝 Instructions:</h3>
+        <ol>
+            <li>Click each link below to test different scope configurations</li>
+            <li>If you get a scope mismatch error, try the next one</li>
+            <li>The one that works without errors is the correct configuration</li>
+            <li>Update your HubSpot app scopes to match the working combination</li>
+        </ol>
+    </div>
+
+    <h2>Test Different Scope Combinations:</h2>
+
+    <a href="https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=oauth&state=test1" target="_blank" class="test-link">
+        <div class="scope">1. oauth</div>
+        <div class="url">https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=oauth&state=test1</div>
+    </a>
+
+    <a href="https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=contacts&state=test2" target="_blank" class="test-link">
+        <div class="scope">2. contacts</div>
+        <div class="url">https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=contacts&state=test2</div>
+    </a>
+
+    <a href="https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=crm.objects.contacts.read&state=test3" target="_blank" class="test-link">
+        <div class="scope">3. crm.objects.contacts.read</div>
+        <div class="url">https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=crm.objects.contacts.read&state=test3</div>
+    </a>
+
+    <a href="https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=crm.objects.contacts.read+crm.objects.contacts.write&state=test4" target="_blank" class="test-link">
+        <div class="scope">4. crm.objects.contacts.read crm.objects.contacts.write</div>
+        <div class="url">https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=crm.objects.contacts.read+crm.objects.contacts.write&state=test4</div>
+    </a>
+
+    <a href="https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=crm.objects.contacts.read+crm.objects.contacts.write+crm.objects.companies.read+crm.objects.companies.write&state=test5" target="_blank" class="test-link">
+        <div class="scope">5. crm.objects.contacts.read crm.objects.contacts.write crm.objects.companies.read crm.objects.companies.write</div>
+        <div class="url">https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=crm.objects.contacts.read+crm.objects.contacts.write+crm.objects.companies.read+crm.objects.companies.write&state=test5</div>
+    </a>
+
+    <a href="https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=crm.objects.contacts.read+crm.objects.contacts.write+crm.objects.companies.read+crm.objects.companies.write+crm.objects.deals.read+crm.objects.deals.write&state=test6" target="_blank" class="test-link">
+        <div class="scope">6. Full CRM scopes (contacts, companies, deals)</div>
+        <div class="url">https://app.hubspot.com/oauth/authorize?client_id=0ae72dad-c2db-4167-8c98-735e668c56ab&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=crm.objects.contacts.read+crm.objects.contacts.write+crm.objects.companies.read+crm.objects.companies.write+crm.objects.deals.read+crm.objects.deals.write&state=test6</div>
+    </a>
+
+    <div class="instructions">
+        <h3>🔧 After finding the working scope:</h3>
+        <ol>
+            <li>Go to your HubSpot Developer Portal</li>
+            <li>Navigate to your app → Auth → Scopes</li>
+            <li>Add the scopes that worked in the test above</li>
+            <li>Remove any scopes that aren't in the working combination</li>
+            <li>Save the changes</li>
+            <li>Try the OAuth flow again in your app</li>
+        </ol>
+    </div>
+</body>
+</html> 

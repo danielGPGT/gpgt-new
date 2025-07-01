@@ -1,0 +1,217 @@
+import React, { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+
+import { PackageManagerService } from '@/lib/packageManagerService';
+import type { Venue, VenueInsert, VenueUpdate } from '@/lib/packageManagerService';
+
+interface VenueFormProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  venue?: Venue;
+}
+
+export function VenueForm({ open, onOpenChange, venue }: VenueFormProps) {
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState<VenueInsert>({
+    name: venue?.name || '',
+    slug: venue?.slug || '',
+    country: venue?.country || '',
+    city: venue?.city || '',
+    timezone: venue?.timezone || '',
+    latitude: venue?.latitude || undefined,
+    longitude: venue?.longitude || undefined,
+    description: venue?.description || '',
+    map_url: venue?.map_url || '',
+    website: venue?.website || '',
+  });
+
+  const createVenueMutation = useMutation({
+    mutationFn: (data: VenueInsert) => PackageManagerService.createVenue(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['venues'] });
+      onOpenChange(false);
+      toast.success('Venue created successfully');
+    },
+    onError: (error) => {
+      toast.error(`Failed to create venue: ${error.message}`);
+    },
+  });
+
+  const updateVenueMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: VenueUpdate }) =>
+      PackageManagerService.updateVenue(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['venues'] });
+      onOpenChange(false);
+      toast.success('Venue updated successfully');
+    },
+    onError: (error) => {
+      toast.error(`Failed to update venue: ${error.message}`);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (venue) {
+      updateVenueMutation.mutate({ id: venue.id, data: formData });
+    } else {
+      createVenueMutation.mutate(formData);
+    }
+  };
+
+  const isLoading = createVenueMutation.isPending || updateVenueMutation.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{venue ? 'Edit Venue' : 'Add New Venue'}</DialogTitle>
+          <DialogDescription>
+            {venue ? 'Update venue information' : 'Create a new venue for events'}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Venue Name *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g., Circuit de Monaco"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="slug">Slug</Label>
+              <Input
+                id="slug"
+                value={formData.slug}
+                onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
+                placeholder="e.g., circuit-de-monaco"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="country">Country</Label>
+              <Input
+                id="country"
+                value={formData.country}
+                onChange={(e) => setFormData(prev => ({ ...prev, country: e.target.value }))}
+                placeholder="e.g., Monaco"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                value={formData.city}
+                onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                placeholder="e.g., Monte Carlo"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="timezone">Timezone</Label>
+              <Input
+                id="timezone"
+                value={formData.timezone}
+                onChange={(e) => setFormData(prev => ({ ...prev, timezone: e.target.value }))}
+                placeholder="e.g., Europe/Monaco"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="latitude">Latitude</Label>
+              <Input
+                id="latitude"
+                type="number"
+                step="any"
+                value={formData.latitude || ''}
+                onChange={(e) => setFormData(prev => ({ 
+                  ...prev, 
+                  latitude: e.target.value ? parseFloat(e.target.value) : undefined 
+                }))}
+                placeholder="e.g., 43.7384"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="longitude">Longitude</Label>
+              <Input
+                id="longitude"
+                type="number"
+                step="any"
+                value={formData.longitude || ''}
+                onChange={(e) => setFormData(prev => ({ 
+                  ...prev, 
+                  longitude: e.target.value ? parseFloat(e.target.value) : undefined 
+                }))}
+                placeholder="e.g., 7.4246"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="website">Website</Label>
+              <Input
+                id="website"
+                type="url"
+                value={formData.website}
+                onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
+                placeholder="e.g., https://www.monaco-grand-prix.com"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="map_url">Map URL</Label>
+            <Input
+              id="map_url"
+              type="url"
+              value={formData.map_url}
+              onChange={(e) => setFormData(prev => ({ ...prev, map_url: e.target.value }))}
+              placeholder="e.g., https://maps.google.com/..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Brief description of the venue..."
+              rows={3}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? 'Saving...' : venue ? 'Update Venue' : 'Create Venue'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+} 

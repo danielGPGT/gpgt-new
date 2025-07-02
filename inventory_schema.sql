@@ -79,7 +79,6 @@ create table public.hotel_rooms (
   event_id uuid null,
   check_in date not null,
   check_out date not null,
-  nights integer GENERATED ALWAYS as ((check_out - check_in)) STORED null,
   quantity_total integer not null,
   quantity_reserved integer null default 0,
   quantity_provisional integer null default 0,
@@ -88,65 +87,66 @@ create table public.hotel_rooms (
       (quantity_total - quantity_reserved) - quantity_provisional
     )
   ) STORED null,
-  base_price numeric(10, 2) not null,
+  supplier_price_per_night numeric(10, 2) null,
+  supplier_currency text null default 'EUR'::text,
   markup_percent numeric(5, 2) null default 0.00,
-  price_with_markup numeric GENERATED ALWAYS as (
+  price_per_night_gbp numeric GENERATED ALWAYS as (
     (
-      base_price + ((base_price * markup_percent) / (100)::numeric)
-    )
-  ) STORED (10, 2) null,
-  currency text null default 'EUR'::text,
-  vat_percent numeric(5, 2) null,
-  resort_fee numeric(10, 2) null,
-  resort_fee_type text null default 'per_night'::text,
-  city_tax_per_person_per_night numeric(10, 2) null,
-  contracted boolean null default false,
-  attrition_deadline date null,
-  release_allowed_percent numeric(5, 2) null,
-  penalty_terms text null,
-  supplier text null,
-  supplier_ref text null,
-  active boolean null default true,
-  created_at timestamp without time zone null default now(),
-  updated_at timestamp without time zone null default now(),
-  constraint hotel_rooms_pkey primary key (id),
-  constraint hotel_rooms_event_id_fkey foreign KEY (event_id) references events (id),
-  constraint hotel_rooms_hotel_id_fkey foreign KEY (hotel_id) references gpgt_hotels (id) on delete CASCADE
-) TABLESPACE pg_default;
-create table public.hotel_rooms (
-  id uuid not null default gen_random_uuid (),
-  hotel_id uuid not null,
-  room_type_id text not null,
-  event_id uuid null,
-  check_in date not null,
-  check_out date not null,
-  nights integer GENERATED ALWAYS as ((check_out - check_in)) STORED null,
-  quantity_total integer not null,
-  quantity_reserved integer null default 0,
-  quantity_provisional integer null default 0,
-  quantity_available integer GENERATED ALWAYS as (
-    (
-      (quantity_total - quantity_reserved) - quantity_provisional
+      supplier_price_per_night + (
+        (supplier_price_per_night * markup_percent) / (100)::numeric
+      )
     )
   ) STORED null,
-  base_price numeric(10, 2) not null,
-  markup_percent numeric(5, 2) null default 0.00,
-  price_with_markup numeric GENERATED ALWAYS as (
+  vat_percentage numeric(5, 2) null,
+  price_per_night_gbp_incl_vat numeric GENERATED ALWAYS as (
     (
-      base_price + ((base_price * markup_percent) / (100)::numeric)
+      (
+        supplier_price_per_night + (
+          (supplier_price_per_night * markup_percent) / (100)::numeric
+        )
+      ) + (
+        (
+          (
+            supplier_price_per_night + (
+              (supplier_price_per_night * markup_percent) / (100)::numeric
+            )
+          ) * COALESCE(vat_percentage, (0)::numeric)
+        ) / (100)::numeric
+      )
     )
-  ) STORED (10, 2) null,
-  currency text null default 'EUR'::text,
-  vat_percent numeric(5, 2) null,
+  ) STORED null,
   resort_fee numeric(10, 2) null,
   resort_fee_type text null default 'per_night'::text,
-  city_tax_per_person_per_night numeric(10, 2) null,
+  city_tax numeric(10, 2) null,
+  city_tax_type text null default 'per_person_per_night'::text,
+  total_stay_price_gbp_incl_vat numeric GENERATED ALWAYS as (
+    (
+      (
+        (
+          supplier_price_per_night + (
+            (supplier_price_per_night * markup_percent) / (100)::numeric
+          )
+        ) + (
+          (
+            (
+              supplier_price_per_night + (
+                (supplier_price_per_night * markup_percent) / (100)::numeric
+              )
+            ) * COALESCE(vat_percentage, (0)::numeric)
+          ) / (100)::numeric
+        )
+      ) * ((check_out - check_in))::numeric
+    )
+  ) STORED null,
+  breakfast_included boolean null default true,
+  extra_night_markup_percent numeric(5, 2) null,
   contracted boolean null default false,
   attrition_deadline date null,
   release_allowed_percent numeric(5, 2) null,
   penalty_terms text null,
   supplier text null,
   supplier_ref text null,
+  contract_file_path text null,
   active boolean null default true,
   created_at timestamp without time zone null default now(),
   updated_at timestamp without time zone null default now(),

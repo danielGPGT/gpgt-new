@@ -4,58 +4,73 @@ export interface HotelRoom {
   id: string;
   hotel_id: string;
   room_type_id: string;
-  event_id?: string;
-  check_in: string;
-  check_out: string;
-  nights: number;
+  event_id?: string | null;
+  check_in: string; // date
+  check_out: string; // date
   quantity_total: number;
-  quantity_reserved: number;
-  quantity_provisional: number;
-  quantity_available: number;
-  markup_percent: number;
-  currency: string;
-  vat_percent?: number;
-  resort_fee?: number;
-  resort_fee_type: 'per_night' | 'per_stay';
-  city_tax_per_person_per_night?: number;
-  contracted: boolean;
-  attrition_deadline?: string;
-  release_allowed_percent?: number;
-  penalty_terms?: string;
-  supplier?: string;
-  supplier_ref?: string;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
-  supplier_price: number;
-  supplier_currency: string;
-  price_gbp: number;
+  quantity_reserved?: number | null;
+  quantity_provisional?: number | null;
+  quantity_available?: number | null; // GENERATED
+  supplier_price_per_night?: number | null;
+  supplier_currency?: string | null;
+  markup_percent?: number | null;
+  vat_percentage?: number | null;
+  resort_fee?: number | null;
+  resort_fee_type?: string | null;
+  city_tax?: number | null;
+  city_tax_type?: string | null;
+  breakfast_included?: boolean | null;
+  breakfast_price_per_person_per_night?: number | null;
+  extra_night_markup_percent?: number | null;
+  contracted?: boolean | null;
+  attrition_deadline?: string | null;
+  release_allowed_percent?: number | null;
+  penalty_terms?: string | null;
+  supplier?: string | null;
+  supplier_ref?: string | null;
+  contract_file_path?: string | null;
+  active?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  max_people?: number | null;
+  // The following are generated columns, keep as read-only for display only
+  total_supplier_price_per_night?: number | null; // GENERATED
+  total_price_per_night_gbp?: number | null; // GENERATED
+  total_price_per_stay_gbp?: number | null; // GENERATED
+  total_price_per_night_gbp_with_markup?: number | null; // GENERATED
+  total_price_per_stay_gbp_with_markup?: number | null; // GENERATED
+  extra_night_price_gbp?: number | null; // GENERATED
 }
 
 export interface HotelRoomInsert {
   hotel_id: string;
   room_type_id: string;
-  event_id?: string;
+  event_id?: string | null;
   check_in: string;
   check_out: string;
   quantity_total: number;
-  quantity_reserved?: number;
-  quantity_provisional?: number;
-  markup_percent?: number;
-  currency?: string;
-  vat_percent?: number;
-  resort_fee?: number;
-  resort_fee_type?: 'per_night' | 'per_stay';
-  city_tax_per_person_per_night?: number;
-  contracted?: boolean;
-  attrition_deadline?: string;
-  release_allowed_percent?: number;
-  penalty_terms?: string;
-  supplier?: string;
-  supplier_ref?: string;
-  active?: boolean;
-  supplier_price: number;
-  supplier_currency?: string;
+  quantity_reserved?: number | null;
+  quantity_provisional?: number | null;
+  supplier_price_per_night?: number | null;
+  supplier_currency?: string | null;
+  markup_percent?: number | null;
+  vat_percentage?: number | null;
+  resort_fee?: number | null;
+  resort_fee_type?: string | null;
+  city_tax?: number | null;
+  city_tax_type?: string | null;
+  breakfast_included?: boolean | null;
+  extra_night_markup_percent?: number | null;
+  contracted?: boolean | null;
+  attrition_deadline?: string | null;
+  release_allowed_percent?: number | null;
+  penalty_terms?: string | null;
+  supplier?: string | null;
+  supplier_ref?: string | null;
+  contract_file_path?: string | null;
+  active?: boolean | null;
+  max_people?: number | null;
+  breakfast_price_per_person_per_night?: number | null;
 }
 
 export interface HotelRoomUpdate extends Partial<HotelRoomInsert> {
@@ -70,9 +85,8 @@ export interface RoomAvailability {
   nights: number;
   quantity_total: number;
   quantity_available: number;
-  price_gbp: number;
-  currency: string;
-  supplier_price: number;
+  price_per_night_gbp: number;
+  supplier_price_per_night: number;
   supplier_currency: string;
   markup_percent: number;
 }
@@ -195,12 +209,11 @@ export class HotelRoomService {
           room_type_id,
           check_in,
           check_out,
-          nights,
+          (check_out::date - check_in::date) as nights,
           quantity_total,
           quantity_available,
-          price_gbp,
-          currency,
-          supplier_price,
+          price_per_night_gbp,
+          supplier_price_per_night,
           supplier_currency,
           markup_percent
         `)
@@ -211,7 +224,20 @@ export class HotelRoomService {
         .order('check_in', { ascending: true });
 
       if (error) throw error;
-      return data || [];
+      // Map id to room_id for compatibility
+      return (data || []).map((row: any) => ({
+        room_id: row.id,
+        room_type_id: row.room_type_id,
+        check_in: row.check_in,
+        check_out: row.check_out,
+        nights: row.nights,
+        quantity_total: row.quantity_total,
+        quantity_available: row.quantity_available,
+        price_per_night_gbp: row.price_per_night_gbp,
+        supplier_price_per_night: row.supplier_price_per_night,
+        supplier_currency: row.supplier_currency,
+        markup_percent: row.markup_percent,
+      }));
     } catch (error) {
       console.error('Error fetching room availability:', error);
       throw error;

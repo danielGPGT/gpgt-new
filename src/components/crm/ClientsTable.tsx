@@ -749,7 +749,7 @@ export function ClientsTable({
                         <SiHubspot className="h-5 w-5 text-[#FF7A59]" title="HubSpot" />
                         <span className="text-xs text-muted-foreground font-medium">HubSpot</span>
                       </span>
-                      <Badge variant="default" className="bg-green-100 text-success border-green-200 text-xs px-2 py-0.5 ml-1">Active</Badge>
+                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200 text-xs px-2 py-0.5 ml-1">Active</Badge>
                       <Button onClick={handleSync} disabled={syncing} size="icon" variant="ghost" className="h-7 w-7 ml-1">
                         {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                       </Button>

@@ -20,6 +20,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, subDays, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { FormField } from '@/components/ui/form';
 
 // Live FX rate API using exchangerate-api.com (free tier)
 const EXCHANGE_RATE_API_BASE = 'https://api.exchangerate-api.com/v4/latest';
@@ -105,26 +106,32 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
   const [formData, setFormData] = useState<HotelRoomInsert & { contract_file_path?: string }>({
     hotel_id: hotelId,
     room_type_id: room?.room_type_id || '',
-    event_id: room?.event_id,
+    event_id: room?.event_id ?? null,
     check_in: room?.check_in ? new Date(room.check_in).toISOString().split('T')[0] : '',
     check_out: room?.check_out ? new Date(room.check_out).toISOString().split('T')[0] : '',
-    quantity_total: room?.quantity_total || 0,
-    markup_percent: room?.markup_percent || 0,
-    currency: room?.currency || 'EUR',
-    vat_percent: room?.vat_percent,
-    resort_fee: room?.resort_fee,
-    resort_fee_type: room?.resort_fee_type || 'per_night',
-    city_tax_per_person_per_night: room?.city_tax_per_person_per_night,
-    contracted: room?.contracted || false,
-    attrition_deadline: room?.attrition_deadline,
-    release_allowed_percent: room?.release_allowed_percent,
-    penalty_terms: room?.penalty_terms,
-    supplier: room?.supplier,
-    supplier_ref: room?.supplier_ref,
-    contract_file_path: (room as any)?.contract_file_path,
+    quantity_total: room?.quantity_total ?? 0,
+    quantity_reserved: room?.quantity_reserved ?? 0,
+    quantity_provisional: room?.quantity_provisional ?? 0,
+    supplier_price_per_night: room?.supplier_price_per_night ?? 0,
+    supplier_currency: room?.supplier_currency ?? 'EUR',
+    markup_percent: room?.markup_percent ?? 0,
+    vat_percentage: room?.vat_percentage ?? 0,
+    resort_fee: room?.resort_fee ?? 0,
+    resort_fee_type: room?.resort_fee_type ?? 'per_night',
+    city_tax: room?.city_tax ?? 0,
+    city_tax_type: room?.city_tax_type ?? 'per_person_per_night',
+    breakfast_included: room?.breakfast_included ?? true,
+    extra_night_markup_percent: room?.extra_night_markup_percent ?? 0,
+    contracted: room?.contracted ?? false,
+    attrition_deadline: room?.attrition_deadline ?? '',
+    release_allowed_percent: room?.release_allowed_percent ?? 0,
+    penalty_terms: room?.penalty_terms ?? '',
+    supplier: room?.supplier ?? '',
+    supplier_ref: room?.supplier_ref ?? '',
+    contract_file_path: (room as any)?.contract_file_path ?? '',
     active: room?.active ?? true,
-    supplier_price: room?.supplier_price || 0,
-    supplier_currency: room?.supplier_currency || 'EUR',
+    max_people: room?.max_people ?? 1,
+    breakfast_price_per_person_per_night: room?.breakfast_price_per_person_per_night ?? 0,
   });
 
   // Fetch parent hotel to get room types
@@ -159,7 +166,8 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     finalPriceGBP: 0,
     finalPriceDisplay: 0
   });
-  
+  const [supplierPriceGbp, setSupplierPriceGbp] = useState(0);
+
   useEffect(() => {
     if (formData.check_in && formData.check_out) {
       const checkIn = new Date(formData.check_in);
@@ -172,9 +180,23 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     }
   }, [formData.check_in, formData.check_out]);
 
+  useEffect(() => {
+    const convert = async () => {
+      const price = formData.supplier_price_per_night ?? 0;
+      const currency = formData.supplier_currency ?? 'EUR';
+      if (currency === 'GBP') {
+        setSupplierPriceGbp(price);
+      } else {
+        const gbp = await convertCurrency(price, currency, 'GBP');
+        setSupplierPriceGbp(gbp);
+      }
+    };
+    convert();
+  }, [formData.supplier_price_per_night, formData.supplier_currency]);
+
   // Calculate pricing breakdown
   const calculatePricing = async () => {
-    if (!formData.supplier_price || formData.supplier_price <= 0) {
+    if (!formData.supplier_price_per_night || formData.supplier_price_per_night <= 0) {
       setPriceBreakdown({
         supplierPrice: 0,
         supplierPriceGBP: 0,
@@ -191,24 +213,17 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
 
     setIsConvertingCurrency(true);
     try {
-      // Convert supplier price to GBP
-      const supplierPriceGBP = await convertCurrency(
-        formData.supplier_price, 
-        formData.supplier_currency || 'EUR', 
-        'GBP'
-      );
-
       // Calculate taxes and fees
-      const vatAmount = formData.vat_percent ? (supplierPriceGBP * formData.vat_percent / 100) : 0;
+      const vatAmount = formData.vat_percentage ? (supplierPriceGbp * formData.vat_percentage / 100) : 0;
       
       const resortFeeAmount = formData.resort_fee ? 
         (formData.resort_fee_type === 'per_night' ? formData.resort_fee * nights : formData.resort_fee) : 0;
       
-      const cityTaxAmount = formData.city_tax_per_person_per_night ? 
-        formData.city_tax_per_person_per_night * nights : 0;
+      const cityTaxAmount = formData.city_tax ? 
+        formData.city_tax * nights : 0;
 
       // Calculate subtotal in GBP
-      const subtotalGBP = supplierPriceGBP + vatAmount + resortFeeAmount + cityTaxAmount;
+      const subtotalGBP = supplierPriceGbp + vatAmount + resortFeeAmount + cityTaxAmount;
 
       // Apply markup
       const markupAmount = formData.markup_percent ? (subtotalGBP * formData.markup_percent / 100) : 0;
@@ -216,13 +231,13 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
 
       // Convert to display currency if different from GBP
       let finalPriceDisplay = finalPriceGBP;
-      if (formData.currency && formData.currency !== 'GBP') {
-        finalPriceDisplay = await convertCurrency(finalPriceGBP, 'GBP', formData.currency);
+      if (formData.supplier_currency && formData.supplier_currency !== 'GBP') {
+        finalPriceDisplay = await convertCurrency(finalPriceGBP, 'GBP', formData.supplier_currency);
       }
 
       setPriceBreakdown({
-        supplierPrice: formData.supplier_price,
-        supplierPriceGBP,
+        supplierPrice: formData.supplier_price_per_night,
+        supplierPriceGBP: supplierPriceGbp,
         vatAmount,
         resortFeeAmount,
         cityTaxAmount,
@@ -243,14 +258,13 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
   useEffect(() => {
     calculatePricing();
   }, [
-    formData.supplier_price,
+    formData.supplier_price_per_night,
     formData.supplier_currency,
-    formData.vat_percent,
+    formData.vat_percentage,
     formData.resort_fee,
     formData.resort_fee_type,
-    formData.city_tax_per_person_per_night,
+    formData.city_tax,
     formData.markup_percent,
-    formData.currency,
     nights
   ]);
 
@@ -382,10 +396,37 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     }
   };
 
+  function calculatePriceFields(formData: any, supplierPriceGbp: number, nights: number, exchangeRate: number = 1) {
+    const maxPeople = formData.max_people ?? 1;
+    const supplierPrice = Number(formData.supplier_price_per_night) || 0;
+    const vat = Number(formData.vat_percentage) || 0;
+    const cityTax = Number(formData.city_tax) || 0;
+    const resortFee = Number(formData.resort_fee) || 0;
+    const breakfast = Number(formData.breakfast_price_per_person_per_night) || 0;
+
+    const total_supplier_price_per_night =
+      supplierPrice
+      + (supplierPrice * vat / 100)
+      + (cityTax * maxPeople)
+      + resortFee
+      + (breakfast * maxPeople);
+
+    const total_price_per_night_gbp = total_supplier_price_per_night * exchangeRate;
+    const total_price_per_stay_gbp = total_price_per_night_gbp * nights;
+
+    return {
+      total_supplier_price_per_night,
+      total_price_per_night_gbp,
+      total_price_per_stay_gbp,
+    };
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.room_type_id || !formData.event_id || !formData.check_in || !formData.check_out || !formData.quantity_total || !formData.supplier_price) {
+    // Calculate nights first
+    const nights = formData.check_in && formData.check_out ? Math.max(1, Math.ceil((new Date(formData.check_out).getTime() - new Date(formData.check_in).getTime()) / (1000 * 60 * 60 * 24))) : 1;
+
+    if (!formData.room_type_id || !formData.event_id || !formData.check_in || !formData.check_out || !formData.quantity_total || !formData.supplier_price_per_night) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -395,10 +436,20 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
       return;
     }
 
+    // Use supplierPriceGbp / supplier_price_per_night as exchange rate if not GBP
+    const exchangeRate = (formData.supplier_currency === 'GBP' || !formData.supplier_price_per_night)
+      ? 1
+      : (supplierPriceGbp / formData.supplier_price_per_night);
+    const priceFields = calculatePriceFields(formData, supplierPriceGbp, nights, exchangeRate);
+    const submissionData = {
+      ...formData,
+      ...priceFields,
+    };
+
     if (room) {
-      updateMutation.mutate({ id: room.id, data: formData });
+      updateMutation.mutate({ id: room.id, data: submissionData });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(submissionData);
     }
   };
 
@@ -577,129 +628,92 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                   {nights} night{nights !== 1 ? 's' : ''}
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label htmlFor="max_people" className="text-sm font-medium text-foreground">Max People</Label>
+                <Input
+                  id="max_people"
+                  type="number"
+                  min={1}
+                  value={formData.max_people ?? 1}
+                  onChange={e => updateField('max_people', parseInt(e.target.value) || 1)}
+                  placeholder="Max people in room"
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="pricing" className="space-y-4">
-          {/* Step 1: Supplier Information */}
-          <Card className="border-[var(--border)] bg-[var(--card)]">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-[var(--card-foreground)] text-base">
-                <Building className="w-4 h-4 text-[var(--primary)]" />
-                Step 1: Supplier Information
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-card-foreground">
+                <DollarSign className="w-5 h-5 text-primary" />
+                Pricing
               </CardTitle>
-              <CardDescription className="text-[var(--muted-foreground)] text-sm">Enter the raw cost from your supplier</CardDescription>
+              <CardDescription className="text-muted-foreground">Configure pricing and taxes for this room</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="supplier_price" className="text-sm font-medium text-[var(--foreground)]">Supplier Price *</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="supplier_price_per_night" className="text-sm font-medium text-foreground">Supplier Price Per Night *</Label>
                   <Input
-                    id="supplier_price"
+                    id="supplier_price_per_night"
                     type="number"
                     step="0.01"
-                    value={formData.supplier_price}
-                    onChange={(e) => updateField('supplier_price', parseFloat(e.target.value) || 0)}
+                    value={formData.supplier_price_per_night ?? 0}
+                    onChange={e => updateField('supplier_price_per_night', parseFloat(e.target.value) || 0)}
                     placeholder="0.00"
-                    className="border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]"
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="supplier_currency" className="text-sm font-medium text-[var(--foreground)]">Supplier Currency</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="supplier_currency" className="text-sm font-medium text-foreground">Supplier Currency</Label>
                   <Select
-                    value={formData.supplier_currency}
-                    onValueChange={(value) => updateField('supplier_currency', value)}
+                    value={formData.supplier_currency ?? ''}
+                    onValueChange={value => updateField('supplier_currency', value)}
                   >
-                    <SelectTrigger className="border-[var(--border)] bg-[var(--background)]">
-                      <SelectValue />
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
-                      {CURRENCIES.map(currency => (
-                        <SelectItem key={currency} value={currency}>{currency}</SelectItem>
-                      ))}
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="CAD">CAD</SelectItem>
+                      <SelectItem value="AUD">AUD</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-
-              {/* Quick Conversion Preview */}
-              {formData.supplier_price > 0 && (
-                <div className="p-3 bg-[var(--muted)]/50 rounded-lg border border-[var(--border)]/30">
-                  <div className="text-sm font-medium mb-2 text-[var(--foreground)]">Quick Preview</div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                    <div>
-                      <div className="text-[var(--muted-foreground)]">Supplier Price</div>
-                      <div className="font-medium text-[var(--foreground)]">
-                        {getCurrencySymbol(formData.supplier_currency || 'EUR')}{formData.supplier_price.toFixed(2)} {formData.supplier_currency}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[var(--muted-foreground)]">≈ GBP</div>
-                      <div className="font-medium text-[var(--foreground)]">
-                        £{priceBreakdown.supplierPriceGBP.toFixed(2)}
-                      </div>
-                    </div>
-                    {formData.currency && formData.currency !== 'GBP' && (
-                      <div>
-                        <div className="text-[var(--muted-foreground)]">≈ {formData.currency}</div>
-                        <div className="font-medium text-[var(--foreground)]">
-                          {getCurrencySymbol(formData.currency)}{(priceBreakdown.supplierPriceGBP * (priceBreakdown.finalPriceDisplay / priceBreakdown.finalPriceGBP)).toFixed(2)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Step 2: Taxes & Fees */}
-          <Card className="border-[var(--border)] bg-[var(--card)]">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-[var(--card-foreground)] text-base">
-                <Calculator className="w-4 h-4 text-[var(--primary)]" />
-                Step 2: Taxes & Additional Fees
-              </CardTitle>
-              <CardDescription className="text-[var(--muted-foreground)] text-sm">Add any taxes, resort fees, or city taxes</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="vat_percent" className="text-sm font-medium text-[var(--foreground)]">VAT %</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="vat_percentage" className="text-sm font-medium text-foreground">VAT %</Label>
                   <Input
-                    id="vat_percent"
+                    id="vat_percentage"
                     type="number"
                     step="0.01"
-                    value={formData.vat_percent || ''}
-                    onChange={(e) => updateField('vat_percent', e.target.value ? parseFloat(e.target.value) : undefined)}
+                    value={formData.vat_percentage ?? 0}
+                    onChange={e => updateField('vat_percentage', parseFloat(e.target.value) || 0)}
                     placeholder="0.00"
-                    className="border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]"
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="resort_fee" className="text-sm font-medium text-[var(--foreground)]">Resort Fee</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="resort_fee" className="text-sm font-medium text-foreground">Resort Fee</Label>
                   <Input
                     id="resort_fee"
                     type="number"
                     step="0.01"
-                    value={formData.resort_fee || ''}
-                    onChange={(e) => updateField('resort_fee', e.target.value ? parseFloat(e.target.value) : undefined)}
+                    value={formData.resort_fee ?? 0}
+                    onChange={e => updateField('resort_fee', parseFloat(e.target.value) || 0)}
                     placeholder="0.00"
-                    className="border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]"
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="resort_fee_type" className="text-sm font-medium text-[var(--foreground)]">Resort Fee Type</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="resort_fee_type" className="text-sm font-medium text-foreground">Resort Fee Type</Label>
                   <Select
-                    value={formData.resort_fee_type}
-                    onValueChange={(value: 'per_night' | 'per_stay') => updateField('resort_fee_type', value)}
+                    value={formData.resort_fee_type ?? 'per_night'}
+                    onValueChange={value => updateField('resort_fee_type', value)}
                   >
-                    <SelectTrigger className="border-[var(--border)] bg-[var(--background)]">
-                      <SelectValue />
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="per_night">Per Night</SelectItem>
@@ -707,151 +721,224 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="city_tax_per_person_per_night" className="text-sm font-medium text-[var(--foreground)]">City Tax (per person/night)</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="city_tax" className="text-sm font-medium text-foreground">City Tax</Label>
                   <Input
-                    id="city_tax_per_person_per_night"
+                    id="city_tax"
                     type="number"
                     step="0.01"
-                    value={formData.city_tax_per_person_per_night || ''}
-                    onChange={(e) => updateField('city_tax_per_person_per_night', e.target.value ? parseFloat(e.target.value) : undefined)}
+                    value={formData.city_tax ?? 0}
+                    onChange={e => updateField('city_tax', parseFloat(e.target.value) || 0)}
                     placeholder="0.00"
-                    className="border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]"
                   />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Step 3: Markup & Display */}
-          <Card className="border-[var(--border)] bg-[var(--card)]">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-[var(--card-foreground)] text-base">
-                <TrendingUp className="w-4 h-4 text-[var(--primary)]" />
-                Step 3: Markup & Display Settings
-              </CardTitle>
-              <CardDescription className="text-[var(--muted-foreground)] text-sm">Set your profit margin and display currency</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="markup_percent" className="text-sm font-medium text-[var(--foreground)]">Markup %</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="city_tax_type" className="text-sm font-medium text-foreground">City Tax Type</Label>
+                  <Select
+                    value={formData.city_tax_type ?? 'per_person_per_night'}
+                    onValueChange={value => updateField('city_tax_type', value)}
+                  >
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="per_person_per_night">Per Person Per Night</SelectItem>
+                      <SelectItem value="per_stay">Per Stay</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 flex items-center gap-2">
+                  <Checkbox
+                    id="breakfast_included"
+                    checked={!!formData.breakfast_included}
+                    onCheckedChange={checked => updateField('breakfast_included', !!checked)}
+                  />
+                  <Label htmlFor="breakfast_included" className="text-sm font-medium text-foreground">Breakfast Included</Label>
+                </div>
+                {!formData.breakfast_included && (
+                  <div className="space-y-2">
+                    <Label htmlFor="breakfast_price_per_person_per_night" className="text-sm font-medium text-foreground">Breakfast Price Per Person Per Night</Label>
+                    <Input
+                      id="breakfast_price_per_person_per_night"
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={formData.breakfast_price_per_person_per_night ?? 0}
+                      onChange={e => updateField('breakfast_price_per_person_per_night', parseFloat(e.target.value) || 0)}
+                      placeholder="e.g. 10"
+                    />
+                  </div>
+                )}
+                {/* Move markup fields to the end for better flow */}
+                <div className="space-y-2">
+                  <Label htmlFor="markup_percent" className="text-sm font-medium text-foreground">Markup %</Label>
                   <Input
                     id="markup_percent"
                     type="number"
                     step="0.01"
-                    value={formData.markup_percent}
-                    onChange={(e) => updateField('markup_percent', parseFloat(e.target.value) || 0)}
+                    value={formData.markup_percent ?? 0}
+                    onChange={e => updateField('markup_percent', parseFloat(e.target.value) || 0)}
                     placeholder="0.00"
-                    className="border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]"
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="currency" className="text-sm font-medium text-[var(--foreground)]">Display Currency</Label>
-                  <Select
-                    value={formData.currency}
-                    onValueChange={(value) => updateField('currency', value)}
-                  >
-                    <SelectTrigger className="border-[var(--border)] bg-[var(--background)]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CURRENCIES.map(currency => (
-                        <SelectItem key={currency} value={currency}>{currency}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-2">
+                  <Label htmlFor="extra_night_markup_percent" className="text-sm font-medium text-foreground">Extra Night Markup %</Label>
+                  <Input
+                    id="extra_night_markup_percent"
+                    type="number"
+                    step="0.01"
+                    value={formData.extra_night_markup_percent ?? 0}
+                    onChange={e => updateField('extra_night_markup_percent', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                  />
                 </div>
               </div>
             </CardContent>
           </Card>
-
-          {/* Final Price Breakdown */}
-          {formData.supplier_price > 0 && (
-            <Card className="border-[var(--border)] bg-[var(--muted)]/30">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-[var(--card-foreground)] text-lg">
-                  <DollarSign className="w-5 h-5 text-[var(--primary)]" />
-                  Final Price Summary
-                  {isConvertingCurrency && (
-                    <div className="text-sm text-[var(--muted-foreground)]">(Converting rates...)</div>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Detailed Breakdown */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center py-2 border-b border-[var(--border)]/50">
-                    <div className="text-sm text-[var(--muted-foreground)]">Supplier Price (GBP)</div>
-                    <div className="font-medium text-[var(--foreground)]">£{priceBreakdown.supplierPriceGBP.toFixed(2)}</div>
-                  </div>
-
-                  {formData.vat_percent && formData.vat_percent > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-[var(--border)]/50">
-                      <div className="text-sm text-[var(--muted-foreground)]">+ VAT ({formData.vat_percent}%)</div>
-                      <div className="font-medium text-[var(--primary-600)]">£{priceBreakdown.vatAmount.toFixed(2)}</div>
-                    </div>
-                  )}
-
-                  {formData.resort_fee && formData.resort_fee > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-[var(--border)]/50">
-                      <div className="text-sm text-[var(--muted-foreground)]">+ Resort Fee</div>
-                      <div className="font-medium text-[var(--primary-600)]">£{priceBreakdown.resortFeeAmount.toFixed(2)}</div>
-                    </div>
-                  )}
-
-                  {formData.city_tax_per_person_per_night && formData.city_tax_per_person_per_night > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-[var(--border)]/50">
-                      <div className="text-sm text-[var(--muted-foreground)]">+ City Tax ({nights} nights)</div>
-                      <div className="font-medium text-[var(--primary-600)]">£{priceBreakdown.cityTaxAmount.toFixed(2)}</div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center py-2 border-b border-[var(--border)]/50">
-                    <div className="text-sm font-medium text-[var(--foreground)]">Subtotal</div>
-                    <div className="font-semibold text-[var(--foreground)]">£{priceBreakdown.subtotalGBP.toFixed(2)}</div>
-                  </div>
-
-                  {formData.markup_percent && formData.markup_percent > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-[var(--border)]/50">
-                      <div className="text-sm text-[var(--muted-foreground)]">+ Markup ({formData.markup_percent}%)</div>
-                      <div className="font-medium text-[var(--secondary-600)]">£{priceBreakdown.markupAmount.toFixed(2)}</div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center py-3 bg-[var(--primary)]/10 rounded-lg px-3">
-                    <div className="text-lg font-semibold text-[var(--foreground)]">Final Price ({formData.currency})</div>
-                    <div className="text-xl font-bold text-[var(--primary)]">
-                      {getCurrencySymbol(formData.currency || 'GBP')}{priceBreakdown.finalPriceDisplay.toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Per Night Summary */}
-                {nights > 0 && (
-                  <div className="mt-3 p-3 bg-[var(--muted)]/50 rounded-lg">
-                    <div className="text-sm font-medium mb-2 text-[var(--foreground)]">Per Night Summary</div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <div className="text-[var(--muted-foreground)]">Per Night</div>
-                        <div className="font-medium text-[var(--foreground)]">
-                          {getCurrencySymbol(formData.currency || 'GBP')}{(priceBreakdown.finalPriceDisplay / nights).toFixed(2)}
-                        </div>
+          {/* Hotel Room Price Summary (read-only, generated columns) */}
+          <Card className="border-border bg-muted/30 mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-card-foreground">
+                <DollarSign className="w-5 h-5 text-primary" />
+                Hotel Room Price Summary
+              </CardTitle>
+              <CardDescription className="text-muted-foreground">
+                These values are calculated live and include all taxes and fees.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(() => {
+                const nights = formData.check_in && formData.check_out ? Math.max(1, Math.ceil((new Date(formData.check_out).getTime() - new Date(formData.check_in).getTime()) / (1000 * 60 * 60 * 24))) : 1;
+                const maxPeople = formData.max_people ?? 1;
+                const cityTax = formData.city_tax ?? 0;
+                const cityTaxType = formData.city_tax_type ?? 'per_person_per_night';
+                const resortFee = formData.resort_fee ?? 0;
+                const resortFeeType = formData.resort_fee_type ?? 'per_night';
+                const breakfastIncluded = !!formData.breakfast_included;
+                const breakfastPerPersonPerNight = breakfastIncluded ? (formData.breakfast_price_per_person_per_night ?? 0) : 0;
+                const vat = formData.vat_percentage ?? 0;
+                const markup = formData.markup_percent ?? 0;
+                const supplierCurrency = formData.supplier_currency ?? 'EUR';
+                const supplierSymbol = getCurrencySymbol(supplierCurrency);
+                // Room price (raw)
+                const roomPriceSupplier = (formData.supplier_price_per_night ?? 0) * nights;
+                const roomPriceGbp = supplierPriceGbp * nights;
+                // VAT (supplier)
+                const vatAmountSupplier = roomPriceSupplier * (vat / 100);
+                const vatAmountGbp = roomPriceGbp * (vat / 100);
+                // City tax
+                let cityTaxTotalSupplier = 0;
+                let cityTaxTotalGbp = 0;
+                if (cityTaxType === 'per_person_per_night') {
+                  cityTaxTotalSupplier = cityTax * maxPeople * nights;
+                  cityTaxTotalGbp = cityTaxTotalSupplier * (supplierCurrency === 'GBP' ? 1 : supplierPriceGbp / (formData.supplier_price_per_night || 1));
+                } else if (cityTaxType === 'per_stay') {
+                  cityTaxTotalSupplier = cityTax;
+                  cityTaxTotalGbp = cityTaxTotalSupplier * (supplierCurrency === 'GBP' ? 1 : supplierPriceGbp / (formData.supplier_price_per_night || 1));
+                }
+                // Resort fee
+                let resortFeeTotalSupplier = 0;
+                let resortFeeTotalGbp = 0;
+                if (resortFeeType === 'per_night') {
+                  resortFeeTotalSupplier = resortFee * nights;
+                  resortFeeTotalGbp = resortFeeTotalSupplier * (supplierCurrency === 'GBP' ? 1 : supplierPriceGbp / (formData.supplier_price_per_night || 1));
+                } else if (resortFeeType === 'per_stay') {
+                  resortFeeTotalSupplier = resortFee;
+                  resortFeeTotalGbp = resortFeeTotalSupplier * (supplierCurrency === 'GBP' ? 1 : supplierPriceGbp / (formData.supplier_price_per_night || 1));
+                }
+                // Breakfast
+                const breakfastTotalSupplier = breakfastPerPersonPerNight * maxPeople * nights;
+                const breakfastTotalGbp = breakfastTotalSupplier * (supplierCurrency === 'GBP' ? 1 : supplierPriceGbp / (formData.supplier_price_per_night || 1));
+                // Subtotal (your total cost)
+                const subtotalSupplier = roomPriceSupplier + vatAmountSupplier + cityTaxTotalSupplier + resortFeeTotalSupplier + breakfastTotalSupplier;
+                const subtotalGbp = roomPriceGbp + vatAmountGbp + cityTaxTotalGbp + resortFeeTotalGbp + breakfastTotalGbp;
+                // Markup
+                const markupAmountSupplier = subtotalSupplier * (markup / 100);
+                const markupAmountGbp = subtotalGbp * (markup / 100);
+                // Total (what you charge the customer)
+                const totalSupplier = subtotalSupplier + markupAmountSupplier;
+                const totalGbp = subtotalGbp + markupAmountGbp;
+                // Per night breakdown
+                const perNight = nights > 0 ? {
+                  room: { supplier: (formData.supplier_price_per_night ?? 0), gbp: supplierPriceGbp },
+                  vat: { supplier: vatAmountSupplier / nights, gbp: vatAmountGbp / nights },
+                  cityTax: { supplier: cityTaxTotalSupplier / nights, gbp: cityTaxTotalGbp / nights },
+                  resortFee: { supplier: resortFeeTotalSupplier / nights, gbp: resortFeeTotalGbp / nights },
+                  breakfast: { supplier: breakfastTotalSupplier / nights, gbp: breakfastTotalGbp / nights },
+                  subtotal: { supplier: subtotalSupplier / nights, gbp: subtotalGbp / nights },
+                  markup: { supplier: markupAmountSupplier / nights, gbp: markupAmountGbp / nights },
+                  total: { supplier: totalSupplier / nights, gbp: totalGbp / nights },
+                } : null;
+                const showBoth = supplierCurrency !== 'GBP';
+                return (
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex justify-between"><span>Room Price:</span>
+                        <span className="font-semibold">
+                          {showBoth ? `${supplierSymbol}${roomPriceSupplier.toFixed(2)} | ` : ''}£{roomPriceGbp.toFixed(2)}
+                        </span>
                       </div>
-                      <div>
-                        <div className="text-[var(--muted-foreground)]">Total ({nights} nights)</div>
-                        <div className="font-medium text-[var(--foreground)]">
-                          {getCurrencySymbol(formData.currency || 'GBP')}{priceBreakdown.finalPriceDisplay.toFixed(2)}
+                      <div className="flex justify-between"><span>VAT (supplier):</span>
+                        <span className="font-semibold">
+                          {showBoth ? `${supplierSymbol}${vatAmountSupplier.toFixed(2)} | ` : ''}£{vatAmountGbp.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between"><span>City Tax:</span>
+                        <span className="font-semibold">
+                          {showBoth ? `${supplierSymbol}${cityTaxTotalSupplier.toFixed(2)} | ` : ''}£{cityTaxTotalGbp.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between"><span>Resort Fee:</span>
+                        <span className="font-semibold">
+                          {showBoth ? `${supplierSymbol}${resortFeeTotalSupplier.toFixed(2)} | ` : ''}£{resortFeeTotalGbp.toFixed(2)}
+                        </span>
+                      </div>
+                      {breakfastIncluded && (
+                        <div className="flex justify-between items-center">
+                          <span>Breakfast ({maxPeople} guests × {supplierSymbol}{breakfastPerPersonPerNight} × {nights} nights):</span>
+                          <span className="font-semibold">
+                            {showBoth ? `${supplierSymbol}${breakfastTotalSupplier.toFixed(2)} | ` : ''}£{breakfastTotalGbp.toFixed(2)}
+                          </span>
                         </div>
+                      )}
+                      <div className="flex justify-between border-t pt-2 mt-2 font-bold">
+                        <span>Subtotal (your total cost):</span>
+                        <span>
+                          {showBoth ? `${supplierSymbol}${subtotalSupplier.toFixed(2)} | ` : ''}£{subtotalGbp.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between"><span>Markup ({markup}%):</span>
+                        <span className="font-semibold">
+                          {showBoth ? `${supplierSymbol}${markupAmountSupplier.toFixed(2)} | ` : ''}£{markupAmountGbp.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t pt-2 mt-2 font-bold text-lg">
+                        <span>Total (what you charge the customer):</span>
+                        <span>
+                          {showBoth ? `${supplierSymbol}${totalSupplier.toFixed(2)} | ` : ''}£{totalGbp.toFixed(2)}
+                        </span>
                       </div>
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                    {perNight && (
+                      <div className="mt-6 p-3 rounded-lg bg-muted/40 border border-border">
+                        <div className="font-semibold mb-2">Per Night Price Breakdown</div>
+                        <div className="flex justify-between"><span>Room:</span><span>{showBoth ? `${supplierSymbol}${perNight.room.supplier.toFixed(2)} | ` : ''}£{perNight.room.gbp.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>VAT:</span><span>{showBoth ? `${supplierSymbol}${perNight.vat.supplier.toFixed(2)} | ` : ''}£{perNight.vat.gbp.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>City Tax:</span><span>{showBoth ? `${supplierSymbol}${perNight.cityTax.supplier.toFixed(2)} | ` : ''}£{perNight.cityTax.gbp.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>Resort Fee:</span><span>{showBoth ? `${supplierSymbol}${perNight.resortFee.supplier.toFixed(2)} | ` : ''}£{perNight.resortFee.gbp.toFixed(2)}</span></div>
+                        {breakfastIncluded && (
+                          <div className="flex justify-between"><span>Breakfast:</span><span>{showBoth ? `${supplierSymbol}${perNight.breakfast.supplier.toFixed(2)} | ` : ''}£{perNight.breakfast.gbp.toFixed(2)}</span></div>
+                        )}
+                        <div className="flex justify-between font-bold"><span>Subtotal:</span><span>{showBoth ? `${supplierSymbol}${perNight.subtotal.supplier.toFixed(2)} | ` : ''}£{perNight.subtotal.gbp.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>Markup:</span><span>{showBoth ? `${supplierSymbol}${perNight.markup.supplier.toFixed(2)} | ` : ''}£{perNight.markup.gbp.toFixed(2)}</span></div>
+                        <div className="flex justify-between font-bold text-lg"><span>Total per night:</span><span>{showBoth ? `${supplierSymbol}${perNight.total.supplier.toFixed(2)} | ` : ''}£{perNight.total.gbp.toFixed(2)}</span></div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="availability" className="space-y-4">
@@ -926,7 +1013,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                   <Label htmlFor="supplier" className="text-sm font-medium text-foreground">Supplier</Label>
                   <Input
                     id="supplier"
-                    value={formData.supplier || ''}
+                    value={formData.supplier ?? ''}
                     onChange={(e) => updateField('supplier', e.target.value || undefined)}
                     placeholder="Supplier name"
                     className="border-border bg-background text-foreground"
@@ -937,7 +1024,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                   <Label htmlFor="supplier_ref" className="text-sm font-medium text-foreground">Supplier Reference</Label>
                   <Input
                     id="supplier_ref"
-                    value={formData.supplier_ref || ''}
+                    value={formData.supplier_ref ?? ''}
                     onChange={(e) => updateField('supplier_ref', e.target.value || undefined)}
                     placeholder="Reference number"
                     className="border-border bg-background text-foreground"
@@ -950,7 +1037,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="contracted"
-                  checked={formData.contracted}
+                  checked={!!formData.contracted}
                   onCheckedChange={(checked) => updateField('contracted', !!checked)}
                 />
                 <Label htmlFor="contracted" className="text-sm font-medium text-foreground">Contracted</Label>
@@ -1008,7 +1095,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                 <Label htmlFor="penalty_terms" className="text-sm font-medium text-foreground">Penalty Terms</Label>
                 <Textarea
                   id="penalty_terms"
-                  value={formData.penalty_terms || ''}
+                  value={formData.penalty_terms ?? ''}
                   onChange={(e) => updateField('penalty_terms', e.target.value || undefined)}
                   placeholder="Describe penalty terms..."
                   rows={3}

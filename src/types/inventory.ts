@@ -184,24 +184,30 @@ export interface LoungePassFilters extends InventoryFilters {
 
 // Form types for creating/editing
 export interface TicketFormData {
+  // Required fields
   event_id: string;
-  ticket_category_id?: string;
+  ticket_category_id: string;
   quantity_total: number;
+  supplier_currency: string;
+  supplier_price: number;
+  currency: string;
   price: number;
-  markup_percent?: number;
-  currency?: string;
-  delivery_method?: string;
-  ticket_format?: string;
-  ticket_type?: string;
-  ticket_delivery_days?: number;
-  available_from?: string;
-  available_until?: string;
-  refundable?: boolean;
-  resellable?: boolean;
-  party_size_together?: number;
-  supplier?: string;
-  supplier_ref?: string;
-  distribution_channel?: string;
+  markup_percent: number;
+  refundable: boolean;
+  resellable: boolean;
+  
+  // Optional fields
+  ticket_days?: string | null;
+  quantity_provisional?: number | null;
+  ticket_type?: string | null;
+  supplier?: string | null;
+  supplier_ref?: string | null;
+  ordered?: boolean;
+  ordered_at?: string | null;
+  paid?: boolean;
+  paid_at?: string | null;
+  tickets_received?: boolean;
+  tickets_received_at?: string | null;
   metadata?: Record<string, any>;
 }
 
@@ -225,6 +231,7 @@ export interface HotelRoomFormData {
   penalty_terms?: string;
   supplier?: string;
   supplier_ref?: string;
+  contract_file_path?: string;
 }
 
 export interface CircuitTransferFormData {

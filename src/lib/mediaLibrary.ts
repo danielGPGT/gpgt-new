@@ -226,7 +226,7 @@ Respond with ONLY valid JSON in this exact format:
         .from('media_library')
         .select('*')
         .eq('user_id', userId)
-        .or(`title.ilike.%${query}%,description.ilike.%${query}%,tags.cs.{${query}}`)
+        .or(`description.ilike.%${query}%,tags.cs.{${query}},category.ilike.%${query}%`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

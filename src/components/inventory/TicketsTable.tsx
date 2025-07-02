@@ -122,11 +122,35 @@ export function TicketsTable() {
   });
 
   const handleCreateTicket = (data: TicketFormData) => {
-    createTicketMutation.mutate(data);
+    // Convert null values to undefined for Supabase
+    const submitData = {
+      ...data,
+      quantity_provisional: data.quantity_provisional || undefined,
+      ticket_type: data.ticket_type || undefined,
+      supplier: data.supplier || undefined,
+      supplier_ref: data.supplier_ref || undefined,
+      ticket_days: data.ticket_days || undefined,
+      ordered_at: data.ordered_at || undefined,
+      paid_at: data.paid_at || undefined,
+      tickets_received_at: data.tickets_received_at || undefined,
+    };
+    createTicketMutation.mutate(submitData);
   };
 
   const handleUpdateTicket = (id: string, data: Partial<TicketFormData>) => {
-    updateTicketMutation.mutate({ id, data });
+    // Convert null values to undefined for Supabase
+    const submitData = {
+      ...data,
+      quantity_provisional: data.quantity_provisional || undefined,
+      ticket_type: data.ticket_type || undefined,
+      supplier: data.supplier || undefined,
+      supplier_ref: data.supplier_ref || undefined,
+      ticket_days: data.ticket_days || undefined,
+      ordered_at: data.ordered_at || undefined,
+      paid_at: data.paid_at || undefined,
+      tickets_received_at: data.tickets_received_at || undefined,
+    };
+    updateTicketMutation.mutate({ id, data: submitData });
   };
 
   const handleDeleteTicket = (id: string) => {
@@ -491,22 +515,25 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading, role }: Tic
     event_id: ticket?.event_id || '',
     ticket_category_id: ticket?.ticket_category_id || '',
     quantity_total: ticket?.quantity_total || 0,
+    supplier_currency: ticket?.supplier_currency || 'EUR',
+    supplier_price: ticket?.supplier_price || 0,
+    currency: ticket?.currency || 'GBP',
     price: ticket?.price || 0,
     markup_percent: ticket?.markup_percent || 0,
-    currency: ticket?.currency || 'EUR',
-    delivery_method: ticket?.delivery_method || '',
-    ticket_format: ticket?.ticket_format || '',
-    ticket_type: ticket?.ticket_type || '',
-    ticket_delivery_days: ticket?.ticket_delivery_days || undefined,
-    available_from: ticket?.available_from || '',
-    available_until: ticket?.available_until || '',
+    ticket_days: ticket?.ticket_days || null,
     refundable: ticket?.refundable || false,
     resellable: ticket?.resellable || false,
-    party_size_together: ticket?.party_size_together || undefined,
-    supplier: ticket?.supplier || '',
-    supplier_ref: ticket?.supplier_ref || '',
-    distribution_channel: ticket?.distribution_channel || '',
-    metadata: ticket?.metadata || {},
+    quantity_provisional: ticket?.quantity_provisional || null,
+    ticket_type: ticket?.ticket_type || undefined,
+    supplier: ticket?.supplier || undefined,
+    supplier_ref: ticket?.supplier_ref || undefined,
+    ordered: ticket?.ordered || false,
+    ordered_at: ticket?.ordered_at || null,
+    paid: ticket?.paid || false,
+    paid_at: ticket?.paid_at || null,
+    tickets_received: ticket?.tickets_received || false,
+    tickets_received_at: ticket?.tickets_received_at || null,
+    metadata: (ticket?.metadata as Record<string, any>) || {},
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -542,8 +569,8 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading, role }: Tic
           <Label htmlFor="ticket_type">Ticket Type</Label>
           <Input
             id="ticket_type"
-            value={formData.ticket_type}
-            onChange={(e) => setFormData(prev => ({ ...prev, ticket_type: e.target.value }))}
+            value={formData.ticket_type || ''}
+            onChange={(e) => setFormData(prev => ({ ...prev, ticket_type: e.target.value || undefined }))}
             placeholder="e.g., VIP, General Admission"
             disabled={role === 'sales'}
           />
@@ -590,8 +617,8 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading, role }: Tic
               <Label htmlFor="supplier">Supplier</Label>
               <Input
                 id="supplier"
-                value={formData.supplier}
-                onChange={(e) => setFormData(prev => ({ ...prev, supplier: e.target.value }))}
+                value={formData.supplier || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, supplier: e.target.value || undefined }))}
                 placeholder="Supplier name"
               />
             </div>
@@ -599,8 +626,8 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading, role }: Tic
               <Label htmlFor="supplier_ref">Supplier Reference</Label>
               <Input
                 id="supplier_ref"
-                value={formData.supplier_ref}
-                onChange={(e) => setFormData(prev => ({ ...prev, supplier_ref: e.target.value }))}
+                value={formData.supplier_ref || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, supplier_ref: e.target.value || undefined }))}
                 placeholder="Reference number"
               />
             </div>
@@ -629,16 +656,7 @@ function TicketForm({ events, ticket, onSubmit, onCancel, isLoading, role }: Tic
           </>
         )}
 
-        <div className="space-y-2">
-          <Label htmlFor="delivery_method">Delivery Method</Label>
-          <Input
-            id="delivery_method"
-            value={formData.delivery_method}
-            onChange={(e) => setFormData(prev => ({ ...prev, delivery_method: e.target.value }))}
-            placeholder="e.g., Email, Mobile, Physical"
-            disabled={role === 'sales'}
-          />
-        </div>
+
       </div>
 
       <div className="flex items-center space-x-2">

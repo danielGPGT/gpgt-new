@@ -303,6 +303,103 @@ class GeminiService {
     }
   }
 
+  async generateHotelInfo(hotelName: string, userId?: string): Promise<{
+    name: string;
+    brand: string;
+    star_rating: number;
+    address: string;
+    city: string;
+    country: string;
+    latitude: number;
+    longitude: number;
+    description: string;
+    images: string[];
+    amenities: string[];
+    check_in_time: string;
+    check_out_time: string;
+    contact_email: string;
+    phone: string;
+    room_types: string[];
+  }> {
+    try {
+      const prompt = `You are a hotel information assistant. Based on the hotel name "${hotelName}", provide accurate and detailed information about this hotel.
+
+IMPORTANT:
+* Respond with ONLY valid, compact JSON. Do NOT include markdown, code fences, or any extra text.
+* Provide realistic and accurate information based on the hotel name.
+* If the hotel name is vague or unclear, make reasonable assumptions based on common hotel naming patterns.
+* Use real cities and countries that would make sense for this type of hotel.
+
+Return a JSON object with the following structure:
+{
+  "name": "Full hotel name",
+  "brand": "Hotel brand/chain (e.g., Marriott, Hilton, Independent)",
+  "star_rating": 5,
+  "address": "Full street address",
+  "city": "City name",
+  "country": "Country name",
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "description": "Detailed hotel description (2-3 sentences)",
+  "amenities": ["WiFi", "Pool", "Gym", "Spa", "Restaurant", "Bar", "Room Service", "Concierge", "Parking"],
+  "check_in_time": "15:00",
+  "check_out_time": "11:00",
+  "contact_email": "info@hotelname.com",
+  "phone": "+1 (555) 123-4567",
+  "room_types": ["Standard", "Deluxe", "Suite", "Executive"]
+}
+
+Make sure all information is realistic and consistent. If you don't know specific details, provide reasonable defaults.`;
+
+      const result = await this.itineraryModel.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      // Try to repair and parse JSON
+      const repairedJson = this.tryRepairJson(text);
+      const parsed = JSON.parse(repairedJson);
+      
+      // If userId is provided, search for relevant images in media library
+      let images: string[] = [];
+      if (userId) {
+        try {
+          const { MediaLibraryService } = await import('./mediaLibrary');
+          
+          // Search for hotel-related images
+          const searchTerms = [
+            hotelName.toLowerCase(),
+            parsed.city?.toLowerCase(),
+            parsed.country?.toLowerCase(),
+            'hotel',
+            'accommodation',
+            'luxury',
+            'resort'
+          ].filter(Boolean);
+          
+          // Search for each term and collect unique images
+          const foundImages = new Set<string>();
+          for (const term of searchTerms) {
+            const mediaItems = await MediaLibraryService.searchMedia(userId, term);
+            mediaItems.slice(0, 3).forEach(item => foundImages.add(item.image_url));
+          }
+          
+          images = Array.from(foundImages).slice(0, 5); // Limit to 5 images
+        } catch (error) {
+          console.error('Error searching media library:', error);
+          // Continue without images if search fails
+        }
+      }
+      
+      return {
+        ...parsed,
+        images
+      };
+    } catch (error) {
+      console.error('Error generating hotel info:', error);
+      throw new Error('Failed to generate hotel information. Please try again.');
+    }
+  }
+
   private buildPrompt(preferences: TripPreferences): string {
     const duration = Math.ceil((new Date(preferences.endDate).getTime() - new Date(preferences.startDate).getTime()) / (1000 * 60 * 60 * 24));
     const budgetPerDay = preferences.budget.max / duration;

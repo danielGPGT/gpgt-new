@@ -90,7 +90,9 @@ export const HubSpotIntegration: React.FC<HubSpotIntegrationProps> = ({ teamId }
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
       
-      const functionUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL?.replace(/\/$/, '') + '/hubspot-sync' || '/functions/v1/hubspot-sync';
+      // Construct the function URL using the Supabase URL
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const functionUrl = `${supabaseUrl}/functions/v1/hubspot-sync`;
       
       const res = await fetch(functionUrl, {
         method: 'POST',

@@ -14,10 +14,7 @@ import {
   Filter,
   Search,
   Download,
-  Upload,
-  Grid3X3,
-  List,
-  BarChart3
+  Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -29,13 +26,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { HotelRoomForm } from './HotelRoomForm';
 
-interface HotelRoomsTableProps {
+interface HotelRoomManagerProps {
   hotelId: string;
   hotelName: string;
 }
@@ -57,7 +54,7 @@ const ROOM_TYPES = [
 
 const CURRENCIES = ['EUR', 'GBP', 'USD', 'CAD', 'AUD'];
 
-export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
+export function HotelRoomManager({ hotelId, hotelName }: HotelRoomManagerProps) {
   const queryClient = useQueryClient();
   const [selectedRoom, setSelectedRoom] = useState<HotelRoom | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -72,13 +69,18 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
     queryFn: () => HotelRoomService.getHotelRooms(hotelId),
   });
 
-
+  // Fetch room stats
+  const { data: roomStats } = useQuery({
+    queryKey: ['hotel-room-stats', hotelId],
+    queryFn: () => HotelRoomService.getRoomStats(hotelId),
+  });
 
   // Delete room mutation
   const deleteMutation = useMutation({
     mutationFn: (roomId: string) => HotelRoomService.deleteRoom(roomId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hotel-rooms', hotelId] });
+      queryClient.invalidateQueries({ queryKey: ['hotel-room-stats', hotelId] });
       toast.success('Room deleted successfully');
     },
     onError: (error) => {
@@ -127,9 +129,9 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
 
   const getAvailabilityBadge = (available: number, total: number) => {
     const percentage = (available / total) * 100;
-    if (percentage >= 70) return <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">High</Badge>;
-    if (percentage >= 30) return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">Medium</Badge>;
-    return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200">Low</Badge>;
+    if (percentage >= 70) return <Badge variant="default" className="bg-green-100 text-green-800">High</Badge>;
+    if (percentage >= 30) return <Badge variant="secondary">Medium</Badge>;
+    return <Badge variant="destructive">Low</Badge>;
   };
 
   if (isLoading) {
@@ -148,23 +150,20 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Room Management</h2>
+          <h2 className="text-2xl font-bold">Room Management</h2>
           <p className="text-muted-foreground">Manage rooms and availability for {hotelName}</p>
         </div>
-        <Button 
-          onClick={() => setIsFormOpen(true)} 
-          className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
-        >
+        <Button onClick={() => setIsFormOpen(true)} className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
           Add Room
         </Button>
       </div>
 
-
+    
 
       {/* Filters and Search */}
-      <Card className="border-border bg-card">
-        <CardHeader className="pb-4">
+      <Card>
+        <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -173,11 +172,11 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
                   placeholder="Search rooms..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 border-border bg-background text-foreground"
+                  className="w-64"
                 />
               </div>
               <Select value={filterRoomType} onValueChange={setFilterRoomType}>
-                <SelectTrigger className="w-40 border-border bg-background">
+                <SelectTrigger className="w-40">
                   <SelectValue placeholder="Room Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -188,7 +187,7 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
                 </SelectContent>
               </Select>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-40 border-border bg-background">
+                <SelectTrigger className="w-40">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -204,18 +203,14 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
                 variant={viewMode === 'table' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setViewMode('table')}
-                className="flex items-center gap-2"
               >
-                <List className="w-4 h-4" />
                 Table
               </Button>
               <Button
                 variant={viewMode === 'cards' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setViewMode('cards')}
-                className="flex items-center gap-2"
               >
-                <Grid3X3 className="w-4 h-4" />
                 Cards
               </Button>
             </div>
@@ -223,117 +218,113 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
         </CardHeader>
         <CardContent>
           {viewMode === 'table' ? (
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow className="hover:bg-muted/50">
-                    <TableHead className="text-muted-foreground font-medium">Room Type</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Dates</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Availability</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Price</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Supplier</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Status</TableHead>
-                    <TableHead className="text-muted-foreground font-medium">Actions</TableHead>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Room Type</TableHead>
+                  <TableHead>Dates</TableHead>
+                  <TableHead>Availability</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRooms.map((room) => (
+                  <TableRow key={room.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{room.room_type_id}</div>
+                        <div className="text-sm text-muted-foreground">{room.nights} nights</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <div>{format(new Date(room.check_in), 'MMM dd')}</div>
+                        <div className="text-muted-foreground">to {format(new Date(room.check_out), 'MMM dd, yyyy')}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                          <span>Available: {room.quantity_available}</span>
+                          <span className={getAvailabilityColor(room.quantity_available, room.quantity_total)}>
+                            {Math.round((room.quantity_available / room.quantity_total) * 100)}%
+                          </span>
+                        </div>
+                        <Progress 
+                          value={(room.quantity_available / room.quantity_total) * 100} 
+                          className="h-2"
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">£{room.price_gbp}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {room.supplier_price} {room.supplier_currency}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <div>{room.supplier || 'N/A'}</div>
+                        {room.supplier_ref && (
+                          <div className="text-muted-foreground">Ref: {room.supplier_ref}</div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {getAvailabilityBadge(room.quantity_available, room.quantity_total)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditRoom(room)}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteRoom(room.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRooms.map((room) => (
-                    <TableRow key={room.id} className="hover:bg-muted/30 transition-colors">
-                      <TableCell>
-                        <div>
-                          <div className="font-medium text-foreground">{room.room_type_id}</div>
-                          <div className="text-sm text-muted-foreground">{room.nights} nights</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div className="text-foreground">{format(new Date(room.check_in), 'MMM dd')}</div>
-                          <div className="text-muted-foreground">to {format(new Date(room.check_out), 'MMM dd, yyyy')}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-foreground">Available: {room.quantity_available}</span>
-                            <span className={getAvailabilityColor(room.quantity_available, room.quantity_total)}>
-                              {Math.round((room.quantity_available / room.quantity_total) * 100)}%
-                            </span>
-                          </div>
-                          <Progress 
-                            value={(room.quantity_available / room.quantity_total) * 100} 
-                            className="h-2"
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium text-foreground">£{room.price_gbp}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {room.supplier_price} {room.supplier_currency}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div className="text-foreground">{room.supplier || 'N/A'}</div>
-                          {room.supplier_ref && (
-                            <div className="text-muted-foreground">Ref: {room.supplier_ref}</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getAvailabilityBadge(room.quantity_available, room.quantity_total)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditRoom(room)}
-                            className="border-border hover:bg-muted"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteRoom(room.id)}
-                            className="border-border hover:bg-destructive hover:text-destructive-foreground"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredRooms.map((room) => (
-                <Card key={room.id} className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-200 group">
-                  <CardHeader className="pb-3">
+                <Card key={room.id}>
+                  <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg text-card-foreground">{room.room_type_id}</CardTitle>
+                      <CardTitle className="text-lg">{room.room_type_id}</CardTitle>
                       {getAvailabilityBadge(room.quantity_available, room.quantity_total)}
                     </div>
-                    <CardDescription className="text-muted-foreground">
+                    <CardDescription>
                       {format(new Date(room.check_in), 'MMM dd')} - {format(new Date(room.check_out), 'MMM dd, yyyy')}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="p-3 rounded-xl bg-muted/40 border border-border">
-                        <div className="font-bold text-card-foreground text-lg">£{room.price_gbp}</div>
-                        <div className="text-muted-foreground text-xs">Per night</div>
+                      <div>
+                        <div className="font-medium">£{room.price_gbp}</div>
+                        <div className="text-muted-foreground">Per night</div>
                       </div>
-                      <div className="p-3 rounded-xl bg-muted/40 border border-border">
-                        <div className="font-bold text-card-foreground text-lg">{room.quantity_available}</div>
-                        <div className="text-muted-foreground text-xs">Available</div>
+                      <div>
+                        <div className="font-medium">{room.quantity_available}</div>
+                        <div className="text-muted-foreground">Available</div>
                       </div>
                     </div>
-                    <Separator className="bg-border" />
+                    <Separator />
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-muted-foreground">
                         {room.supplier || 'No supplier'}
@@ -343,7 +334,6 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
                           variant="outline"
                           size="sm"
                           onClick={() => handleEditRoom(room)}
-                          className="border-border hover:bg-muted group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-colors"
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -351,7 +341,6 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDeleteRoom(room.id)}
-                          className="border-border hover:bg-destructive hover:text-destructive-foreground transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -365,31 +354,29 @@ export function HotelRoomsTable({ hotelId, hotelName }: HotelRoomsTableProps) {
         </CardContent>
       </Card>
 
-      {/* Room Form Drawer */}
-      <Drawer open={isFormOpen} onOpenChange={setIsFormOpen} direction="right">
-        <DrawerContent className="!max-w-4xl h-full">
-          <DrawerHeader className="border-b border-border">
-            <DrawerTitle className="text-foreground">
+      {/* Room Form Dialog */}
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
               {selectedRoom ? 'Edit Room' : 'Add New Room'}
-            </DrawerTitle>
-            <DrawerDescription className="text-muted-foreground">
-              Configure room details, pricing, and availability for {hotelName}.
-            </DrawerDescription>
-          </DrawerHeader>
-          <div className="flex-1 overflow-y-auto p-6">
-            <HotelRoomForm
-              hotelId={hotelId}
-              room={selectedRoom}
-              onClose={handleFormClose}
-              onSuccess={() => {
-                handleFormClose();
-                queryClient.invalidateQueries({ queryKey: ['hotel-rooms', hotelId] });
-                queryClient.invalidateQueries({ queryKey: ['hotel-room-stats', hotelId] });
-              }}
-            />
-          </div>
-        </DrawerContent>
-      </Drawer>
+            </DialogTitle>
+            <DialogDescription>
+              Configure room details, pricing, and availability.
+            </DialogDescription>
+          </DialogHeader>
+          <HotelRoomForm
+            hotelId={hotelId}
+            room={selectedRoom}
+            onClose={handleFormClose}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['hotel-rooms', hotelId] });
+              queryClient.invalidateQueries({ queryKey: ['hotel-room-stats', hotelId] });
+              handleFormClose();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

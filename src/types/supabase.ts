@@ -374,6 +374,7 @@ export interface Database {
           penalty_terms: string | null
           supplier: string | null
           supplier_ref: string | null
+          contract_file_path: string | null
           active: boolean
           created_at: string
           updated_at: string
@@ -401,6 +402,7 @@ export interface Database {
           penalty_terms?: string | null
           supplier?: string | null
           supplier_ref?: string | null
+          contract_file_path?: string | null
           active?: boolean
           created_at?: string
           updated_at?: string
@@ -428,6 +430,7 @@ export interface Database {
           penalty_terms?: string | null
           supplier?: string | null
           supplier_ref?: string | null
+          contract_file_path?: string | null
           active?: boolean
           created_at?: string
           updated_at?: string

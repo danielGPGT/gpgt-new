@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, Package, Ticket, Hotel, Car, Plane, Coffee } from 'lucide-react';
+import { Plus, Ticket, Hotel, Car, Plane, Coffee } from 'lucide-react';
 import { InventorySummary } from '@/types/inventory';
 import { InventoryService } from '@/lib/inventoryService';
 import { useQuery } from '@tanstack/react-query';
@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 // Import inventory components (we'll create these next)
 import { TicketsManager } from '@/components/inventory/TicketsManager';
-import { HotelRoomsTable } from '@/components/inventory/HotelRoomsTable';
+import HotelManager from '@/components/inventory/HotelManager';
 import { CircuitTransfersTable } from '@/components/inventory/CircuitTransfersTable';
 import { AirportTransfersTable } from '@/components/inventory/AirportTransfersTable';
 import { FlightsTable } from '@/components/inventory/FlightsTable';
@@ -49,7 +49,7 @@ export default function InventoryPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Inventory Management</h1>
           <p className="text-muted-foreground">
-            Manage tickets, hotels, transfers, flights, and packages
+            Manage tickets, hotel properties, transfers, flights, and packages
           </p>
         </div>
         <Button onClick={handleRefresh} variant="outline">
@@ -62,37 +62,39 @@ export default function InventoryPage() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-10">
-          <TabsTrigger value="sports-events">Sports & Events</TabsTrigger>
-          <TabsTrigger value="venues">Venues & Ticket Categories</TabsTrigger>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="tickets">
+        <TabsList className="grid grid-cols-9 p-1 rounded-xl w-auto">
+          <TabsTrigger value="overview" className="rounded-lg !text-muted-foreground !data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm transition-colors">
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="sports-events" className="rounded-lg !text-muted-foreground !data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm transition-colors">
+            Sports & Events
+          </TabsTrigger>
+          <TabsTrigger value="venues" className="rounded-lg !text-muted-foreground !data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm transition-colors">
+            Venues & Categories
+          </TabsTrigger>
+          <TabsTrigger value="tickets" className="rounded-lg !text-muted-foreground !data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm transition-colors">
             <Ticket className="h-4 w-4 mr-2" />
             Tickets
           </TabsTrigger>
-          <TabsTrigger value="hotels">
+          <TabsTrigger value="hotels" className="rounded-lg !text-muted-foreground !data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm transition-colors">
             <Hotel className="h-4 w-4 mr-2" />
             Hotels
           </TabsTrigger>
-          <TabsTrigger value="circuit-transfers">
+          <TabsTrigger value="circuit-transfers" className="rounded-lg !text-muted-foreground !data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm transition-colors">
             <Car className="h-4 w-4 mr-2" />
             Circuit
           </TabsTrigger>
-          <TabsTrigger value="airport-transfers">
+          <TabsTrigger value="airport-transfers" className="rounded-lg !text-muted-foreground !data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm transition-colors">
             <Car className="h-4 w-4 mr-2" />
             Airport
           </TabsTrigger>
-          <TabsTrigger value="flights">
+          <TabsTrigger value="flights" className="rounded-lg !text-muted-foreground !data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm transition-colors">
             <Plane className="h-4 w-4 mr-2" />
             Flights
           </TabsTrigger>
-          <TabsTrigger value="lounge-passes">
+          <TabsTrigger value="lounge-passes" className="rounded-lg !text-muted-foreground !data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm transition-colors">
             <Coffee className="h-4 w-4 mr-2" />
             Lounges
-          </TabsTrigger>
-          <TabsTrigger value="packages">
-            <Package className="h-4 w-4 mr-2" />
-            Packages
           </TabsTrigger>
         </TabsList>
 
@@ -133,17 +135,17 @@ export default function InventoryPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Hotel className="h-5 w-5" />
-                  Hotel Rooms
+                  Hotels
                 </CardTitle>
                 <CardDescription>
-                  Accommodation inventory
+                  Hotel properties and room inventory
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-2xl font-bold">0</p>
-                    <p className="text-sm text-muted-foreground">Available</p>
+                    <p className="text-sm text-muted-foreground">Properties</p>
                   </div>
                   <Button size="sm" onClick={() => setActiveTab('hotels')}>
                     Manage
@@ -224,11 +226,11 @@ export default function InventoryPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Packages
+                  <Plus className="h-5 w-5" />
+                  Sports & Events
                 </CardTitle>
                 <CardDescription>
-                  Pre-built travel packages
+                  Sporting events and activities
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -237,7 +239,30 @@ export default function InventoryPage() {
                     <p className="text-2xl font-bold">0</p>
                     <p className="text-sm text-muted-foreground">Active</p>
                   </div>
-                  <Button size="sm" onClick={() => setActiveTab('packages')}>
+                  <Button size="sm" onClick={() => setActiveTab('sports-events')}>
+                    Manage
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Venues & Categories
+                </CardTitle>
+                <CardDescription>
+                  Venues and ticket categories
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-2xl font-bold">0</p>
+                    <p className="text-sm text-muted-foreground">Configured</p>
+                  </div>
+                  <Button size="sm" onClick={() => setActiveTab('venues')}>
                     Manage
                   </Button>
                 </div>
@@ -251,7 +276,7 @@ export default function InventoryPage() {
         </TabsContent>
 
         <TabsContent value="hotels">
-          <HotelRoomsTable />
+          <HotelManager />
         </TabsContent>
 
         <TabsContent value="circuit-transfers">

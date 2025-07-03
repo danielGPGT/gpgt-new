@@ -23,6 +23,15 @@ import { format } from 'date-fns';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+  PaginationEllipsis,
+} from '@/components/ui/pagination';
 
 // Utility to calculate price with markup
 const calcPriceWithMarkup = (price: number, markup: number) =>
@@ -99,30 +108,125 @@ const convertCurrency = async (amount: number, fromCurrency: string, toCurrency:
   }
 };
 
+// Helper function to get cell content for dynamic columns
+function getTicketCellContent(
+  ticket: Ticket,
+  col: string,
+  events: Event[],
+  ticketCategories: TicketCategory[]
+) {
+  switch (col) {
+    case 'event':
+      return events.find(evt => evt.id === ticket.event_id)?.name || '';
+    case 'category':
+      return ticketCategories.find(cat => cat.id === ticket.ticket_category_id)?.category_name || '';
+    case 'quantity_total':
+      return ticket.quantity_total;
+    case 'quantity_reserved':
+      return ticket.quantity_reserved ?? 0;
+    case 'quantity_available':
+      return ticket.quantity_available ?? (ticket.quantity_total - (ticket.quantity_reserved ?? 0));
+    case 'supplier_price':
+      const supplierSymbol = getCurrencySymbol(ticket.supplier_currency);
+      return `${supplierSymbol}${ticket.supplier_price?.toFixed(2)}`;
+    case 'supplier_currency':
+      return ticket.supplier_currency;
+    case 'price':
+      const priceSymbol = getCurrencySymbol(ticket.currency);
+      return `${priceSymbol}${ticket.price?.toFixed(2)}`;
+    case 'currency':
+      return ticket.currency;
+    case 'markup_percent':
+      return `${ticket.markup_percent}%`;
+    case 'price_with_markup':
+      const markupSymbol = getCurrencySymbol(ticket.currency);
+      const markupPrice = calcPriceWithMarkup(ticket.price, ticket.markup_percent);
+      return `${markupSymbol}${markupPrice.toFixed(2)}`;
+    case 'ticket_type':
+      return ticket.ticket_type || 'e-ticket';
+    case 'supplier':
+      return ticket.supplier || '-';
+    case 'supplier_ref':
+      return ticket.supplier_ref || '-';
+    case 'refundable':
+      return ticket.refundable ? 'Yes' : 'No';
+    case 'resellable':
+      return ticket.resellable ? 'Yes' : 'No';
+    case 'ordered':
+      return ticket.ordered ? 'Yes' : 'No';
+    case 'paid':
+      return ticket.paid ? 'Yes' : 'No';
+    case 'tickets_received':
+      return ticket.tickets_received ? 'Yes' : 'No';
+    case 'ticket_days':
+      return ticket.ticket_days || '-';
+    case 'status': {
+      // All icons use primary color for true, gray for false
+      const iconClass = 'w-4 h-4';
+      const activeColor = 'var(--primary-600)';
+      const inactiveColor = 'var(--base-700)';
+      return (
+        <TooltipProvider>
+          <div className="flex items-center gap-1.5">
+            {/* Ordered */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={`inline-flex items-center justify-center rounded border px-1.5 py-0.5 ${ticket.ordered ? '' : ''}`} style={{ minWidth: 0, borderColor: ticket.ordered ? activeColor : inactiveColor }}>
+                  <ShoppingCart className={iconClass} style={{ color: ticket.ordered ? activeColor : inactiveColor }} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Ordered</TooltipContent>
+            </Tooltip>
+            {/* Paid */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={`inline-flex items-center justify-center rounded border px-1.5 py-0.5 ${ticket.paid ? '' : ''}`} style={{ minWidth: 0, borderColor: ticket.paid ? activeColor : inactiveColor }}>
+                  <CreditCard className={iconClass} style={{ color: ticket.paid ? activeColor : inactiveColor }} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Paid</TooltipContent>
+            </Tooltip>
+            {/* Received */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={`inline-flex items-center justify-center rounded border px-1.5 py-0.5 ${ticket.tickets_received ? '' : ''}`} style={{ minWidth: 0, borderColor: ticket.tickets_received ? activeColor : inactiveColor }}>
+                  <Package className={iconClass} style={{ color: ticket.tickets_received ? activeColor : inactiveColor }} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Received</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
+      );
+    }
+    default:
+      return '';
+  }
+}
+
 // Zod schema for ticket form validation
 const ticketFormSchema = z.object({
   // Required fields
   event_id: z.string().uuid('Event is required'),
   ticket_category_id: z.string().uuid('Ticket category is required'),
   quantity_total: z.number().min(0, 'Quantity must be at least 0'),
-  supplier_currency: z.string().min(1, 'Supplier currency is required').default('EUR'),
+  supplier_currency: z.string().min(1, 'Supplier currency is required'),
   supplier_price: z.number().min(0, 'Supplier price must be at least 0'),
-  currency: z.string().min(1, 'Selling currency is required').default('GBP'),
+  currency: z.string().min(1, 'Selling currency is required'),
   price: z.number().min(0, 'Base price must be at least 0'),
-  markup_percent: z.number().min(0).max(100, 'Markup must be between 0-100%').default(0),
-  refundable: z.boolean().default(false),
-  resellable: z.boolean().default(false),
+  markup_percent: z.number().min(0).max(100, 'Markup must be between 0-100%'),
+  refundable: z.boolean(),
+  resellable: z.boolean(),
   
   // Optional fields
-  quantity_provisional: z.number().min(0).nullable().optional(),
   ticket_type: z.string().nullable().optional(),
   supplier: z.string().nullable().optional(),
   supplier_ref: z.string().nullable().optional(),
-  ordered: z.boolean().default(false),
+  ordered: z.boolean(),
   ordered_at: z.string().nullable().optional(),
-  paid: z.boolean().default(false),
+  paid: z.boolean(),
   paid_at: z.string().nullable().optional(),
-  tickets_received: z.boolean().default(false),
+  tickets_received: z.boolean(),
   tickets_received_at: z.string().nullable().optional(),
   metadata: z.record(z.any()).optional(),
   ticket_days: z.string().nullable().optional(),
@@ -166,12 +270,28 @@ export function TicketsManager() {
 
   // Enhanced table features state
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set([
-    'event', 'category', 'quantity', 'supplier_price', 'markup', 'sell_price', 'status', 'actions'
-  ]));
-  const [columnOrder, setColumnOrder] = useState<string[]>([
-    'event', 'category', 'quantity', 'supplier_price', 'markup', 'sell_price', 'status', 'actions'
-  ]);
+  
+  // Column visibility with localStorage persistence
+  const COLUMN_STORAGE_KEY = 'ticketsManagerTableVisibleColumns_v1';
+  const defaultColumns = [
+    'event', 'category', 'quantity_total', 'quantity_reserved', 'quantity_available', 
+    'supplier_price', 'supplier_currency', 'price', 'currency', 'markup_percent', 'price_with_markup', 
+    'ticket_type', 'supplier', 'supplier_ref', 'refundable', 'resellable', 
+    'ordered', 'paid', 'tickets_received', 'ticket_days', 'status'
+  ];
+  
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch {}
+    return new Set(defaultColumns);
+  });
+  
+  const [columnOrder, setColumnOrder] = useState<string[]>(defaultColumns);
   const [isExporting, setIsExporting] = useState(false);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -181,6 +301,10 @@ export function TicketsManager() {
   
   // Debounced search
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [rowsPerPage] = useState(25); // You can make this user-configurable if desired
 
   // Fetch data
   const { data: sports = [] } = useQuery({
@@ -334,6 +458,18 @@ export function TicketsManager() {
     return 0;
   }), [filteredTickets, sortKey, sortDir, events, ticketCategories]);
 
+  // Calculate paginated tickets
+  const totalPages = Math.max(1, Math.ceil(sortedTickets.length / rowsPerPage));
+  const paginatedTickets = useMemo(() => {
+    const start = (page - 1) * rowsPerPage;
+    return sortedTickets.slice(start, start + rowsPerPage);
+  }, [sortedTickets, page, rowsPerPage]);
+
+  // Reset to first page if filters change and current page is out of range
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [totalPages, page]);
+
   // Reset filters when parent selection changes
   useEffect(() => {
     if (selectedSport && selectedEvent && selectedEvent.sport_id !== selectedSport.id) {
@@ -351,6 +487,11 @@ export function TicketsManager() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  // Save column visibility to localStorage
+  useEffect(() => {
+    localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(Array.from(visibleColumns)));
+  }, [visibleColumns]);
 
   // Utility functions for enhanced features
   const toggleTicketSelection = useCallback((ticketId: string) => {
@@ -606,16 +747,30 @@ export function TicketsManager() {
                       Columns
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent align="end" className="w-64">
                     <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     {[
                       { key: 'event', label: 'Event' },
                       { key: 'category', label: 'Category' },
-                      { key: 'quantity', label: 'Quantity' },
+                      { key: 'quantity_total', label: 'Total Quantity' },
+                      { key: 'quantity_reserved', label: 'Reserved Quantity' },
+                      { key: 'quantity_available', label: 'Available Quantity' },
                       { key: 'supplier_price', label: 'Supplier Price' },
-                      { key: 'markup', label: 'Markup %' },
-                      { key: 'sell_price', label: 'Sell Price' },
+                      { key: 'supplier_currency', label: 'Supplier Currency' },
+                      { key: 'price', label: 'Base Price' },
+                      { key: 'currency', label: 'Selling Currency' },
+                      { key: 'markup_percent', label: 'Markup %' },
+                      { key: 'price_with_markup', label: 'Price with Markup' },
+                      { key: 'ticket_type', label: 'Ticket Type' },
+                      { key: 'supplier', label: 'Supplier' },
+                      { key: 'supplier_ref', label: 'Supplier Ref' },
+                      { key: 'refundable', label: 'Refundable' },
+                      { key: 'resellable', label: 'Resellable' },
+                      { key: 'ordered', label: 'Ordered' },
+                      { key: 'paid', label: 'Paid' },
+                      { key: 'tickets_received', label: 'Tickets Received' },
+                      { key: 'ticket_days', label: 'Ticket Days' },
                       { key: 'status', label: 'Status' },
                       { key: 'actions', label: 'Actions' }
                     ].map(column => (
@@ -627,6 +782,10 @@ export function TicketsManager() {
                         {column.label}
                       </DropdownMenuCheckboxItem>
                     ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setVisibleColumns(new Set(defaultColumns))}>
+                      Reset Columns
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 </div>
@@ -877,13 +1036,45 @@ export function TicketsManager() {
                     </TableHead>
                   )}
                   
-                  {visibleColumns.has('quantity') && (
+                  {visibleColumns.has('quantity_total') && (
                     <TableHead className="cursor-pointer select-none" onClick={() => {
                       setSortKey('quantity');
                       setSortDir(sortKey === 'quantity' && sortDir === 'asc' ? 'desc' : 'asc');
                     }}>
                       <span className="inline-flex items-center gap-1">
-                        Quantity
+                        Total
+                        {sortKey === 'quantity' ? (
+                          sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                        ) : (
+                          <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </span>
+                    </TableHead>
+                  )}
+                  
+                  {visibleColumns.has('quantity_reserved') && (
+                    <TableHead className="cursor-pointer select-none" onClick={() => {
+                      setSortKey('quantity');
+                      setSortDir(sortKey === 'quantity' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}>
+                      <span className="inline-flex items-center gap-1">
+                        Reserved
+                        {sortKey === 'quantity' ? (
+                          sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                        ) : (
+                          <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </span>
+                    </TableHead>
+                  )}
+                  
+                  {visibleColumns.has('quantity_available') && (
+                    <TableHead className="cursor-pointer select-none" onClick={() => {
+                      setSortKey('quantity');
+                      setSortDir(sortKey === 'quantity' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}>
+                      <span className="inline-flex items-center gap-1">
+                        Available
                         {sortKey === 'quantity' ? (
                           sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
                         ) : (
@@ -909,7 +1100,31 @@ export function TicketsManager() {
                     </TableHead>
                   )}
                   
-                  {visibleColumns.has('markup') && (
+                  {visibleColumns.has('supplier_currency') && (
+                    <TableHead>Supplier Currency</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('price') && (
+                    <TableHead className="cursor-pointer select-none" onClick={() => {
+                      setSortKey('sell_price');
+                      setSortDir(sortKey === 'sell_price' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}>
+                      <span className="inline-flex items-center gap-1">
+                        Base Price
+                        {sortKey === 'sell_price' ? (
+                          sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                        ) : (
+                          <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </span>
+                    </TableHead>
+                  )}
+                  
+                  {visibleColumns.has('currency') && (
+                    <TableHead>Selling Currency</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('markup_percent') && (
                     <TableHead className="cursor-pointer select-none" onClick={() => {
                       setSortKey('markup');
                       setSortDir(sortKey === 'markup' && sortDir === 'asc' ? 'desc' : 'asc');
@@ -925,13 +1140,13 @@ export function TicketsManager() {
                     </TableHead>
                   )}
                   
-                  {visibleColumns.has('sell_price') && (
+                  {visibleColumns.has('price_with_markup') && (
                     <TableHead className="cursor-pointer select-none" onClick={() => {
                       setSortKey('sell_price');
                       setSortDir(sortKey === 'sell_price' && sortDir === 'asc' ? 'desc' : 'asc');
                     }}>
                       <span className="inline-flex items-center gap-1">
-                        Sell Price (GBP)
+                        Price with Markup
                         {sortKey === 'sell_price' ? (
                           sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
                         ) : (
@@ -941,22 +1156,53 @@ export function TicketsManager() {
                     </TableHead>
                   )}
                   
+                  {visibleColumns.has('ticket_type') && (
+                    <TableHead>Ticket Type</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('supplier') && (
+                    <TableHead>Supplier</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('supplier_ref') && (
+                    <TableHead>Supplier Ref</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('refundable') && (
+                    <TableHead>Refundable</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('resellable') && (
+                    <TableHead>Resellable</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('ordered') && (
+                    <TableHead>Ordered</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('paid') && (
+                    <TableHead>Paid</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('tickets_received') && (
+                    <TableHead>Tickets Received</TableHead>
+                  )}
+                  
+                  {visibleColumns.has('ticket_days') && (
+                    <TableHead>Ticket Days</TableHead>
+                  )}
+                  
                   {visibleColumns.has('status') && (
                     <TableHead>Status</TableHead>
                   )}
                   
-                  {visibleColumns.has('actions') && (
+                  {/* Actions column is always visible and at the end */}
                     <TableHead className="text-right">Actions</TableHead>
-                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedTickets.length > 0 ? (
-                  sortedTickets.map((ticket, index) => {
-                    const category = ticketCategories.find(cat => cat.id === ticket.ticket_category_id);
-                    const event = events.find(evt => evt.id === ticket.event_id);
-                    
-                    return (
+                {paginatedTickets.length > 0 ? (
+                  paginatedTickets.map((ticket, index) => (
                       <TableRow 
                         key={ticket.id} 
                         className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${
@@ -975,172 +1221,13 @@ export function TicketsManager() {
                             aria-label={`Select ticket ${ticket.id}`}
                           />
                         </TableCell>
-                        
-                        {/* Conditional Columns */}
-                        {visibleColumns.has('event') && (
-                          <TableCell className="font-medium">
-                            <div>
-                              <div>{event?.name || 'Unknown Event'}</div>
-                            </div>
+                      {/* Render all visible columns in order */}
+                      {columnOrder.filter(col => visibleColumns.has(col)).map(col => (
+                        <TableCell key={col}>
+                          {getTicketCellContent(ticket, col, events, ticketCategories)}
                           </TableCell>
-                        )}
-                        
-                        {visibleColumns.has('category') && (
-                          <TableCell>
-                            <div className="font-medium">
-                              {category?.category_name || 'Unknown Category'}
-                            </div>
-                          </TableCell>
-                        )}
-                        
-                        {visibleColumns.has('quantity') && (
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all hover:bg-muted/80" 
-                                         style={{
-                                           backgroundColor: 'var(--color-muted)',
-                                           color: 'var(--color-muted-foreground)',
-                                           border: '1px solid var(--color-border)'
-                                         }}>
-                                      <span>{ticket.quantity_total}</span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Total Quantity</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all hover:bg-muted/80"
-                                         style={{
-                                           backgroundColor: 'var(--color-muted)',
-                                           color: 'var(--color-muted-foreground)',
-                                           border: '1px solid var(--color-border)'
-                                         }}>
-                                      <span>{ticket.quantity_reserved || 0}</span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Reserved Quantity</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all ${
-                                      ticket.quantity_available > 0 ? 'hover:bg-green-50' : 'hover:bg-red-50'
-                                    }`}
-                                         style={{
-                                           backgroundColor: ticket.quantity_available > 0 
-                                             ? 'var(--color-muted)' 
-                                             : 'var(--color-muted)',
-                                           color: ticket.quantity_available > 0 
-                                             ? 'var(--color-muted-foreground)' 
-                                             : 'var(--color-muted-foreground)',
-                                           border: '1px solid var(--color-border)'
-                                         }}>
-                                      <span>{ticket.quantity_available}</span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Available Quantity</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                          </TableCell>
-                        )}
-                        
-                        {visibleColumns.has('supplier_price') && (
-                          <TableCell>
-                            <div className="font-medium">
-                              {ticket.supplier_price?.toFixed(2) || '0.00'} {getCurrencySymbol(ticket.supplier_currency || 'EUR')}
-                            </div>
-                          </TableCell>
-                        )}
-                        
-                        {visibleColumns.has('markup') && (
-                          <TableCell>
-                            <div className="font-medium">
-                              {ticket.markup_percent || 0}%
-                            </div>
-                          </TableCell>
-                        )}
-                        
-                        {visibleColumns.has('sell_price') && (
-                          <TableCell>
-                            <div className="font-medium">
-                              £{ticket.price_with_markup?.toFixed(2) || ticket.price?.toFixed(2) || '0.00'}
-                            </div>
-                          </TableCell>
-                        )}
-                        
-                        {visibleColumns.has('status') && (
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border transition-colors ${
-                                      ticket.ordered 
-                                        ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/15' 
-                                        : 'bg-muted/50 text-muted-foreground/50 border-muted/30'
-                                    }`}>
-                                      <ShoppingCart className="h-3.5 w-3.5" />
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{ticket.ordered ? 'Ordered' : 'Not Ordered'}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border transition-colors ${
-                                      ticket.paid 
-                                        ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/15' 
-                                        : 'bg-muted/50 text-muted-foreground/50 border-muted/30'
-                                    }`}>
-                                      <CreditCard className="h-3.5 w-3.5" />
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{ticket.paid ? 'Paid' : 'Not Paid'}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border transition-colors ${
-                                      ticket.tickets_received 
-                                        ? 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/15' 
-                                        : 'bg-muted/50 text-muted-foreground/50 border-muted/30'
-                                    }`}>
-                                      <Package className="h-3.5 w-3.5" />
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{ticket.tickets_received ? 'Tickets Received' : 'Not Received'}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                          </TableCell>
-                        )}
-                        
-                        {visibleColumns.has('actions') && (
+                      ))}
+                      {/* Actions column always at the end */}
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
                               <Button size="icon" variant="ghost" onClick={() => { setEditingTicket(ticket); setTicketDrawerOpen(true); }}>
@@ -1151,13 +1238,11 @@ export function TicketsManager() {
                               </Button>
                             </div>
                           </TableCell>
-                        )}
                       </TableRow>
-                    );
-                  })
+                  ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={visibleColumns.size + 1} className="text-center py-12 text-muted-foreground bg-muted/10 border-b border-border/30">
+                    <TableCell colSpan={visibleColumns.size + 2} className="text-center py-12 text-muted-foreground bg-muted/10 border-b border-border/30">
                       <div className="flex flex-col items-center gap-2">
                         <Package className="h-8 w-8 text-muted-foreground/50" />
                         <span className="text-sm font-medium">No tickets found</span>
@@ -1168,11 +1253,65 @@ export function TicketsManager() {
                 )}
               </TableBody>
             </Table>
+            {/* Pagination Controls */}
+            <div className="flex justify-center py-4">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={e => { e.preventDefault(); setPage(p => Math.max(1, p - 1)); }}
+                      aria-disabled={page === 1}
+                    />
+                  </PaginationItem>
+                  {/* Page numbers with ellipsis if needed */}
+                  {Array.from({ length: totalPages }).map((_, i) => {
+                    // Show first, last, current, and neighbors; ellipsis for gaps
+                    if (
+                      i === 0 ||
+                      i === totalPages - 1 ||
+                      Math.abs(i + 1 - page) <= 1
+                    ) {
+                      return (
+                        <PaginationItem key={i}>
+                          <PaginationLink
+                            href="#"
+                            isActive={page === i + 1}
+                            onClick={e => { e.preventDefault(); setPage(i + 1); }}
+                          >
+                            {i + 1}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    }
+                    // Ellipsis logic
+                    if (
+                      (i === 1 && page > 3) ||
+                      (i === totalPages - 2 && page < totalPages - 2)
+                    ) {
+                      return (
+                        <PaginationItem key={i}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      );
+                    }
+                    return null;
+                  })}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={e => { e.preventDefault(); setPage(p => Math.min(totalPages, p + 1)); }}
+                      aria-disabled={page === totalPages}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
       </div>
 
       {/* Ticket Form Drawer */}
       <Drawer open={ticketDrawerOpen} onOpenChange={setTicketDrawerOpen} direction="right">
-        <DrawerContent className="!w-[600px] max-w-none !max-h-none h-full">
+        <DrawerContent className="!max-w-3xl !max-h-none h-full">
           <DrawerHeader>
             <DrawerTitle>{editingTicket ? 'Edit Ticket' : 'Add New Ticket'}</DrawerTitle>
             <DrawerDescription>
@@ -1183,7 +1322,7 @@ export function TicketsManager() {
             ticket={editingTicket || undefined}
             events={events}
             ticketCategories={selectedEvent ? ticketCategories : allTicketCategories}
-            onSubmit={data => {
+            onSubmit={(data: any) => {
               if (editingTicket) {
                 updateTicketMutation.mutate({ id: editingTicket.id, data });
               } else {
@@ -1389,7 +1528,7 @@ function TicketFormDrawer({
       resellable: !!ticket?.resellable,
       
       // Optional fields
-      quantity_provisional: typeof ticket?.quantity_provisional === 'number' ? ticket.quantity_provisional : 0,
+      
       ticket_type: typeof ticket?.ticket_type === 'string' ? ticket.ticket_type : 'e-ticket',
       supplier: typeof ticket?.supplier === 'string' ? ticket.supplier : '',
       supplier_ref: typeof ticket?.supplier_ref === 'string' ? ticket.supplier_ref : '',
@@ -1416,7 +1555,7 @@ function TicketFormDrawer({
 
   // Calculate derived values
   const priceWithMarkup = calcPriceWithMarkup(watchedValues.price, watchedValues.markup_percent);
-  const quantityAvailable = watchedValues.quantity_total - (watchedValues.quantity_provisional || 0);
+  const quantityAvailable = watchedValues.quantity_total;
   
   // Auto-convert supplier price to base price when currencies differ
   React.useEffect(() => {
@@ -1480,7 +1619,7 @@ function TicketFormDrawer({
       ordered_at: data.ordered && data.ordered_at ? data.ordered_at : null,
       paid_at: data.paid && data.paid_at ? data.paid_at : null,
       tickets_received_at: data.tickets_received && data.tickets_received_at ? data.tickets_received_at : null,
-      quantity_provisional: typeof data.quantity_provisional === 'number' ? data.quantity_provisional : 0,
+
       ticket_type: typeof data.ticket_type === 'string' ? data.ticket_type : 'e-ticket',
       supplier: typeof data.supplier === 'string' ? data.supplier : '',
       supplier_ref: typeof data.supplier_ref === 'string' ? data.supplier_ref : '',
@@ -1755,24 +1894,7 @@ function TicketFormDrawer({
               <h3 className="text-base font-semibold text-card-foreground">Optional Fields</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="quantity_provisional" className="text-sm font-medium text-muted-foreground">Provisional Quantity</Label>
-                <Controller
-                  name="quantity_provisional"
-                  control={form.control}
-                  render={({ field }) => (
-                    <Input
-                      type="number"
-                      min="0"
-                      className="h-9"
-                      {...field}
-                      value={field.value || ''}
-                      onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
-                      placeholder="Optional provisional quantity"
-                    />
-                  )}
-                />
-              </div>
+
 
               <div className="space-y-1.5">
                 <Label htmlFor="ticket_type" className="text-sm font-medium text-muted-foreground">Ticket Type</Label>
@@ -1780,7 +1902,7 @@ function TicketFormDrawer({
                   name="ticket_type"
                   control={form.control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value || ''}>
                       <SelectTrigger className="h-9">
                         <SelectValue placeholder="Select ticket type" />
                       </SelectTrigger>

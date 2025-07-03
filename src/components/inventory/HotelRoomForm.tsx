@@ -114,14 +114,14 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     quantity_provisional: room?.quantity_provisional ?? 0,
     supplier_price_per_night: room?.supplier_price_per_night ?? 0,
     supplier_currency: room?.supplier_currency ?? 'EUR',
-    markup_percent: room?.markup_percent ?? 0,
+    markup_percent: room?.markup_percent ?? 55,
     vat_percentage: room?.vat_percentage ?? 0,
     resort_fee: room?.resort_fee ?? 0,
     resort_fee_type: room?.resort_fee_type ?? 'per_night',
     city_tax: room?.city_tax ?? 0,
     city_tax_type: room?.city_tax_type ?? 'per_person_per_night',
     breakfast_included: room?.breakfast_included ?? true,
-    extra_night_markup_percent: room?.extra_night_markup_percent ?? 0,
+    extra_night_markup_percent: room?.extra_night_markup_percent ?? 28,
     contracted: room?.contracted ?? false,
     attrition_deadline: room?.attrition_deadline ?? '',
     release_allowed_percent: room?.release_allowed_percent ?? 0,
@@ -815,7 +815,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                 const resortFee = formData.resort_fee ?? 0;
                 const resortFeeType = formData.resort_fee_type ?? 'per_night';
                 const breakfastIncluded = !!formData.breakfast_included;
-                const breakfastPerPersonPerNight = breakfastIncluded ? (formData.breakfast_price_per_person_per_night ?? 0) : 0;
+                const breakfastPerPersonPerNight = !breakfastIncluded ? (formData.breakfast_price_per_person_per_night ?? 0) : 0;
                 const vat = formData.vat_percentage ?? 0;
                 const markup = formData.markup_percent ?? 0;
                 const supplierCurrency = formData.supplier_currency ?? 'EUR';
@@ -893,7 +893,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                           {showBoth ? `${supplierSymbol}${resortFeeTotalSupplier.toFixed(2)} | ` : ''}£{resortFeeTotalGbp.toFixed(2)}
                         </span>
                       </div>
-                      {breakfastIncluded && (
+                      {!breakfastIncluded && breakfastPerPersonPerNight > 0 && (
                         <div className="flex justify-between items-center">
                           <span>Breakfast ({maxPeople} guests × {supplierSymbol}{breakfastPerPersonPerNight} × {nights} nights):</span>
                           <span className="font-semibold">
@@ -902,7 +902,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                         </div>
                       )}
                       <div className="flex justify-between border-t pt-2 mt-2 font-bold">
-                        <span>Subtotal (your total cost):</span>
+                        <span>Subtotal (our total cost):</span>
                         <span>
                           {showBoth ? `${supplierSymbol}${subtotalSupplier.toFixed(2)} | ` : ''}£{subtotalGbp.toFixed(2)}
                         </span>
@@ -913,25 +913,75 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                         </span>
                       </div>
                       <div className="flex justify-between border-t pt-2 mt-2 font-bold text-lg">
-                        <span>Total (what you charge the customer):</span>
+                        <span>Total (what we charge the customer):</span>
                         <span>
                           {showBoth ? `${supplierSymbol}${totalSupplier.toFixed(2)} | ` : ''}£{totalGbp.toFixed(2)}
                         </span>
                       </div>
                     </div>
                     {perNight && (
-                      <div className="mt-6 p-3 rounded-lg bg-muted/40 border border-border">
-                        <div className="font-semibold mb-2">Per Night Price Breakdown</div>
-                        <div className="flex justify-between"><span>Room:</span><span>{showBoth ? `${supplierSymbol}${perNight.room.supplier.toFixed(2)} | ` : ''}£{perNight.room.gbp.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span>VAT:</span><span>{showBoth ? `${supplierSymbol}${perNight.vat.supplier.toFixed(2)} | ` : ''}£{perNight.vat.gbp.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span>City Tax:</span><span>{showBoth ? `${supplierSymbol}${perNight.cityTax.supplier.toFixed(2)} | ` : ''}£{perNight.cityTax.gbp.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span>Resort Fee:</span><span>{showBoth ? `${supplierSymbol}${perNight.resortFee.supplier.toFixed(2)} | ` : ''}£{perNight.resortFee.gbp.toFixed(2)}</span></div>
-                        {breakfastIncluded && (
-                          <div className="flex justify-between"><span>Breakfast:</span><span>{showBoth ? `${supplierSymbol}${perNight.breakfast.supplier.toFixed(2)} | ` : ''}£{perNight.breakfast.gbp.toFixed(2)}</span></div>
+                      <div className="mt-6 p-4 rounded-lg bg-gradient-to-br from-muted/30 to-muted/50 border border-border/50">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Calendar className="w-4 h-4 text-primary" />
+                          <div className="font-semibold text-sm">Per Night Breakdown</div>
+                        </div>
+                        
+                        {/* Base Costs */}
+                        <div className="space-y-1.5 mb-3">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Room Rate</span>
+                            <span className="font-medium">{showBoth ? `${supplierSymbol}${perNight.room.supplier.toFixed(2)} | ` : ''}£{perNight.room.gbp.toFixed(2)}</span>
+                          </div>
+                          
+                          {/* Taxes & Fees */}
+                          {perNight.vat.supplier > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">VAT ({vat}%)</span>
+                              <span className="font-medium">{showBoth ? `${supplierSymbol}${perNight.vat.supplier.toFixed(2)} | ` : ''}£{perNight.vat.gbp.toFixed(2)}</span>
+                            </div>
+                          )}
+                          
+                          {perNight.cityTax.supplier > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">City Tax</span>
+                              <span className="font-medium">{showBoth ? `${supplierSymbol}${perNight.cityTax.supplier.toFixed(2)} | ` : ''}£{perNight.cityTax.gbp.toFixed(2)}</span>
+                            </div>
+                          )}
+                          
+                          {perNight.resortFee.supplier > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Resort Fee</span>
+                              <span className="font-medium">{showBoth ? `${supplierSymbol}${perNight.resortFee.supplier.toFixed(2)} | ` : ''}£{perNight.resortFee.gbp.toFixed(2)}</span>
+                            </div>
+                          )}
+                          
+                          {!breakfastIncluded && breakfastPerPersonPerNight > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Breakfast ({maxPeople}×{supplierSymbol}{breakfastPerPersonPerNight})</span>
+                              <span className="font-medium">{showBoth ? `${supplierSymbol}${perNight.breakfast.supplier.toFixed(2)} | ` : ''}£{perNight.breakfast.gbp.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Subtotal */}
+                        <div className="flex justify-between py-2 border-t border-border/30 font-semibold text-sm">
+                          <span>Subtotal (Our Cost)</span>
+                          <span>{showBoth ? `${supplierSymbol}${perNight.subtotal.supplier.toFixed(2)} | ` : ''}£{perNight.subtotal.gbp.toFixed(2)}</span>
+                        </div>
+                        
+                        {/* Markup */}
+                        {markup > 0 && (
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-muted-foreground">Markup ({markup}%)</span>
+                            <span className="font-medium">{showBoth ? `${supplierSymbol}${perNight.markup.supplier.toFixed(2)} | ` : ''}£{perNight.markup.gbp.toFixed(2)}</span>
+                          </div>
                         )}
-                        <div className="flex justify-between font-bold"><span>Subtotal:</span><span>{showBoth ? `${supplierSymbol}${perNight.subtotal.supplier.toFixed(2)} | ` : ''}£{perNight.subtotal.gbp.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span>Markup:</span><span>{showBoth ? `${supplierSymbol}${perNight.markup.supplier.toFixed(2)} | ` : ''}£{perNight.markup.gbp.toFixed(2)}</span></div>
-                        <div className="flex justify-between font-bold text-lg"><span>Total per night:</span><span>{showBoth ? `${supplierSymbol}${perNight.total.supplier.toFixed(2)} | ` : ''}£{perNight.total.gbp.toFixed(2)}</span></div>
+                        
+                        {/* Total */}
+                        <div className="flex justify-between py-2 border-t border-primary/20 bg-primary/5 rounded px-2 font-bold text-base">
+                          <span>Total per Night</span>
+                          <span className="text-primary">{showBoth ? `${supplierSymbol}${perNight.total.supplier.toFixed(2)} | ` : ''}£{perNight.total.gbp.toFixed(2)}</span>
+                        </div>
                       </div>
                     )}
                   </>

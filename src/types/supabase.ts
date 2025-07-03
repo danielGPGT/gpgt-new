@@ -153,6 +153,7 @@ export interface Database {
           start_date: string | null
           end_date: string | null
           venue_id: string | null
+          event_image: Json | null
         }
         Insert: {
           id?: string
@@ -162,6 +163,7 @@ export interface Database {
           start_date?: string | null
           end_date?: string | null
           venue_id?: string | null
+          event_image?: Json | null
         }
         Update: {
           id?: string
@@ -171,6 +173,7 @@ export interface Database {
           start_date?: string | null
           end_date?: string | null
           venue_id?: string | null
+          event_image?: Json | null
         }
       }
       sports: {

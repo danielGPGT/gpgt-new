@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { gemini } from './gemini';
+import { ImageProcessor, type ProcessedImage } from './imageProcessor';
 
 export interface MediaItem {
   id: string;
@@ -57,15 +58,27 @@ export class MediaLibraryService {
       throw new Error('File too large. Please upload an image smaller than 10MB.');
     }
 
-    // Generate unique filename
+    // Process the image with aggressive compression and WebP conversion
+    const processedImage = await ImageProcessor.processImage(file, {
+      convertToWebP: true,
+      quality: 0.6, // More aggressive quality setting
+      maxWidth: 1200, // Smaller max width
+      maxHeight: 800, // Smaller max height
+      maxFileSize: 500 * 1024, // Target 500KB max
+    });
+
+    // Log compression results
+    console.log(`Image processed: ${processedImage.originalSize} → ${processedImage.processedSize} bytes (${processedImage.compressionRatio.toFixed(1)}% reduction)`);
+
+    // Generate unique filename with appropriate extension
     const timestamp = Date.now();
-    const fileExtension = file.name.split('.').pop();
+    const fileExtension = processedImage.format;
     const fileName = `${userId}/${timestamp}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
     
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from(this.BUCKET_NAME)
-      .upload(fileName, file, {
+      .upload(fileName, processedImage.file, {
         cacheControl: '3600',
         upsert: false
       });
@@ -86,8 +99,8 @@ export class MediaLibraryService {
     return {
       url: urlData.publicUrl,
       path: fileName,
-      size: file.size,
-      type: file.type
+      size: processedImage.processedSize,
+      type: processedImage.file.type
     };
   }
 
@@ -116,8 +129,8 @@ export class MediaLibraryService {
           location: aiResult.location,
           image_url: uploadedImage.url,
           thumbnail_url: uploadedImage.url, // Could generate thumbnail later
-          file_size: file.size,
-          file_type: file.type,
+          file_size: uploadedImage.size, // Use processed file size
+          file_type: uploadedImage.type, // Use processed file type
           ai_generated: true,
         })
         .select()
@@ -448,8 +461,8 @@ Respond with ONLY valid JSON in this exact format:
           location: aiResult.location,
           image_url: uploadedImage.url,
           thumbnail_url: uploadedImage.url,
-          file_size: imageFile.size,
-          file_type: imageFile.type,
+          file_size: uploadedImage.size, // Use processed file size
+          file_type: uploadedImage.type, // Use processed file type
           ai_generated: true,
         })
         .select()

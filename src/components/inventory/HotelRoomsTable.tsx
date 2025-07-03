@@ -18,11 +18,15 @@ import {
   Grid3X3,
   List,
   BarChart3,
-  Settings
+  Settings,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { HotelRoomService, type HotelRoom, type HotelRoomInsert } from '@/lib/hotelRoomService';
+import { InventoryService } from '@/lib/inventoryService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,7 +67,7 @@ const CURRENCIES = ['EUR', 'GBP', 'USD', 'CAD', 'AUD'];
 
 const COLUMN_STORAGE_KEY = 'hotelRoomsTableVisibleColumns_v2';
 const defaultColumns = [
-  'room_type_id', 'dates', 'availability', 'total_price_per_night_gbp', 'total_price_per_stay_gbp',
+  'room_type_id', 'dates', 'quantity_total', 'quantity_reserved', 'quantity_available', 'total_price_per_night_gbp', 'total_price_per_stay_gbp',
   'vat_percentage', 'city_tax', 'resort_fee', 'breakfast_price_per_person_per_night',
   'supplier', 'status', 'actions'
 ];
@@ -75,7 +79,14 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRoomType, setFilterRoomType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterEvent, setFilterEvent] = useState<string>('all');
+  const [filterSupplier, setFilterSupplier] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  
+  // Sorting state
+  const [sortKey, setSortKey] = useState<'room_type_id' | 'check_in' | 'check_out' | 'quantity_available' | 'quantity_total' | 'quantity_reserved' | 'supplier_price_per_night' | 'total_price_per_night_gbp' | 'supplier'>('room_type_id');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
@@ -98,6 +109,12 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
   const { data: rooms = [], isLoading } = useQuery({
     queryKey: ['hotel-rooms', hotelId],
     queryFn: () => HotelRoomService.getHotelRooms(hotelId),
+  });
+
+  // Fetch events for filter
+  const { data: events = [] } = useQuery({
+    queryKey: ['events'],
+    queryFn: () => InventoryService.getEvents(),
   });
 
   // Delete room mutation
@@ -125,7 +142,34 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
       (filterStatus === 'reserved' && (room.quantity_reserved ?? 0) > 0) ||
       (filterStatus === 'provisional' && (room.quantity_provisional ?? 0) > 0);
 
-    return matchesSearch && matchesRoomType && matchesStatus;
+    const matchesEvent = filterEvent === 'all' || room.event_id === filterEvent;
+    
+    const matchesSupplier = filterSupplier === 'all' || room.supplier === filterSupplier;
+
+    return matchesSearch && matchesRoomType && matchesStatus && matchesEvent && matchesSupplier;
+  });
+
+  // Sort rooms
+  const sortedRooms = [...filteredRooms].sort((a, b) => {
+    const aVal = a[sortKey] ?? '';
+    const bVal = b[sortKey] ?? '';
+    
+    // Handle date sorting
+    if (sortKey === 'check_in' || sortKey === 'check_out') {
+      const aDate = new Date(aVal).getTime();
+      const bDate = new Date(bVal).getTime();
+      return sortDir === 'asc' ? aDate - bDate : bDate - aDate;
+    }
+    
+    // Handle numeric sorting
+    if (typeof aVal === 'number' && typeof bVal === 'number') {
+      return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+    }
+    
+    // Handle string sorting
+    return sortDir === 'asc'
+      ? String(aVal).localeCompare(String(bVal))
+      : String(bVal).localeCompare(String(aVal));
   });
 
   const handleEditRoom = (room: HotelRoom) => {
@@ -184,18 +228,18 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
   };
 
   const toggleAllRooms = () => {
-    if (selectedRooms.size === filteredRooms.length) {
+    if (selectedRooms.size === sortedRooms.length) {
       setSelectedRooms(new Set());
     } else {
-      setSelectedRooms(new Set(filteredRooms.map(r => r.id)));
+      setSelectedRooms(new Set(sortedRooms.map(r => r.id)));
     }
   };
 
   const exportToCSV = async () => {
     setIsExporting(true);
     try {
-      const selectedRoomsData = filteredRooms.filter(r => selectedRooms.has(r.id));
-      const roomsToExport = selectedRoomsData.length > 0 ? selectedRoomsData : filteredRooms;
+      const selectedRoomsData = sortedRooms.filter(r => selectedRooms.has(r.id));
+      const roomsToExport = selectedRoomsData.length > 0 ? selectedRoomsData : sortedRooms;
       const csvContent = [
         [
           'Room Type', 'Dates', 'Availability', 'Supplier Price', 'Supplier Total',
@@ -294,7 +338,9 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                   {[
                     { key: 'room_type_id', label: 'Room Type' },
                     { key: 'dates', label: 'Dates' },
-                    { key: 'availability', label: 'Availability' },
+                    { key: 'quantity_total', label: 'Total' },
+                    { key: 'quantity_reserved', label: 'Reserved' },
+                    { key: 'quantity_available', label: 'Available' },
                     { key: 'supplier_price_per_night', label: 'Supplier Price' },
                     { key: 'total_supplier_price_per_night', label: 'Supplier Total' },
                     { key: 'total_price_per_night_gbp', label: 'GBP/Night' },
@@ -390,6 +436,8 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                     setSearchTerm('');
                     setFilterRoomType('all');
                     setFilterStatus('all');
+                    setFilterEvent('all');
+                    setFilterSupplier('all');
                   }}
                 >
                   Clear All
@@ -397,6 +445,19 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
               </div>
               {/* Filters at flex-end */}
               <div className="flex flex-wrap gap-2 items-center justify-end">
+                <Select value={filterEvent} onValueChange={setFilterEvent}>
+                  <SelectTrigger className="h-8 min-w-[140px] text-xs rounded-md">
+                    <SelectValue placeholder="All events" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All events</SelectItem>
+                    {events.filter(event => event.id && event.id.trim() !== '').map(event => (
+                      <SelectItem key={event.id} value={event.id}>
+                        {event.name} - {event.start_date}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Select value={filterRoomType} onValueChange={setFilterRoomType}>
                   <SelectTrigger className="h-8 min-w-[110px] text-xs rounded-md">
                     <SelectValue placeholder="All types" />
@@ -419,19 +480,35 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                     <SelectItem value="provisional">Provisional</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+                  <SelectTrigger className="h-8 min-w-[120px] text-xs rounded-md">
+                    <SelectValue placeholder="All suppliers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All suppliers</SelectItem>
+                    {Array.from(new Set(rooms.map(r => r.supplier).filter(Boolean))).map(supplier => (
+                      <SelectItem key={supplier!} value={supplier!}>{supplier}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
                 {/* Active Filters Count */}
                 <div>
                   <div className={`h-8 min-w-[40px] flex items-center justify-center rounded-md border px-2 text-xs font-semibold transition-colors ${[
+                    filterEvent !== 'all' ? 'event' : null,
                     filterRoomType !== 'all' ? filterRoomType : null,
                     filterStatus !== 'all' ? filterStatus : null,
+                    filterSupplier !== 'all' ? 'supplier' : null,
                     searchTerm ? 'search' : null
                   ].filter(Boolean).length > 0
                     ? 'bg-primary/10 text-primary border-primary/20'
                     : 'bg-muted/30 text-muted-foreground border-muted/30'}`}
                   >
                     {[
+                      filterEvent !== 'all' ? 'event' : null,
                       filterRoomType !== 'all' ? filterRoomType : null,
                       filterStatus !== 'all' ? filterStatus : null,
+                      filterSupplier !== 'all' ? 'supplier' : null,
                       searchTerm ? 'search' : null
                     ].filter(Boolean).length}
                   </div>
@@ -473,17 +550,138 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                 {/* Selection Checkbox */}
                 <TableHead className="">
                   <Checkbox
-                    checked={selectedRooms.size === filteredRooms.length && filteredRooms.length > 0}
+                    checked={selectedRooms.size === sortedRooms.length && sortedRooms.length > 0}
                     onCheckedChange={toggleAllRooms}
                     aria-label="Select all rooms"
                   />
                 </TableHead>
-                {visibleColumns.has('room_type_id') && <TableHead className="text-muted-foreground font-medium">Room Type</TableHead>}
-                {visibleColumns.has('dates') && <TableHead className="text-muted-foreground font-medium">Dates</TableHead>}
-                {visibleColumns.has('availability') && <TableHead className="text-muted-foreground font-medium">Availability</TableHead>}
-                {visibleColumns.has('supplier_price_per_night') && <TableHead className="text-muted-foreground font-medium">Supplier Price</TableHead>}
+                {visibleColumns.has('room_type_id') && (
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => {
+                      setSortKey('room_type_id');
+                      setSortDir(sortKey === 'room_type_id' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Room Type
+                      {sortKey === 'room_type_id' ? (
+                        sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
+                )}
+                {visibleColumns.has('dates') && (
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => {
+                      setSortKey('check_in');
+                      setSortDir(sortKey === 'check_in' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Dates
+                      {sortKey === 'check_in' ? (
+                        sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
+                )}
+                {visibleColumns.has('quantity_total') && (
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => {
+                      setSortKey('quantity_total');
+                      setSortDir(sortKey === 'quantity_total' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Total
+                      {sortKey === 'quantity_total' ? (
+                        sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
+                )}
+                {visibleColumns.has('quantity_reserved') && (
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => {
+                      setSortKey('quantity_reserved');
+                      setSortDir(sortKey === 'quantity_reserved' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Reserved
+                      {sortKey === 'quantity_reserved' ? (
+                        sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
+                )}
+                {visibleColumns.has('quantity_available') && (
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => {
+                      setSortKey('quantity_available');
+                      setSortDir(sortKey === 'quantity_available' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Available
+                      {sortKey === 'quantity_available' ? (
+                        sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
+                )}
+                {visibleColumns.has('supplier_price_per_night') && (
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => {
+                      setSortKey('supplier_price_per_night');
+                      setSortDir(sortKey === 'supplier_price_per_night' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Supplier Price
+                      {sortKey === 'supplier_price_per_night' ? (
+                        sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
+                )}
                 {visibleColumns.has('total_supplier_price_per_night') && <TableHead className="text-muted-foreground font-medium">Supplier Total</TableHead>}
-                {visibleColumns.has('total_price_per_night_gbp') && <TableHead className="text-muted-foreground font-medium">GBP/Night</TableHead>}
+                {visibleColumns.has('total_price_per_night_gbp') && (
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => {
+                      setSortKey('total_price_per_night_gbp');
+                      setSortDir(sortKey === 'total_price_per_night_gbp' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      GBP/Night
+                      {sortKey === 'total_price_per_night_gbp' ? (
+                        sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
+                )}
                 {visibleColumns.has('total_price_per_night_gbp_with_markup') && <TableHead className="text-muted-foreground font-medium">GBP/Night + Markup</TableHead>}
                 {visibleColumns.has('total_price_per_stay_gbp') && <TableHead className="text-muted-foreground font-medium">GBP/Stay</TableHead>}
                 {visibleColumns.has('total_price_per_stay_gbp_with_markup') && <TableHead className="text-muted-foreground font-medium">GBP/Stay + Markup</TableHead>}
@@ -492,13 +690,30 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                 {visibleColumns.has('city_tax') && <TableHead className="text-muted-foreground font-medium">City Tax</TableHead>}
                 {visibleColumns.has('resort_fee') && <TableHead className="text-muted-foreground font-medium">Resort Fee</TableHead>}
                 {visibleColumns.has('breakfast_price_per_person_per_night') && <TableHead className="text-muted-foreground font-medium">Breakfast Price</TableHead>}
-                {visibleColumns.has('supplier') && <TableHead className="text-muted-foreground font-medium">Supplier</TableHead>}
+                {visibleColumns.has('supplier') && (
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => {
+                      setSortKey('supplier');
+                      setSortDir(sortKey === 'supplier' && sortDir === 'asc' ? 'desc' : 'asc');
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Supplier
+                      {sortKey === 'supplier' ? (
+                        sortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
+                )}
                 {visibleColumns.has('status') && <TableHead className="text-muted-foreground font-medium">Status</TableHead>}
                 {visibleColumns.has('actions') && <TableHead className="text-right font-medium">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredRooms.map((room, index) => (
+              {sortedRooms.map((room, index) => (
                 <TableRow
                   key={room.id}
                   className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${
@@ -519,19 +734,45 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                   </TableCell>
                   {visibleColumns.has('room_type_id') && <TableCell>{room.room_type_id}</TableCell>}
                   {visibleColumns.has('dates') && <TableCell>{format(new Date(room.check_in), 'MMM dd')} to {format(new Date(room.check_out), 'MMM dd, yyyy')}</TableCell>}
-                  {visibleColumns.has('availability') && (
+                  {visibleColumns.has('quantity_total') && (
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-foreground">Available: {room.quantity_available ?? 0}</span>
-                          <span className={getAvailabilityColor(room.quantity_available ?? 0, room.quantity_total ?? 0)}>
-                            {room.quantity_total ? Math.round(((room.quantity_available ?? 0) / room.quantity_total) * 100) : 0}%
-                          </span>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all hover:bg-muted/80" 
+                           style={{
+                             backgroundColor: 'var(--color-muted)',
+                             color: 'var(--color-muted-foreground)',
+                             border: '1px solid var(--color-border)'
+                           }}>
+                        <span>{room.quantity_total ?? 0}</span>
+                      </div>
+                    </TableCell>
+                  )}
+                  {visibleColumns.has('quantity_reserved') && (
+                    <TableCell>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all hover:bg-muted/80"
+                           style={{
+                             backgroundColor: 'var(--color-muted)',
+                             color: 'var(--color-muted-foreground)',
+                             border: '1px solid var(--color-border)'
+                           }}>
+                        <span>{room.quantity_reserved ?? 0}</span>
                         </div>
-                        <Progress 
-                          value={room.quantity_total ? ((room.quantity_available ?? 0) / room.quantity_total) * 100 : 0} 
-                          className="h-2"
-                        />
+                    </TableCell>
+                  )}
+                  {visibleColumns.has('quantity_available') && (
+                    <TableCell>
+                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all ${
+                        (room.quantity_available ?? 0) > 0 ? 'hover:bg-green-50' : 'hover:bg-red-50'
+                      }`}
+                           style={{
+                             backgroundColor: (room.quantity_available ?? 0) > 0 
+                               ? 'var(--color-muted)' 
+                               : 'var(--color-muted)',
+                             color: (room.quantity_available ?? 0) > 0 
+                               ? 'var(--color-muted-foreground)' 
+                               : 'var(--color-muted-foreground)',
+                             border: '1px solid var(--color-border)'
+                           }}>
+                        <span>{room.quantity_available ?? 0}</span>
                       </div>
                     </TableCell>
                   )}
@@ -569,7 +810,7 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredRooms.map((room) => (
+          {sortedRooms.map((room) => (
             <Card key={room.id} className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-200 group">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -581,15 +822,23 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="p-3 rounded-xl bg-muted/40 border border-border">
-                    <div className="font-bold text-card-foreground text-lg">£{room.total_price_per_night_gbp}</div>
-                    <div className="text-muted-foreground text-xs">Per night</div>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="p-2 rounded-lg bg-muted/40 border border-border text-center">
+                    <div className="font-bold text-card-foreground text-sm">{room.quantity_total ?? 0}</div>
+                    <div className="text-muted-foreground text-xs">Total</div>
                   </div>
-                  <div className="p-3 rounded-xl bg-muted/40 border border-border">
-                    <div className="font-bold text-card-foreground text-lg">{room.quantity_available}</div>
+                  <div className="p-2 rounded-lg bg-muted/40 border border-border text-center">
+                    <div className="font-bold text-card-foreground text-sm">{room.quantity_reserved ?? 0}</div>
+                    <div className="text-muted-foreground text-xs">Reserved</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/40 border border-border text-center">
+                    <div className="font-bold text-card-foreground text-sm">{room.quantity_available ?? 0}</div>
                     <div className="text-muted-foreground text-xs">Available</div>
                   </div>
+                </div>
+                <div className="p-3 rounded-xl bg-muted/40 border border-border">
+                  <div className="font-bold text-card-foreground text-lg">£{room.total_price_per_night_gbp}</div>
+                  <div className="text-muted-foreground text-xs">Per night</div>
                 </div>
                 <Separator className="bg-border" />
                 <div className="flex items-center justify-between">

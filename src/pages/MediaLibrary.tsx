@@ -14,6 +14,7 @@ import { Loader2, Upload, Search, Edit, Trash2, RefreshCw, Eye, Sparkles } from 
 import { toast } from 'sonner';
 import { TierRestriction } from '../components/TierRestriction';
 import UnsplashSearch from '../components/UnsplashSearch';
+import { ImageProcessor } from '../lib/imageProcessor';
 
 export default function MediaLibrary() {
   const { user } = useAuth();
@@ -84,12 +85,25 @@ export default function MediaLibrary() {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
-        const toastId = toast.loading(`Uploading ${file.name} and generating AI tags...`);
+        const toastId = toast.loading(`Processing ${file.name}...`);
         
         try {
+          // Show compression info with estimated stats
+          const originalSize = ImageProcessor.formatFileSize(file.size);
+          const stats = await ImageProcessor.getCompressionStats(file);
+          toast.loading(`Ultra-compressing ${file.name} (${originalSize} → ~${stats.estimatedCompressedSize})...`, { id: toastId });
+          
           const mediaItem = await MediaLibraryService.uploadImageWithAITagging(file, user.id);
           setMediaItems(prev => [mediaItem, ...prev]);
-          toast.success(`Successfully uploaded ${file.name}`, { id: toastId });
+          
+          // Show compression results
+          const processedSize = ImageProcessor.formatFileSize(mediaItem.file_size);
+          const compressionRatio = ((file.size - mediaItem.file_size) / file.size * 100).toFixed(1);
+          
+          toast.success(
+            `${file.name} uploaded successfully!\n${originalSize} → ${processedSize} (${compressionRatio}% smaller)`, 
+            { id: toastId, duration: 5000 }
+          );
         } catch (error) {
           console.error(`Error uploading ${file.name}:`, error);
           toast.error(`Failed to upload ${file.name}`, { id: toastId });
@@ -178,7 +192,7 @@ export default function MediaLibrary() {
           <div>
             <h1 className="text-3xl font-bold">Media Library</h1>
             <p className="text-muted-foreground">
-              Your personal image collection with AI-powered tagging.
+              Your personal image collection with AI-powered tagging and ultra-compression.
             </p>
           </div>
           

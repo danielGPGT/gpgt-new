@@ -9,7 +9,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@
 import { Label } from '@/components/ui/label';
 import { InventoryService } from '@/lib/inventoryService';
 import type { Sport, SportInsert, SportUpdate, Event, EventInsert, EventUpdate, Venue } from '@/types/inventory';
-import { Plus, Edit, Trash2, Calendar, Search, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, Search, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, Image } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogClose, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
@@ -25,7 +25,7 @@ export function cleanEventUpdate(data: any) {
   for (const key in data) {
     if (data[key] === '' || data[key] === undefined) {
       // Set nullable fields to null, skip others
-      if (["sport_id", "location", "start_date", "end_date", "venue_id"].includes(key)) {
+      if (["sport_id", "location", "start_date", "end_date", "venue_id", "event_image"].includes(key)) {
         cleaned[key] = null;
       }
     } else {
@@ -319,6 +319,7 @@ export function SportsEventsManager() {
                       )}
                     </span>
                   </TableHead>
+                  <TableHead>Image</TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => {
                     setSortKey('venue');
                     setSortDir(sortKey === 'venue' && sortDir === 'asc' ? 'desc' : 'asc');
@@ -379,6 +380,19 @@ export function SportsEventsManager() {
                   sortedEvents.map(event => (
                     <TableRow key={event.id}>
                       <TableCell className="font-medium">{event.name}</TableCell>
+                      <TableCell>
+                        {event.event_image ? (
+                          <img 
+                            src={event.event_image.image_url || event.event_image.thumbnail_url} 
+                            alt={event.event_image.description || 'Event image'} 
+                            className="w-12 h-12 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-muted rounded flex items-center justify-center">
+                            <Image className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>{event.venue_id ? (venues.find(v => v.id === event.venue_id)?.name || '-') : '-'}</TableCell>
                       <TableCell>{event.start_date || '-'}</TableCell>
                       <TableCell>{event.end_date || '-'}</TableCell>
@@ -397,7 +411,7 @@ export function SportsEventsManager() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       <AlertTriangle className="inline-block mr-2 text-yellow-500" />
                       No events found
                     </TableCell>
@@ -527,6 +541,7 @@ function EventFormDrawer({ event, sportId, sports, venues, onSubmit, onCancel, i
     start_date: event?.start_date || '',
     end_date: event?.end_date || '',
     venue_id: event?.venue_id ?? '',
+    event_image: event?.event_image || null,
   });
   const [venuesList, setVenuesList] = useState<Venue[]>(venues || []);
   const [venueDialogOpen, setVenueDialogOpen] = useState(false);
@@ -762,25 +777,27 @@ function EventFormDrawer({ event, sportId, sports, venues, onSubmit, onCancel, i
                   {newVenue.images && newVenue.images.length > 0 ? 'Edit Images' : 'Select Images'}
                 </Button>
                 <Dialog open={showImageSelector} onOpenChange={setShowImageSelector}>
-                  <DialogContent className="!max-w-6xl">
-                    <DialogHeader>
+                  <DialogContent className="!max-w-6xl max-h-[80vh] flex flex-col">
+                    <DialogHeader className="flex-shrink-0">
                       <DialogTitle>Select Venue Images</DialogTitle>
                     </DialogHeader>
-                    <MediaLibrarySelector
-                      selectedItems={Array.isArray(selectedImages) ? selectedImages : []}
-                      onSelect={(item) => {
-                        setSelectedImages((prev) => {
-                          const exists = prev.find((img) => img.id === item.id);
-                          if (exists) {
-                            return prev.filter((img) => img.id !== item.id);
-                          } else {
-                            return [...prev, item];
-                          }
-                        });
-                      }}
-                      multiple={true}
-                    />
-                    <DialogFooter>
+                    <div className="flex-1 overflow-hidden min-h-0">
+                      <MediaLibrarySelector
+                        selectedItems={Array.isArray(selectedImages) ? selectedImages : []}
+                        onSelect={(item) => {
+                          setSelectedImages((prev) => {
+                            const exists = prev.find((img) => img.id === item.id);
+                            if (exists) {
+                              return prev.filter((img) => img.id !== item.id);
+                            } else {
+                              return [...prev, item];
+                            }
+                          });
+                        }}
+                        multiple={true}
+                      />
+                    </div>
+                    <DialogFooter className="flex-shrink-0">
                       <Button
                         type="button"
                         onClick={() => {
@@ -868,6 +885,75 @@ function EventFormDrawer({ event, sportId, sports, venues, onSubmit, onCancel, i
           </Popover>
         </div>
       </div>
+      
+      {/* Event Image */}
+      <div className="space-y-2">
+        <Label>Event Image</Label>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {formData.event_image ? (
+            <div className="relative group w-24 h-24 border rounded overflow-hidden">
+              <img 
+                src={formData.event_image.image_url || formData.event_image.thumbnail_url} 
+                alt={formData.event_image.description || 'Event image'} 
+                className="object-cover w-full h-full" 
+              />
+              <button
+                type="button"
+                className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                onClick={() => setFormData(prev => ({ ...prev, event_image: null }))}
+                aria-label="Remove image"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <span className="text-muted-foreground text-sm">No image selected</span>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setSelectedImages(formData.event_image ? [formData.event_image] : []);
+            setShowImageSelector(true);
+          }}
+        >
+          {formData.event_image ? 'Change Image' : 'Select Image'}
+        </Button>
+        
+        {/* Image Selection Dialog */}
+        <Dialog open={showImageSelector} onOpenChange={setShowImageSelector}>
+          <DialogContent className="!max-w-6xl max-h-[80vh] flex flex-col">
+            <DialogHeader className="flex-shrink-0">
+              <DialogTitle>Select Event Image</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden min-h-0">
+              <MediaLibrarySelector
+                selectedItems={Array.isArray(selectedImages) ? selectedImages : []}
+                onSelect={(item) => {
+                  setSelectedImages([item]); // Only allow single image selection
+                }}
+                multiple={false}
+              />
+            </div>
+            <DialogFooter className="flex-shrink-0">
+              <Button
+                type="button"
+                onClick={() => {
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    event_image: selectedImages.length > 0 ? selectedImages[0] : null 
+                  }));
+                  setShowImageSelector(false);
+                }}
+              >
+                Confirm Selection
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+      
       <DrawerFooter>
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={isLoading}>{isLoading ? 'Saving...' : event ? 'Update Event' : 'Create Event'}</Button>

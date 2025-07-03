@@ -737,6 +737,16 @@ export default function HotelManager() {
           <HotelRoomsTable hotelId={selectedHotel.id} hotelName={selectedHotel.name} onBack={handleBackToHotels} />
         </CardContent>
       )}
+
+      {/* Hotel Form Drawer */}
+      <HotelFormDrawer
+        hotel={editingHotel}
+        isOpen={drawerOpen}
+        onClose={() => {
+          setDrawerOpen(false);
+          setEditingHotel(null);
+        }}
+      />
     </>
   );
 } 

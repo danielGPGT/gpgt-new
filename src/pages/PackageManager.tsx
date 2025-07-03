@@ -477,18 +477,39 @@ export default function PackageManager() {
                       exit={{ opacity: 0, y: -20 }}
                       transition={{ duration: 0.2 }}
                     >
-                      <Card className="group hover:shadow-lg transition-all duration-200 cursor-pointer bg-gradient-to-br from-[var(--card)] to-[var(--card)]/80 border-[var(--border)] hover:border-[var(--primary)]/30">
-                        <CardHeader className="pb-3">
+                      <Card 
+                        className={`group hover:shadow-lg transition-all duration-200 cursor-pointer border-[var(--border)] hover:border-[var(--primary)]/30 relative overflow-hidden ${
+                          event.event_image 
+                            ? 'bg-cover bg-center bg-no-repeat' 
+                            : 'bg-gradient-to-br from-[var(--card)] to-[var(--card)]/80'
+                        }`}
+                        style={event.event_image ? {
+                          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)), url(${event.event_image.image_url || event.event_image.thumbnail_url})`
+                        } : undefined}
+                      >
+                        <CardHeader className="pb-3 relative z-10">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="h-12 w-12 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center group-hover:bg-[var(--primary)]/20 transition-colors">
+                              <div className={`h-12 w-12 rounded-lg flex items-center justify-center transition-colors ${
+                                event.event_image 
+                                  ? 'bg-white/20 backdrop-blur-sm group-hover:bg-white/30' 
+                                  : 'bg-[var(--primary)]/10 group-hover:bg-[var(--primary)]/20'
+                              }`}>
                                 {getSportIcon(event.sport?.name || '')}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <CardTitle className="text-lg text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors truncate">
+                                <CardTitle className={`text-lg transition-colors truncate ${
+                                  event.event_image 
+                                    ? 'text-white group-hover:text-white/90' 
+                                    : 'text-[var(--foreground)] group-hover:text-[var(--primary)]'
+                                }`}>
                                   {event.name}
                                 </CardTitle>
-                                <p className="text-sm text-[var(--muted-foreground)] mt-1">
+                                <p className={`text-sm mt-1 ${
+                                  event.event_image 
+                                    ? 'text-white/80' 
+                                    : 'text-[var(--muted-foreground)]'
+                                }`}>
                                   {event.sport?.name}
                                 </p>
                               </div>
@@ -532,15 +553,23 @@ export default function PackageManager() {
                             </DropdownMenu>
                           </div>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="relative z-10">
                           <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
-                              <MapPin className="h-4 w-4 text-[var(--secondary)]" />
-                              <span className="truncate">{event.venue?.name}</span>
+                            <div className="flex items-center gap-2 text-sm">
+                              <MapPin className={`h-4 w-4 ${
+                                event.event_image ? 'text-white/80' : 'text-[var(--secondary)]'
+                              }`} />
+                              <span className={`truncate ${
+                                event.event_image ? 'text-white/80' : 'text-[var(--muted-foreground)]'
+                              }`}>{event.venue?.name}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
-                              <Calendar className="h-4 w-4 text-[var(--chart-4)]" />
-                              <span>
+                            <div className="flex items-center gap-2 text-sm">
+                              <Calendar className={`h-4 w-4 ${
+                                event.event_image ? 'text-white/80' : 'text-[var(--chart-4)]'
+                              }`} />
+                              <span className={
+                                event.event_image ? 'text-white/80' : 'text-[var(--muted-foreground)]'
+                              }>
                                 {event.start_date && format(new Date(event.start_date), 'MMM dd, yyyy')}
                                 {event.end_date && event.end_date !== event.start_date && 
                                   ` - ${format(new Date(event.end_date), 'MMM dd, yyyy')}`
@@ -550,13 +579,21 @@ export default function PackageManager() {
                             <div className="flex items-center justify-between pt-2">
                               <Badge 
                                 variant={getEventStatus(event).status === 'ongoing' ? 'default' : 'secondary'}
-                                className="bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20"
+                                className={
+                                  event.event_image 
+                                    ? 'bg-white/20 text-white hover:bg-white/30' 
+                                    : 'bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20'
+                                }
                               >
                                 {getEventStatus(event).label}
                               </Badge>
                               <Badge 
                                 variant="outline" 
-                                className="border-[var(--border)] text-[var(--muted-foreground)]"
+                                className={
+                                  event.event_image 
+                                    ? 'border-white/30 text-white/80' 
+                                    : 'border-[var(--border)] text-[var(--muted-foreground)]'
+                                }
                               >
                                 {packages?.filter(p => p.event_id === event.id).length || 0} packages
                               </Badge>

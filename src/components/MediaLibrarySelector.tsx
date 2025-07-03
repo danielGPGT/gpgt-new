@@ -10,6 +10,7 @@ import { Loader2, Upload, Search, Image as ImageIcon, Sparkles, RefreshCw, X, Ch
 import { toast } from 'sonner';
 import { TierRestriction } from './TierRestriction';
 import UnsplashSearch from './UnsplashSearch';
+import { ImageProcessor } from '../lib/imageProcessor';
 
 interface MediaLibrarySelectorProps {
   onSelect: (mediaItem: MediaItem) => void;
@@ -90,12 +91,25 @@ export default function MediaLibrarySelector({
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
-        const toastId = toast.loading(`Uploading ${file.name} and generating AI tags...`);
+        const toastId = toast.loading(`Processing ${file.name}...`);
         
         try {
+          // Show compression info with estimated stats
+          const originalSize = ImageProcessor.formatFileSize(file.size);
+          const stats = await ImageProcessor.getCompressionStats(file);
+          toast.loading(`Ultra-compressing ${file.name} (${originalSize} → ~${stats.estimatedCompressedSize})...`, { id: toastId });
+          
           const mediaItem = await MediaLibraryService.uploadImageWithAITagging(file, user.id);
           setMediaItems(prev => [mediaItem, ...prev]);
-          toast.success(`Successfully uploaded ${file.name}`, { id: toastId });
+          
+          // Show compression results
+          const processedSize = ImageProcessor.formatFileSize(mediaItem.file_size);
+          const compressionRatio = ((file.size - mediaItem.file_size) / file.size * 100).toFixed(1);
+          
+          toast.success(
+            `${file.name} uploaded successfully!\n${originalSize} → ${processedSize} (${compressionRatio}% smaller)`, 
+            { id: toastId, duration: 5000 }
+          );
         } catch (error) {
           console.error(`Error uploading ${file.name}:`, error);
           toast.error(`Failed to upload ${file.name}`, { id: toastId });
@@ -181,7 +195,7 @@ export default function MediaLibrarySelector({
 
   return (
     <TierRestriction type="media_library">
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full min-h-0">
         {/* Upload Section */}
         <div className="flex items-center gap-4 mb-4 p-4 bg-muted rounded-lg">
           <div className="relative flex-1">
@@ -212,7 +226,7 @@ export default function MediaLibrarySelector({
           </Button>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Sparkles className="h-4 w-4" />
-            AI-powered tagging
+            AI-powered tagging • Ultra-compression to WebP
           </div>
         </div>
 
@@ -249,8 +263,8 @@ export default function MediaLibrarySelector({
           </Button>
         </div>
 
-        {/* Masonry Grid */}
-        <div className="flex-1 overflow-y-auto">
+                {/* Masonry Grid */}
+        <div className="flex-1 overflow-y-auto min-h-0" style={{ maxHeight: '60vh' }}>
           {loading ? (
             <div className="flex justify-center items-center h-64">
               <Loader2 className="h-8 w-8 animate-spin" />

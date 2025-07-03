@@ -69,6 +69,7 @@ export interface Event {
   start_date?: string;
   end_date?: string;
   venue_id?: string;
+  event_image?: any;
   sport?: Sport;
   venue?: Venue;
   created_at: string;
@@ -82,6 +83,7 @@ export interface EventInsert {
   start_date?: string;
   end_date?: string;
   venue_id?: string;
+  event_image?: any;
 }
 
 export interface EventUpdate {
@@ -91,6 +93,7 @@ export interface EventUpdate {
   start_date?: string;
   end_date?: string;
   venue_id?: string;
+  event_image?: any;
 }
 
 export interface Package {

@@ -114,7 +114,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     quantity_provisional: room?.quantity_provisional ?? 0,
     supplier_price_per_night: room?.supplier_price_per_night ?? 0,
     supplier_currency: room?.supplier_currency ?? 'EUR',
-    markup_percent: room?.markup_percent ?? 55,
+    markup_percent: room?.markup_percent ?? 60,
     vat_percentage: room?.vat_percentage ?? 0,
     resort_fee: room?.resort_fee ?? 0,
     resort_fee_type: room?.resort_fee_type ?? 'per_night',

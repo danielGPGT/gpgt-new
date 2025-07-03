@@ -415,9 +415,10 @@ export default function HotelManager() {
       {/* Table OUTSIDE Card, like in TicketsManager */}
       {!selectedHotel && (
         <div className="mt-0">
-          <Table className="mt-4 border border-border rounded-lg overflow-hidden shadow-sm">
+          <Card className="border py-0 mt-4 border-border rounded-2xl shadow-sm overflow-hidden">
+          <Table className="">
             <TableHeader className="bg-muted sticky top-0 z-10 border-b border-primary-200">
-              <TableRow className="hover:bg-primary-50/30 transition-colors">
+              <TableRow className="">
                 {/* Selection Checkbox */}
                 <TableHead className="">
                   <Checkbox
@@ -625,6 +626,7 @@ export default function HotelManager() {
               ))}
             </TableBody>
           </Table>
+          </Card>
           {/* Pagination */}
           <div className="flex justify-center mt-4">
             <Pagination>

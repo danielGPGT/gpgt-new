@@ -441,159 +441,169 @@ export interface Database {
       }
       circuit_transfers: {
         Row: {
-          id: string
-          event_id: string | null
-          hotel_id: string | null
-          transfer_type: 'coach' | 'mpv'
-          vehicle_name: string | null
-          seat_capacity: number
-          pickup_time: string | null
-          return_time: string | null
-          total_cost: number
-          currency: string
-          markup_percent: number
-          cost_per_seat: number
-          price_per_seat: number
-          min_fill_percent: number
-          breakeven_per_seat: number
-          profit_per_seat: number
-          seats_reserved: number
-          seats_provisional: number
-          seats_available: number
-          guide_included: boolean
-          guide_name: string | null
-          guide_cost: number | null
-          supplier: string | null
-          supplier_ref: string | null
-          notes: string | null
-          active: boolean
-          created_at: string
-          updated_at: string
-        }
+          id: string;
+          event_id: string | null;
+          hotel_id: string | null;
+          transfer_type: 'coach' | 'mpv';
+          used: number | null;
+          coach_capacity: number;
+          coaches_required: number | null;
+          days: number;
+          quote_hours: number | null;
+          expected_hours: number | null;
+          supplier: string | null;
+          coach_cost_per_day_local: number | null;
+          cost_per_extra_hour_per_coach_per_day: number | null;
+          coach_vat_tax_if_not_included_in_price: number | null;
+          parking_ticket_per_coach_per_day: number | null;
+          supplier_currency: string | null;
+          guide_included_in_coach_cost: boolean | null;
+          guide_cost_per_day: number | null;
+          cost_per_extra_hour_per_guide_per_day: number | null;
+          vat_tax_if_not_included_in_guide_price: number | null;
+          total_coach_cost_local: number | null;
+          total_coach_cost_gbp: number | null;
+          total_guide_cost_local: number | null;
+          total_guide_cost_gbp: number | null;
+          provider_guides: string | null;
+          utilisation_percent: number | null;
+          utilisation_cost_per_seat_local: number | null;
+          utilisation_cost_per_seat_gbp: number | null;
+          markup_percent: number | null;
+          sell_price_per_seat_gbp: number | null;
+          active: boolean | null;
+          notes: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
         Insert: {
-          id?: string
-          event_id?: string | null
-          hotel_id?: string | null
-          transfer_type: 'coach' | 'mpv'
-          vehicle_name?: string | null
-          seat_capacity: number
-          pickup_time?: string | null
-          return_time?: string | null
-          total_cost: number
-          currency?: string
-          markup_percent?: number
-          seats_reserved?: number
-          seats_provisional?: number
-          guide_included?: boolean
-          guide_name?: string | null
-          guide_cost?: number | null
-          supplier?: string | null
-          supplier_ref?: string | null
-          notes?: string | null
-          active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
+          id?: string;
+          event_id?: string | null;
+          hotel_id?: string | null;
+          transfer_type: 'coach' | 'mpv';
+          used?: number | null;
+          coach_capacity: number;
+          coaches_required?: number | null;
+          days: number;
+          quote_hours?: number | null;
+          expected_hours?: number | null;
+          supplier?: string | null;
+          coach_cost_per_day_local?: number | null;
+          cost_per_extra_hour_per_coach_per_day?: number | null;
+          coach_vat_tax_if_not_included_in_price?: number | null;
+          parking_ticket_per_coach_per_day?: number | null;
+          supplier_currency?: string | null;
+          guide_included_in_coach_cost?: boolean | null;
+          guide_cost_per_day?: number | null;
+          cost_per_extra_hour_per_guide_per_day?: number | null;
+          vat_tax_if_not_included_in_guide_price?: number | null;
+          total_coach_cost_local?: number | null;
+          total_coach_cost_gbp?: number | null;
+          total_guide_cost_local?: number | null;
+          total_guide_cost_gbp?: number | null;
+          provider_guides?: string | null;
+          utilisation_percent?: number | null;
+          utilisation_cost_per_seat_local?: number | null;
+          utilisation_cost_per_seat_gbp?: number | null;
+          markup_percent?: number | null;
+          sell_price_per_seat_gbp?: number | null;
+          active?: boolean | null;
+          notes?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
         Update: {
-          id?: string
-          event_id?: string | null
-          hotel_id?: string | null
-          transfer_type?: 'coach' | 'mpv'
-          vehicle_name?: string | null
-          seat_capacity?: number
-          pickup_time?: string | null
-          return_time?: string | null
-          total_cost?: number
-          currency?: string
-          markup_percent?: number
-          seats_reserved?: number
-          seats_provisional?: number
-          guide_included?: boolean
-          guide_name?: string | null
-          guide_cost?: number | null
-          supplier?: string | null
-          supplier_ref?: string | null
-          notes?: string | null
-          active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
+          id?: string;
+          event_id?: string | null;
+          hotel_id?: string | null;
+          transfer_type?: 'coach' | 'mpv';
+          used?: number | null;
+          coach_capacity?: number;
+          coaches_required?: number | null;
+          days?: number;
+          quote_hours?: number | null;
+          expected_hours?: number | null;
+          supplier?: string | null;
+          coach_cost_per_day_local?: number | null;
+          cost_per_extra_hour_per_coach_per_day?: number | null;
+          coach_vat_tax_if_not_included_in_price?: number | null;
+          parking_ticket_per_coach_per_day?: number | null;
+          supplier_currency?: string | null;
+          guide_included_in_coach_cost?: boolean | null;
+          guide_cost_per_day?: number | null;
+          cost_per_extra_hour_per_guide_per_day?: number | null;
+          vat_tax_if_not_included_in_guide_price?: number | null;
+          total_coach_cost_local?: number | null;
+          total_coach_cost_gbp?: number | null;
+          total_guide_cost_local?: number | null;
+          total_guide_cost_gbp?: number | null;
+          provider_guides?: string | null;
+          utilisation_percent?: number | null;
+          utilisation_cost_per_seat_local?: number | null;
+          utilisation_cost_per_seat_gbp?: number | null;
+          markup_percent?: number | null;
+          sell_price_per_seat_gbp?: number | null;
+          active?: boolean | null;
+          notes?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
       }
       airport_transfers: {
         Row: {
-          id: string
-          event_id: string | null
-          hotel_id: string | null
-          airport_id: string | null
-          transfer_type: 'arrival' | 'departure' | 'return'
-          vehicle_type: 'private car' | 'mpv' | 'luxury' | 'chauffeur'
-          vehicle_name: string | null
-          max_capacity: number | null
-          pickup_window_start: string | null
-          pickup_window_end: string | null
-          cost: number
-          markup_percent: number
-          currency: string
-          client_price: number
-          total_vehicles: number
-          vehicles_reserved: number
-          vehicles_provisional: number
-          vehicles_available: number
-          supplier: string | null
-          supplier_ref: string | null
-          notes: string | null
-          active: boolean
-          created_at: string
-          updated_at: string
-        }
+          id: string;
+          event_id: string | null;
+          hotel_id: string | null;
+          transport_type: 'hotel_chauffeur' | 'private_car';
+          max_capacity: number;
+          used: number;
+          supplier: string | null;
+          quote_currency: string;
+          supplier_quote_per_car_local: number | null;
+          supplier_quote_per_car_gbp: number | null;
+          paid_to_supplier: boolean;
+          outstanding: boolean;
+          markup: number;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
         Insert: {
-          id?: string
-          event_id?: string | null
-          hotel_id?: string | null
-          airport_id?: string | null
-          transfer_type: 'arrival' | 'departure' | 'return'
-          vehicle_type: 'private car' | 'mpv' | 'luxury' | 'chauffeur'
-          vehicle_name?: string | null
-          max_capacity?: number | null
-          pickup_window_start?: string | null
-          pickup_window_end?: string | null
-          cost: number
-          markup_percent?: number
-          currency?: string
-          total_vehicles?: number
-          vehicles_reserved?: number
-          vehicles_provisional?: number
-          supplier?: string | null
-          supplier_ref?: string | null
-          notes?: string | null
-          active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
+          id?: string;
+          event_id?: string | null;
+          hotel_id?: string | null;
+          transport_type: 'hotel_chauffeur' | 'private_car';
+          max_capacity: number;
+          used?: number;
+          supplier?: string | null;
+          quote_currency?: string;
+          supplier_quote_per_car_local?: number | null;
+          supplier_quote_per_car_gbp?: number | null;
+          paid_to_supplier?: boolean;
+          outstanding?: boolean;
+          markup?: number;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
         Update: {
-          id?: string
-          event_id?: string | null
-          hotel_id?: string | null
-          airport_id?: string | null
-          transfer_type?: 'arrival' | 'departure' | 'return'
-          vehicle_type?: 'private car' | 'mpv' | 'luxury' | 'chauffeur'
-          vehicle_name?: string | null
-          max_capacity?: number | null
-          pickup_window_start?: string | null
-          pickup_window_end?: string | null
-          cost?: number
-          markup_percent?: number
-          currency?: string
-          total_vehicles?: number
-          vehicles_reserved?: number
-          vehicles_provisional?: number
-          supplier?: string | null
-          supplier_ref?: string | null
-          notes?: string | null
-          active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
+          id?: string;
+          event_id?: string | null;
+          hotel_id?: string | null;
+          transport_type?: 'hotel_chauffeur' | 'private_car';
+          max_capacity?: number;
+          used?: number;
+          supplier?: string | null;
+          quote_currency?: string;
+          supplier_quote_per_car_local?: number | null;
+          supplier_quote_per_car_gbp?: number | null;
+          paid_to_supplier?: boolean;
+          outstanding?: boolean;
+          markup?: number;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
       }
       flights: {
         Row: {

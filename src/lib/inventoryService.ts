@@ -1108,4 +1108,55 @@ export class InventoryService {
       total_value: 0
     };
   }
+
+  // New Airport Transfers (new schema)
+  static async getNewAirportTransfers(): Promise<AirportTransferWithRelations[]> {
+    const { data, error } = await supabase
+      .from('airport_transfers')
+      .select(`
+        *,
+        event:events(*),
+        hotel:gpgt_hotels(*)
+      `)
+      .order('created_at', { ascending: false });
+    if (error) {
+      throw new Error(`Failed to fetch airport transfers: ${error.message}`);
+    }
+    return data || [];
+  }
+
+  static async createNewAirportTransfer(transfer: AirportTransferInsert): Promise<AirportTransfer> {
+    const { data, error } = await supabase
+      .from('airport_transfers')
+      .insert(transfer)
+      .select()
+      .single();
+    if (error) {
+      throw new Error(`Failed to create airport transfer: ${error.message}`);
+    }
+    return data;
+  }
+
+  static async updateNewAirportTransfer(id: string, updates: AirportTransferUpdate): Promise<AirportTransfer> {
+    const { data, error } = await supabase
+      .from('airport_transfers')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) {
+      throw new Error(`Failed to update airport transfer: ${error.message}`);
+    }
+    return data;
+  }
+
+  static async deleteNewAirportTransfer(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('airport_transfers')
+      .delete()
+      .eq('id', id);
+    if (error) {
+      throw new Error(`Failed to delete airport transfer: ${error.message}`);
+    }
+  }
 } 

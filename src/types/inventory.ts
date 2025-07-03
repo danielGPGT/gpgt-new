@@ -10,7 +10,19 @@ export type HotelRoom = Database['public']['Tables']['hotel_rooms']['Row'];
 export type CircuitTransfer = Database['public']['Tables']['circuit_transfers']['Row'];
 export type AirportTransfer = Database['public']['Tables']['airport_transfers']['Row'];
 export type Flight = Database['public']['Tables']['flights']['Row'];
-export type LoungePass = Database['public']['Tables']['lounge_passes']['Row'];
+export type LoungePass = {
+  id: string;
+  event_id: string;
+  variant: string;
+  cost: number;
+  markup: number;
+  sell_price: number;
+  currency: string;
+  is_active: boolean;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+};
 export type Package = Database['public']['Tables']['packages']['Row'];
 export type PackageTier = Database['public']['Tables']['package_tiers']['Row'];
 export type PackageComponent = Database['public']['Tables']['package_components']['Row'];
@@ -74,15 +86,6 @@ export interface HotelRoomWithEvent extends HotelRoom {
 }
 
 export interface CircuitTransferWithRelations extends CircuitTransfer {
-  event?: Event;
-  hotel?: {
-    id: string;
-    name: string;
-    location: string;
-  };
-}
-
-export interface AirportTransferWithRelations extends AirportTransfer {
   event?: Event;
   hotel?: {
     id: string;
@@ -235,41 +238,66 @@ export interface HotelRoomFormData {
 }
 
 export interface CircuitTransferFormData {
-  event_id?: string;
-  hotel_id?: string;
+  // Form inputs
+  id?: string;
+  event_id?: string | null;
+  hotel_id?: string | null;
   transfer_type: TransferType;
-  vehicle_name?: string;
-  seat_capacity: number;
-  pickup_time?: string;
-  return_time?: string;
-  total_cost: number;
-  currency?: string;
-  markup_percent?: number;
-  min_fill_percent?: number;
-  guide_included?: boolean;
-  guide_name?: string;
-  guide_cost?: number;
-  supplier?: string;
-  supplier_ref?: string;
-  notes?: string;
+  coach_capacity: number;
+  days: number;
+  quote_hours?: number | null;
+  expected_hours?: number | null;
+  supplier?: string | null;
+  coach_cost_per_day_local?: number | null;
+  coach_vat?: number | null; // percentage
+  parking_ticket_per_coach_per_day?: number | null;
+  supplier_currency?: string | null;
+  guide_included?: boolean | null;
+  guide_cost_per_day?: number | null;
+  guide_vat?: number | null; // percentage
+  markup_percent?: number | null;
+  utilisation_percent?: number | null;
+  active?: boolean | null;
+  notes?: string | null;
+  // Calculated/read-only fields (calculated in frontend, sent to backend)
+  coach_cost_local?: number | undefined;
+  guide_cost_local?: number | undefined;
+  utilisation_cost_per_seat_local?: number | undefined;
+  coach_cost_gbp?: number | undefined;
+  guide_cost_gbp?: number | undefined;
+  utilisation_cost_per_seat_gbp?: number | undefined;
+  sell_price_per_seat_gbp?: number | undefined;
+  // Read-only fields (not in form, not sent on create/update)
+  // coaches_required?: number; // calculated in backend
+  // used?: number; // calculated in backend
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type AirportTransferTransportType = 'hotel_chauffeur' | 'private_car';
+
+export interface AirportTransferWithRelations extends AirportTransfer {
+  event?: Event;
+  hotel?: {
+    id: string;
+    name: string;
+    location: string;
+  };
 }
 
 export interface AirportTransferFormData {
   event_id?: string;
   hotel_id?: string;
-  airport_id?: string;
-  transfer_type: AirportTransferType;
-  vehicle_type: VehicleType;
-  vehicle_name?: string;
-  max_capacity?: number;
-  pickup_window_start?: string;
-  pickup_window_end?: string;
-  cost: number;
-  markup_percent?: number;
-  currency?: string;
-  total_vehicles?: number;
+  transport_type: AirportTransferTransportType;
+  max_capacity: number;
+  used?: number;
   supplier?: string;
-  supplier_ref?: string;
+  quote_currency?: string;
+  supplier_quote_per_car_local?: number;
+  supplier_quote_per_car_gbp?: number;
+  paid_to_supplier?: boolean;
+  outstanding?: boolean;
+  markup?: number;
   notes?: string;
 }
 

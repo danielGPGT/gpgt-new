@@ -991,9 +991,12 @@ export function TicketsManager() {
           </div>
 
         </Card>
-                 <Table className="mt-4 border border-border rounded-lg overflow-hidden shadow-sm">
-            <TableHeader className="bg-muted sticky top-0 z-10 border-b border-primary-200">
-              <TableRow className="hover:bg-primary-50/30 transition-colors">
+        {/* Table */}
+      <Card className="border py-0 mt-4 border-border rounded-2xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+                 <Table>
+            <TableHeader className="bg-muted z-10 border-b border-primary-200">
+              <TableRow className="bg-muted">
                 {/* Selection Checkbox */}
                 <TableHead className="">
                   <Checkbox
@@ -1253,6 +1256,8 @@ export function TicketsManager() {
                 )}
               </TableBody>
             </Table>
+            </div>
+            </Card>
             {/* Pagination Controls */}
             <div className="flex justify-center py-4">
               <Pagination>
@@ -1523,7 +1528,7 @@ function TicketFormDrawer({
       supplier_price: typeof ticket?.supplier_price === 'number' ? ticket.supplier_price : 0,
       currency: typeof ticket?.currency === 'string' ? ticket.currency : 'GBP',
       price: typeof ticket?.price === 'number' ? ticket.price : 0,
-      markup_percent: typeof ticket?.markup_percent === 'number' ? ticket.markup_percent : 55,
+      markup_percent: typeof ticket?.markup_percent === 'number' ? ticket.markup_percent : 60,
       refundable: !!ticket?.refundable,
       resellable: !!ticket?.resellable,
       
@@ -1627,7 +1632,7 @@ function TicketFormDrawer({
       supplier_currency: typeof data.supplier_currency === 'string' ? data.supplier_currency : 'EUR',
       price: typeof data.price === 'number' ? data.price : 0,
       currency: typeof data.currency === 'string' ? data.currency : 'GBP',
-      markup_percent: typeof data.markup_percent === 'number' ? data.markup_percent : 55,
+      markup_percent: typeof data.markup_percent === 'number' ? data.markup_percent : 60,
       refundable: !!data.refundable,
       resellable: !!data.resellable,
       ordered: !!data.ordered,

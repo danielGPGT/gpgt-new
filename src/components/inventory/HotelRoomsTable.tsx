@@ -544,9 +544,11 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
 
       {viewMode === 'table' ? (
         <div className="mt-0">
-          <Table className="mt-4 border border-border rounded-lg overflow-hidden shadow-sm">
-            <TableHeader className="bg-muted sticky top-0 z-10 border-b border-primary-200">
-              <TableRow className="hover:bg-primary-50/30 transition-colors">
+           <Card className="border py-0 mt-4 border-border rounded-2xl shadow-sm overflow-hidden">
+          
+          <Table className="">
+            <TableHeader className="bg-muted z-10 border-b border-primary-200">
+              <TableRow className="">
                 {/* Selection Checkbox */}
                 <TableHead className="">
                   <Checkbox
@@ -805,6 +807,7 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
               ))}
             </TableBody>
           </Table>
+          </Card>
           {/* Pagination (simple, below table) */}
           {/* TODO: Add pagination logic if needed */}
         </div>

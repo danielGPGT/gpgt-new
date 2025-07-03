@@ -1,77 +1,57 @@
+-- ===============================
+-- CIRCUIT TRANSFERS SCHEMA (VAT INCLUDED)
+-- ===============================
+
 create table public.circuit_transfers (
-  id uuid not null default gen_random_uuid (),
-  event_id uuid null,
-  hotel_id uuid null,
-  transfer_type text not null,
-  vehicle_name text null,
-  seat_capacity integer not null,
-  pickup_time time without time zone null,
-  return_time time without time zone null,
-  total_cost numeric(10, 2) not null,
-  currency text null default 'EUR'::text,
+  id uuid not null default gen_random_uuid(),
+  event_id uuid null references public.events (id) on delete cascade,
+  hotel_id uuid null references public.gpgt_hotels (id) on delete cascade,
+  circuit_transfer_id uuid null,
+
+  transfer_type text not null check (transfer_type in ('coach', 'mpv')),
+
+  used integer null default 0,
+  coach_capacity integer not null,
+  coaches_required integer not null,
+  days integer not null,
+
+  quote_hours integer null,
+  expected_hours integer null,
+
+  provider_coach text null,
+  cost_per_day_invoice_ccy numeric(10, 2) null,
+  cost_per_extra_hour_per_coach_per_day numeric(10, 2) null,
+  vat_tax_if_not_included_in_price numeric(5, 2) null,
+  parking_ticket_per_coach_per_day numeric(10, 2) null,
+  currency text null default 'EUR',
+
+  guide_included_in_coach_cost boolean null default true,
+  guide_cost_per_day numeric(10, 2) null,
+  cost_per_extra_hour_per_guide_per_day numeric(10, 2) null,
+  vat_tax_if_not_included_in_guide_price numeric(5, 2) null,
+
+  coach_cost_local numeric(10, 2) null,
+  coach_cost_gbp numeric(10, 2) null,
+
+  guide_cost_local numeric(10, 2) null,
+  guide_cost_gbp numeric(10, 2) null,
+
+  provider_guides text null,
+
+  utilisation_percent numeric(5, 2) null default 100,
+  utilisation_cost_per_seat_local numeric(10, 2) null,
+  utilisation_cost_per_seat_gbp numeric(10, 2) null,
+
   markup_percent numeric(5, 2) null default 0.00,
-  cost_per_seat numeric GENERATED ALWAYS as ((total_cost / (seat_capacity)::numeric)) STORED (10, 2) null,
-  price_per_seat numeric GENERATED ALWAYS as (
-    (
-      (total_cost / (seat_capacity)::numeric) + (
-        (
-          (total_cost / (seat_capacity)::numeric) * markup_percent
-        ) / (100)::numeric
-      )
-    )
-  ) STORED (10, 2) null,
-  min_fill_percent numeric(5, 2) null default 100,
-  breakeven_per_seat numeric GENERATED ALWAYS as (
-    (
-      total_cost / ceil(
-        (
-          (min_fill_percent / 100.0) * (seat_capacity)::numeric
-        )
-      )
-    )
-  ) STORED (10, 2) null,
-  profit_per_seat numeric GENERATED ALWAYS as (
-    (
-      (
-        (total_cost / (seat_capacity)::numeric) + (
-          (
-            (total_cost / (seat_capacity)::numeric) * markup_percent
-          ) / (100)::numeric
-        )
-      ) - (
-        total_cost / ceil(
-          (
-            (min_fill_percent / 100.0) * (seat_capacity)::numeric
-          )
-        )
-      )
-    )
-  ) STORED (10, 2) null,
-  seats_reserved integer null default 0,
-  seats_provisional integer null default 0,
-  seats_available integer GENERATED ALWAYS as (
-    (
-      (seat_capacity - seats_reserved) - seats_provisional
-    )
-  ) STORED null,
-  guide_included boolean null default true,
-  guide_name text null,
-  guide_cost numeric(10, 2) null,
-  supplier text null,
-  supplier_ref text null,
-  notes text null,
+
+  sell_price_per_seat_gbp numeric(10, 2) null,
+
   active boolean null default true,
   created_at timestamp without time zone null default now(),
   updated_at timestamp without time zone null default now(),
-  constraint circuit_transfers_pkey primary key (id),
-  constraint circuit_transfers_event_id_fkey foreign KEY (event_id) references events (id) on delete CASCADE,
-  constraint circuit_transfers_hotel_id_fkey foreign KEY (hotel_id) references gpgt_hotels (id),
-  constraint circuit_transfers_transfer_type_check check (
-    (
-      transfer_type = any (array['coach'::text, 'mpv'::text])
-    )
-  )
-) TABLESPACE pg_default;
+
+  constraint circuit_transfers_pkey primary key (id)
+);
 create table public.hotel_rooms (
   id uuid not null default gen_random_uuid (),
   hotel_id uuid not null,

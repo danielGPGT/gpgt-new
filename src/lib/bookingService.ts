@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getCurrentUserTeamId, ensureUserHasTeam } from './teamUtils';
 
 export interface Booking {
   id: string;
@@ -32,19 +33,19 @@ export interface BookingStats {
 
 export class BookingService {
   /**
-   * Get all bookings for the current user
+   * Get all bookings for the current user's team
    */
   static async getUserBookings(): Promise<Booking[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User not part of a team');
       }
 
       const { data: bookings, error } = await supabase
         .from('bookings')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('team_id', teamId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -80,16 +81,16 @@ export class BookingService {
    */
   static async getBookingById(bookingId: string): Promise<Booking> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User not part of a team');
       }
 
       const { data: booking, error } = await supabase
         .from('bookings')
         .select('*')
         .eq('id', bookingId)
-        .eq('user_id', user.id)
+        .eq('team_id', teamId)
         .single();
 
       if (error) {
@@ -125,9 +126,9 @@ export class BookingService {
    */
   static async updateBookingStatus(bookingId: string, status: 'confirmed' | 'pending' | 'cancelled' | 'completed'): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User not part of a team');
       }
 
       const { error } = await supabase
@@ -137,7 +138,7 @@ export class BookingService {
           updated_at: new Date().toISOString() 
         })
         .eq('id', bookingId)
-        .eq('user_id', user.id);
+        .eq('team_id', teamId);
 
       if (error) {
         throw new Error(`Failed to update booking: ${error.message}`);
@@ -154,16 +155,16 @@ export class BookingService {
    */
   static async deleteBooking(bookingId: string): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User not part of a team');
       }
 
       const { error } = await supabase
         .from('bookings')
         .delete()
         .eq('id', bookingId)
-        .eq('user_id', user.id);
+        .eq('team_id', teamId);
 
       if (error) {
         throw new Error(`Failed to delete booking: ${error.message}`);
@@ -176,19 +177,19 @@ export class BookingService {
   }
 
   /**
-   * Get booking statistics for the current user
+   * Get booking statistics for the current user's team
    */
   static async getBookingStats(): Promise<BookingStats> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User not part of a team');
       }
 
       const { data: bookings, error } = await supabase
         .from('bookings')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('team_id', teamId);
 
       if (error) {
         throw new Error(`Failed to fetch bookings for stats: ${error.message}`);
@@ -244,6 +245,11 @@ export class BookingService {
    */
   static async createBookingFromQuote(quoteId: string, bookingData: any): Promise<string> {
     try {
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User not part of a team');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error('User not authenticated');
@@ -252,6 +258,7 @@ export class BookingService {
       const bookingPayload = {
         quote_id: quoteId,
         user_id: user.id,
+        team_id: teamId,
         client_name: bookingData.clientName || 'Unknown',
         booking_data: bookingData,
         total_cost: bookingData.totalCost,

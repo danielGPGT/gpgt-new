@@ -1,10 +1,12 @@
 import { supabase } from './supabase';
 import { gemini } from './gemini';
 import { ImageProcessor, type ProcessedImage } from './imageProcessor';
+import { getCurrentUserTeamId, ensureUserHasTeam } from './teamUtils';
 
 export interface MediaItem {
   id: string;
   user_id: string;
+  team_id?: string;
   description: string;
   tags: string[];
   category: string;
@@ -118,11 +120,15 @@ export class MediaLibraryService {
       // Generate AI tags using the actual image file
       const aiResult = await this.generateAITagsWithGemini(file);
       
+      // Get or create team for the user
+      const teamId = await ensureUserHasTeam();
+      
       // Save to media library table
       const { data, error } = await supabase
         .from('media_library')
         .insert({
           user_id: userId,
+          team_id: teamId,
           description: aiResult.description,
           tags: aiResult.tags,
           category: aiResult.category,
@@ -196,18 +202,20 @@ Respond with ONLY valid JSON in this exact format:
   }
 
   /**
-   * Get user's media library
+   * Get team's media library
    */
-  static async getUserMedia(userId: string, filters?: {
+  static async getTeamMedia(filters?: {
     category?: string;
     tags?: string[];
     search?: string;
   }): Promise<MediaItem[]> {
     try {
+      const teamId = await getCurrentUserTeamId();
+
       let query = supabase
         .from('media_library')
         .select('*')
-        .eq('user_id', userId)
+        .eq('team_id', teamId)
         .order('created_at', { ascending: false });
 
       // Apply filters
@@ -218,63 +226,94 @@ Respond with ONLY valid JSON in this exact format:
         query = query.overlaps('tags', filters.tags);
       }
       if (filters?.search) {
-        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+        query = query.or(`description.ilike.%${filters.search}%`);
       }
 
       const { data, error } = await query;
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching user media:', error);
+      console.error('Error fetching team media:', error);
       throw error;
     }
   }
 
   /**
-   * Search media by content
+   * Get user's media library (deprecated - use getTeamMedia instead)
    */
-  static async searchMedia(userId: string, query: string): Promise<MediaItem[]> {
+  static async getUserMedia(userId: string, filters?: {
+    category?: string;
+    tags?: string[];
+    search?: string;
+  }): Promise<MediaItem[]> {
+    return this.getTeamMedia(filters);
+  }
+
+  /**
+   * Search team media by content
+   */
+  static async searchTeamMedia(query: string): Promise<MediaItem[]> {
     try {
+      const teamId = await getCurrentUserTeamId();
+
       const { data, error } = await supabase
         .from('media_library')
         .select('*')
-        .eq('user_id', userId)
+        .eq('team_id', teamId)
         .or(`description.ilike.%${query}%,tags.cs.{${query}},category.ilike.%${query}%`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error searching media:', error);
+      console.error('Error searching team media:', error);
       throw error;
     }
   }
 
   /**
-   * Get media by category
+   * Search media by content (deprecated - use searchTeamMedia instead)
    */
-  static async getMediaByCategory(userId: string, category: string): Promise<MediaItem[]> {
+  static async searchMedia(userId: string, query: string): Promise<MediaItem[]> {
+    return this.searchTeamMedia(query);
+  }
+
+  /**
+   * Get team media by category
+   */
+  static async getTeamMediaByCategory(category: string): Promise<MediaItem[]> {
     try {
+      const teamId = await getCurrentUserTeamId();
+
       const { data, error } = await supabase
         .from('media_library')
         .select('*')
-        .eq('user_id', userId)
+        .eq('team_id', teamId)
         .eq('category', category)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching media by category:', error);
+      console.error('Error fetching team media by category:', error);
       throw error;
     }
   }
 
   /**
-   * Update media item
+   * Get media by category (deprecated - use getTeamMediaByCategory instead)
+   */
+  static async getMediaByCategory(userId: string, category: string): Promise<MediaItem[]> {
+    return this.getTeamMediaByCategory(category);
+  }
+
+  /**
+   * Update a media item
    */
   static async updateMediaItem(id: string, updates: Partial<MediaItem>): Promise<MediaItem> {
     try {
+      const teamId = await getCurrentUserTeamId();
+
       const { data, error } = await supabase
         .from('media_library')
         .update({
@@ -282,6 +321,7 @@ Respond with ONLY valid JSON in this exact format:
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
+        .eq('team_id', teamId)
         .select()
         .single();
 
@@ -294,15 +334,18 @@ Respond with ONLY valid JSON in this exact format:
   }
 
   /**
-   * Delete media item
+   * Delete a media item
    */
   static async deleteMediaItem(id: string): Promise<void> {
     try {
-      // Get the media item to delete the file
+      const teamId = await getCurrentUserTeamId();
+
+      // Get the media item first to delete the file from storage
       const { data: mediaItem } = await supabase
         .from('media_library')
         .select('image_url')
         .eq('id', id)
+        .eq('team_id', teamId)
         .single();
 
       if (mediaItem) {
@@ -320,7 +363,8 @@ Respond with ONLY valid JSON in this exact format:
       const { error } = await supabase
         .from('media_library')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('team_id', teamId);
 
       if (error) throw error;
     } catch (error) {
@@ -330,34 +374,45 @@ Respond with ONLY valid JSON in this exact format:
   }
 
   /**
-   * Get categories
+   * Get team categories
    */
-  static async getCategories(userId: string): Promise<string[]> {
+  static async getTeamCategories(): Promise<string[]> {
     try {
+      const teamId = await getCurrentUserTeamId();
+
       const { data, error } = await supabase
         .from('media_library')
         .select('category')
-        .eq('user_id', userId);
+        .eq('team_id', teamId);
 
       if (error) throw error;
       
       const categories = [...new Set(data?.map((item: { category: any; }) => item.category) || [])];
       return categories.sort();
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      console.error('Error fetching team categories:', error);
       return [];
     }
   }
 
   /**
-   * Get popular tags
+   * Get categories (deprecated - use getTeamCategories instead)
    */
-  static async getPopularTags(userId: string, limit: number = 20): Promise<string[]> {
+  static async getCategories(userId: string): Promise<string[]> {
+    return this.getTeamCategories();
+  }
+
+  /**
+   * Get team popular tags
+   */
+  static async getTeamPopularTags(limit: number = 20): Promise<string[]> {
     try {
+      const teamId = await getCurrentUserTeamId();
+
       const { data, error } = await supabase
         .from('media_library')
         .select('tags')
-        .eq('user_id', userId);
+        .eq('team_id', teamId);
 
       if (error) throw error;
       
@@ -375,9 +430,16 @@ Respond with ONLY valid JSON in this exact format:
         .slice(0, limit)
         .map(([tag]) => tag);
     } catch (error) {
-      console.error('Error fetching popular tags:', error);
+      console.error('Error fetching team popular tags:', error);
       return [];
     }
+  }
+
+  /**
+   * Get popular tags (deprecated - use getTeamPopularTags instead)
+   */
+  static async getPopularTags(userId: string, limit: number = 20): Promise<string[]> {
+    return this.getTeamPopularTags(limit);
   }
 
   /**
@@ -450,11 +512,15 @@ Respond with ONLY valid JSON in this exact format:
       }
       const combinedTags = [...aiResult.tags, ...unsplashTags].slice(0, 7);
       
+      // Get or create team for the user
+      const teamId = await ensureUserHasTeam();
+      
       // Save to media library table
       const { data, error } = await supabase
         .from('media_library')
         .insert({
           user_id: userId,
+          team_id: teamId,
           description,
           tags: combinedTags,
           category: aiResult.category,

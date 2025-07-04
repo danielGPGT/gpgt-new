@@ -30,7 +30,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { PDFExportButton } from '@/components/PDFExportButton';
-import { supabase } from '@/lib/supabase';
+import { QuoteService, QuoteResponse } from '@/lib/quoteService';
 import { useAuth } from '@/lib/AuthProvider';
 
 // Updated interface to match quote data structure
@@ -78,28 +78,20 @@ export function Itineraries() {
   const fetchAllItineraries = async () => {
     setLoading(true);
     try {
-      // Load all quotes from the database
-      const { data, error } = await supabase
-        .from('quotes')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        throw error;
-      }
+      // Use QuoteService to get team-based quotes
+      const quotes = await QuoteService.getQuotes();
 
       // Transform quote data to match the expected format
-      const transformedItineraries = (data || []).map(quote => ({
+      const transformedItineraries = quotes.map(quote => ({
         id: quote.id,
-        title: quote.generated_itinerary?.title || 'Untitled Itinerary',
-        client_name: quote.client_name || quote.generated_itinerary?.clientName || 'Client',
-        destination: quote.destination || quote.generated_itinerary?.destination || 'Destination',
-        created_at: quote.created_at,
-        updated_at: quote.updated_at,
-        generated_itinerary: quote.generated_itinerary,
+        title: quote.generatedItinerary?.title || 'Untitled Itinerary',
+        client_name: quote.clientName || quote.generatedItinerary?.clientName || 'Client',
+        destination: quote.destination || quote.generatedItinerary?.destination || 'Destination',
+        created_at: quote.createdAt,
+        updated_at: quote.createdAt, // Using createdAt as updatedAt for now
+        generated_itinerary: quote.generatedItinerary,
         status: quote.status,
-        total_price: quote.total_price,
+        total_price: quote.totalPrice,
         currency: quote.currency,
       }));
 
@@ -155,12 +147,8 @@ export function Itineraries() {
     if (!confirm('Are you sure you want to delete this itinerary?')) return;
     
     try {
-      const { error } = await supabase
-        .from('quotes')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      // Use QuoteService to delete the quote
+      await QuoteService.deleteQuote(id);
 
       setItineraries(itineraries.filter(it => it.id !== id));
       toast.success('Itinerary deleted successfully');
@@ -254,7 +242,7 @@ export function Itineraries() {
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
             {/* Search */}
             <div className="space-y-2">
@@ -304,7 +292,7 @@ export function Itineraries() {
                 <SelectContent>
                   <SelectItem value="date">Date Created</SelectItem>
                   <SelectItem value="title">Title</SelectItem>
-                  <SelectItem value="client">Client Name</SelectItem>
+                  <SelectItem value="client">Client</SelectItem>
                   <SelectItem value="destination">Destination</SelectItem>
                 </SelectContent>
               </Select>
@@ -316,15 +304,25 @@ export function Itineraries() {
                 <FilterX className="h-4 w-4" />
                 Actions
               </label>
-              <Button
-                variant="outline"
-                onClick={clearAllFilters}
-                disabled={!hasActiveFilters}
-                className="w-full bg-white/50 border-0 shadow-sm hover:bg-white/70"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Clear Filters
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearAllFilters}
+                  disabled={!hasActiveFilters}
+                  className="flex-1 bg-white/50 border-0 shadow-sm"
+                >
+                  Clear
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchAllItineraries}
+                  className="bg-white/50 border-0 shadow-sm"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -470,7 +468,7 @@ export function Itineraries() {
                 </div>
 
                 {/* Action Buttons - Always at bottom */}
-                <div className="flex gap-2 pt-4 mt-auto">
+                <div className="flex gap-2 mt-4">
                   <Button
                     size="sm"
                     variant="outline"
@@ -566,12 +564,14 @@ export function Itineraries() {
                   </div>
                   <div className="text-sm text-muted-foreground">Client</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-[var(--primary)]">
-                    {formatCurrency(selectedItinerary.total_price, selectedItinerary.currency)}
+                {selectedItinerary.total_price && (
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-[var(--primary)]">
+                      {formatCurrency(selectedItinerary.total_price, selectedItinerary.currency)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Total Cost</div>
                   </div>
-                  <div className="text-sm text-muted-foreground">Total Cost</div>
-                </div>
+                )}
               </div>
 
               {/* Itinerary Days */}

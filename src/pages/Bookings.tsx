@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
+import { getCurrentUserTeamId } from '@/lib/teamUtils';
 import { Calendar, MapPin, Users, DollarSign, Clock, Search, Filter, Download, Eye, Phone, Mail, CalendarDays, TrendingUp, ArrowUpRight, ArrowDownRight, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -50,6 +51,12 @@ export default function Bookings() {
         throw new Error('User not authenticated');
       }
 
+      // Get team ID
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User not part of a team');
+      }
+
       // Fetch bookings with related quote data
       const { data: bookingsData, error } = await supabase
         .from('bookings')
@@ -60,7 +67,7 @@ export default function Bookings() {
             trip_details
           )
         `)
-        .eq('user_id', user.id)
+        .eq('team_id', teamId)
         .order('created_at', { ascending: false });
 
       if (error) {

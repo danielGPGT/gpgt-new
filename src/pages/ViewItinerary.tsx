@@ -36,6 +36,7 @@ export default function ViewItinerary() {
       const data = await loadItinerary(itineraryId);
       setItinerary(data);
     } catch (error) {
+      console.error('Failed to load itinerary:', error);
       toast.error('Failed to load itinerary');
       navigate('/itineraries');
     } finally {
@@ -63,34 +64,29 @@ export default function ViewItinerary() {
   const heroImage = itinerary.days?.[0]?.imageUrl || undefined;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white/90 to-white/80 flex flex-col items-center py-8 px-2">
-      <div className="w-full max-w-3xl mx-auto rounded-2xl shadow-2xl overflow-hidden bg-white/80 backdrop-blur-2xl border-0">
-        {/* Hero Image */}
-        <div className="relative h-56 w-full bg-gray-100 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="relative">
+        {/* Hero Section */}
+        <div className="relative h-96 overflow-hidden">
           {heroImage ? (
-            <img 
-              src={heroImage} 
-              alt="Itinerary" 
-              className="object-cover w-full h-full"
-              onError={(e) => {
-                // Hide the broken image and show fallback
-                e.currentTarget.style.display = 'none';
-                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                if (fallback) {
-                  fallback.style.display = 'flex';
-                }
-              }}
+            <img
+              src={heroImage}
+              alt={itinerary.destination}
+              className="w-full h-full object-cover"
             />
-          ) : null}
-          <div className="flex flex-col items-center justify-center w-full h-full text-gray-300" style={{ display: heroImage ? 'none' : 'flex' }}>
-            <MapPin className="h-10 w-10 mb-2" />
-            <span className="text-xs">No Image</span>
-          </div>
-          <div className="absolute top-4 left-4">
-            <Badge className="bg-gradient-to-r from-[var(--primary)] to-[var(--primary)]/80 text-white border-0 text-xs font-medium px-2 py-1 shadow-md">
-              LUXURY
-            </Badge>
-          </div>
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-600 flex items-center justify-center">
+              <div className="text-center text-white">
+                <h1 className="text-4xl font-bold mb-2">{itinerary.title}</h1>
+                <p className="text-xl opacity-90">{itinerary.destination}</p>
+              </div>
+            </div>
+          )}
+          
+          {/* Overlay for better text readability */}
+          <div className="absolute inset-0 bg-black/20"></div>
+          
+          {/* Action buttons */}
           <div className="absolute top-4 right-4 flex gap-2">
             <PDFExportButton 
               itinerary={itinerary} 
@@ -132,39 +128,41 @@ export default function ViewItinerary() {
           )}
 
           {/* Daily Schedule */}
-          <div className="mb-8">
-            <h3 className="text-xl font-bold text-[var(--foreground)] mb-4">Daily Schedule</h3>
-            <div className="space-y-6">
-              {itinerary.days?.map((day, index) => (
-                <div key={index} className="bg-white/60 backdrop-blur-sm p-4 rounded-lg border border-[var(--border)]/30">
-                  <h4 className="text-md font-semibold text-[var(--foreground)] mb-2">
-                    Day {index + 1} - {formatDateWithDay(day.date)}
-                  </h4>
-                  <ul className="space-y-2">
-                    {day.activities?.map((activity, actIndex) => (
-                      <li key={actIndex} className="flex gap-4 items-start">
-                        <div className="bg-[var(--primary)]/10 text-[var(--primary)] px-3 py-1 rounded-full text-xs font-medium min-w-[60px] text-center">
-                          {activity.time}
-                        </div>
-                        <div className="flex-1">
-                          <span className="font-medium text-[var(--foreground)]">{activity.description}</span>
-                          {activity.location && (
-                            <span className="text-xs text-[var(--muted-foreground)] ml-2">📍 {activity.location}</span>
-                          )}
-                          {activity.notes && (
-                            <span className="text-xs text-[var(--muted-foreground)] ml-2 italic">{activity.notes}</span>
-                          )}
-                          {activity.estimatedCost ? (
-                            <span className="ml-2 text-xs text-[var(--primary)]">{activity.estimatedCost} ({activity.costType})</span>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+          {itinerary.days && itinerary.days.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-[var(--foreground)] mb-4">Daily Schedule</h3>
+              <div className="space-y-6">
+                {itinerary.days?.map((day, index) => (
+                  <div key={index} className="bg-white/60 backdrop-blur-sm p-4 rounded-lg border border-[var(--border)]/30">
+                    <h4 className="text-md font-semibold text-[var(--foreground)] mb-2">
+                      Day {index + 1} - {formatDateWithDay(day.date)}
+                    </h4>
+                    <ul className="space-y-2">
+                      {day.activities?.map((activity, actIndex) => (
+                        <li key={actIndex} className="flex gap-4 items-start">
+                          <div className="bg-[var(--primary)]/10 text-[var(--primary)] px-3 py-1 rounded-full text-xs font-medium min-w-[60px] text-center">
+                            {activity.time}
+                          </div>
+                          <div className="flex-1">
+                            <span className="font-medium text-[var(--foreground)]">{activity.description}</span>
+                            {activity.location && (
+                              <span className="text-xs text-[var(--muted-foreground)] ml-2">📍 {activity.location}</span>
+                            )}
+                            {activity.notes && (
+                              <span className="text-xs text-[var(--muted-foreground)] ml-2 italic">{activity.notes}</span>
+                            )}
+                            {activity.estimatedCost ? (
+                              <span className="ml-2 text-xs text-[var(--primary)]">{activity.estimatedCost} ({activity.costType})</span>
+                            ) : null}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Trip Preferences */}
           <div className="mb-8">

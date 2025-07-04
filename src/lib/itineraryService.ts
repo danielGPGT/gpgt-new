@@ -5,6 +5,7 @@ import type { TripPreferences, GeneratedItinerary } from './gemini';
 import { supabase } from './supabase';
 import type { TripIntake } from '@/types/trip';
 import { tierManager } from './tierManager';
+import { getCurrentUserTeamId, ensureUserHasTeam } from './teamUtils';
 
 export interface SavedItinerary {
   id: string;
@@ -17,93 +18,78 @@ export interface SavedItinerary {
   days: GeneratedItinerary['days'];
   created_at: string;
   updated_at: string;
+  team_id?: string;
 }
 
 export class ItineraryService {
-  private supabase;
+  private supabase = supabase;
 
-  constructor() {
-    this.supabase = supabase;
-  }
-
-  async saveItinerary(itinerary: GeneratedItinerary, userId: string): Promise<SavedItinerary> {
+  async generateItinerary(preferences: TripPreferences, userId: string): Promise<SavedItinerary> {
     try {
       // Check if user can create more itineraries
       if (!tierManager.canCreateItinerary()) {
         throw new Error(tierManager.getLimitReachedMessage('itineraries'));
       }
 
+      // Ensure user has a team
+      await ensureUserHasTeam();
+
+      // Generate itinerary using Gemini
+      const generated = await gemini.generateItinerary(preferences);
+
+      // Get current timestamp in ISO format
+      const now = new Date().toISOString();
+
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
+
+      // Save to Supabase
       const { data, error } = await this.supabase
         .from('itineraries')
-        .insert([
-          {
-            user_id: userId,
-            ...itinerary,
-            status: 'draft',
-          },
-        ])
+        .insert({
+          title: `${preferences.clientName}'s ${preferences.destination} Trip`,
+          client_name: preferences.clientName,
+          destination: preferences.destination,
+          user_id: userId,
+          team_id: teamId,
+          generated_by: userId,
+          preferences,
+          days: generated.days,
+          date_created: now,
+          created_at: now,
+          updated_at: now
+        })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      if (!data) throw new Error('Failed to save itinerary');
 
       // Increment usage after successful save
       await tierManager.incrementUsage('itineraries');
-      
-      toast.success('Itinerary saved successfully');
-      return data;
+
+      return data as SavedItinerary;
     } catch (error) {
+      console.error('Error in generateItinerary:', error);
       if (error instanceof Error && error.message.includes('limit')) {
         toast.error(error.message);
-      } else {
-      toast.error('Failed to save itinerary');
       }
-      throw error;
-    }
-  }
-
-  async updateItinerary(id: string, updates: Partial<GeneratedItinerary>): Promise<SavedItinerary> {
-    try {
-      const { data, error } = await this.supabase
-        .from('itineraries')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      toast.success('Itinerary updated successfully');
-      return data;
-    } catch (error) {
-      toast.error('Failed to update itinerary');
-      throw error;
-    }
-  }
-
-  async deleteItinerary(id: string): Promise<void> {
-    try {
-      const { error } = await this.supabase
-        .from('itineraries')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      toast.success('Itinerary deleted successfully');
-    } catch (error) {
-      toast.error('Failed to delete itinerary');
       throw error;
     }
   }
 
   async getUserItineraries(userId: string): Promise<SavedItinerary[]> {
     try {
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
+
       const { data, error } = await this.supabase
         .from('itineraries')
         .select('*')
-        .eq('user_id', userId)
+        .eq('team_id', teamId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -114,18 +100,69 @@ export class ItineraryService {
     }
   }
 
-  async getItinerary(id: string): Promise<SavedItinerary> {
+  async getItineraryById(id: string): Promise<SavedItinerary | null> {
     try {
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
+
       const { data, error } = await this.supabase
         .from('itineraries')
         .select('*')
         .eq('id', id)
+        .eq('team_id', teamId)
         .single();
 
       if (error) throw error;
       return data;
     } catch (error) {
       toast.error('Failed to fetch itinerary');
+      throw error;
+    }
+  }
+
+  async updateItinerary(id: string, updates: Partial<SavedItinerary>): Promise<SavedItinerary> {
+    try {
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
+
+      // Always update the updated_at timestamp
+      const updatedData = {
+        ...updates,
+        updated_at: new Date().toISOString()
+      };
+
+      const { data, error } = await this.supabase
+        .from('itineraries')
+        .update(updatedData)
+        .eq('id', id)
+        .eq('team_id', teamId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Failed to update itinerary');
+
+      return data as SavedItinerary;
+    } catch (error) {
+      toast.error('Failed to update itinerary');
+      throw error;
+    }
+  }
+
+  async deleteItinerary(id: string): Promise<void> {
+    try {
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
+
+      const { error } = await this.supabase
+        .from('itineraries')
+        .delete()
+        .eq('id', id)
+        .eq('team_id', teamId);
+
+      if (error) throw error;
+    } catch (error) {
+      toast.error('Failed to delete itinerary');
       throw error;
     }
   }
@@ -139,11 +176,17 @@ export const itineraryService = {
         throw new Error(tierManager.getLimitReachedMessage('itineraries'));
       }
 
+      // Ensure user has a team
+      await ensureUserHasTeam();
+
       // Generate itinerary using Gemini
       const generated = await gemini.generateItinerary(preferences);
 
       // Get current timestamp in ISO format
       const now = new Date().toISOString();
+
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
 
       // Save to Supabase
       const { data, error } = await supabase
@@ -152,6 +195,8 @@ export const itineraryService = {
           title: `${preferences.clientName}'s ${preferences.destination} Trip`,
           client_name: preferences.clientName,
           destination: preferences.destination,
+          user_id: userId,
+          team_id: teamId,
           generated_by: userId,
           preferences,
           days: generated.days,
@@ -181,58 +226,91 @@ export const itineraryService = {
     }
   },
 
-  async getById(id: string): Promise<SavedItinerary> {
-    const { data, error } = await supabase
-      .from('itineraries')
-      .select()
-      .eq('id', id)
-      .single();
+  async getById(id: string): Promise<SavedItinerary | null> {
+    try {
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
 
-    if (error) throw error;
-    if (!data) throw new Error('Itinerary not found');
+      const { data, error } = await supabase
+        .from('itineraries')
+        .select('*')
+        .eq('id', id)
+        .eq('team_id', teamId)
+        .single();
 
-    return data as SavedItinerary;
+      if (error) throw error;
+      return data as SavedItinerary;
+    } catch (error) {
+      console.error('Error getting itinerary by ID:', error);
+      throw error;
+    }
   },
 
   async list(userId: string): Promise<SavedItinerary[]> {
-    const { data, error } = await supabase
-      .from('itineraries')
-      .select()
-      .eq('generated_by', userId)
-      .order('date_created', { ascending: false });
+    try {
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
 
-    if (error) throw error;
-    return (data || []) as SavedItinerary[];
+      const { data, error } = await supabase
+        .from('itineraries')
+        .select()
+        .eq('team_id', teamId)
+        .order('date_created', { ascending: false });
+
+      if (error) throw error;
+      return (data || []) as SavedItinerary[];
+    } catch (error) {
+      console.error('Error listing itineraries:', error);
+      throw error;
+    }
   },
 
   async update(id: string, updates: Partial<SavedItinerary>): Promise<SavedItinerary> {
-    // Always update the updated_at timestamp
-    const updatedData = {
-      ...updates,
-      updated_at: new Date().toISOString()
-    };
+    try {
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
 
-    const { data, error } = await supabase
-      .from('itineraries')
-      .update(updatedData)
-      .eq('id', id)
-      .select()
-      .single();
+      // Always update the updated_at timestamp
+      const updatedData = {
+        ...updates,
+        updated_at: new Date().toISOString()
+      };
 
-    if (error) throw error;
-    if (!data) throw new Error('Failed to update itinerary');
+      const { data, error } = await supabase
+        .from('itineraries')
+        .update(updatedData)
+        .eq('id', id)
+        .eq('team_id', teamId)
+        .select()
+        .single();
 
-    return data as SavedItinerary;
+      if (error) throw error;
+      if (!data) throw new Error('Failed to update itinerary');
+
+      return data as SavedItinerary;
+    } catch (error) {
+      console.error('Error updating itinerary:', error);
+      throw error;
+    }
   },
 
   async delete(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('itineraries')
-      .delete()
-      .eq('id', id);
+    try {
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
 
-    if (error) throw error;
-  },
+      const { error } = await supabase
+        .from('itineraries')
+        .delete()
+        .eq('id', id)
+        .eq('team_id', teamId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting itinerary:', error);
+      throw error;
+    }
+  }
 };
 
 export async function saveItinerary(
@@ -246,10 +324,17 @@ export async function saveItinerary(
       throw new Error(tierManager.getLimitReachedMessage('itineraries'));
     }
 
+    // Ensure user has a team
+    await ensureUserHasTeam();
+
+    // Get user's team ID
+    const teamId = await getCurrentUserTeamId();
+
     const { data, error } = await supabase
       .from('itineraries')
       .insert({
         user_id: userId,
+        team_id: teamId,
         title: itinerary.title,
         client_name: itinerary.clientName,
         destination: itinerary.destination,
@@ -297,10 +382,13 @@ export async function saveItinerary(
 
 export async function loadItineraries(userId: string): Promise<SavedItinerary[]> {
   try {
+    // Get user's team ID
+    const teamId = await getCurrentUserTeamId();
+
     const { data, error } = await supabase
       .from('itineraries')
       .select('*')
-      .eq('generated_by', userId)
+      .eq('team_id', teamId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -317,9 +405,13 @@ export async function loadItineraries(userId: string): Promise<SavedItinerary[]>
 
 export async function loadAllItineraries(): Promise<SavedItinerary[]> {
   try {
+    // Get user's team ID
+    const teamId = await getCurrentUserTeamId();
+
     const { data, error } = await supabase
       .from('itineraries')
       .select('*')
+      .eq('team_id', teamId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -334,17 +426,25 @@ export async function loadAllItineraries(): Promise<SavedItinerary[]> {
   }
 }
 
-export async function loadItinerary(id: string): Promise<SavedItinerary | null> {
+export async function loadItinerary(id: string): Promise<SavedItinerary> {
   try {
+    // Get user's team ID
+    const teamId = await getCurrentUserTeamId();
+
     const { data, error } = await supabase
       .from('itineraries')
       .select('*')
       .eq('id', id)
+      .eq('team_id', teamId)
       .single();
 
     if (error) {
       console.error('Error loading itinerary:', error);
       throw error;
+    }
+
+    if (!data) {
+      throw new Error('Itinerary not found');
     }
 
     return data;
@@ -363,6 +463,9 @@ export async function updateItinerary(
   }>
 ): Promise<SavedItinerary | null> {
   try {
+    // Get user's team ID
+    const teamId = await getCurrentUserTeamId();
+
     const { data, error } = await supabase
       .from('itineraries')
       .update({
@@ -370,6 +473,7 @@ export async function updateItinerary(
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
+      .eq('team_id', teamId)
       .select()
       .single();
 
@@ -387,10 +491,14 @@ export async function updateItinerary(
 
 export async function deleteItinerary(id: string): Promise<void> {
   try {
+    // Get user's team ID
+    const teamId = await getCurrentUserTeamId();
+
     const { error } = await supabase
       .from('itineraries')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('team_id', teamId);
 
     if (error) {
       console.error('Error deleting itinerary:', error);

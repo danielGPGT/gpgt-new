@@ -45,10 +45,10 @@ export default function MediaLibrary() {
     
     try {
       setLoading(true);
-      const items = await MediaLibraryService.getUserMedia(user.id);
+      const items = await MediaLibraryService.getTeamMedia();
       setMediaItems(items);
       
-      const cats = await MediaLibraryService.getCategories(user.id);
+      const cats = await MediaLibraryService.getTeamCategories();
       setCategories(cats);
     } catch (error) {
       console.error('Error loading media library:', error);

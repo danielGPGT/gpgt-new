@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getCurrentUserTeamId, ensureUserHasTeam } from './teamUtils';
 import { gemini, type TripPreferences } from './gemini';
 import { QuoteInput } from '@/utils/createQuotePayload';
 import { CRMService } from './crmService';
@@ -312,11 +313,15 @@ export class QuoteService {
         calculatedTotal: calculatedTotal
       });
 
+      // Get or create team for the user
+      const teamId = await ensureUserHasTeam();
+
       // Save to Supabase
       const { data: quote, error } = await supabase
         .from('quotes')
         .insert({
           user_id: user.id,
+          team_id: teamId,
           client_id: clientId,
           client_name: quoteData.tripDetails.clientName,
           client_email: quoteData.tripDetails.clientEmail,
@@ -396,19 +401,16 @@ export class QuoteService {
   }
 
   /**
-   * Get all quotes for the current user
+   * Get all quotes for the current user's team
    */
   static async getQuotes(): Promise<QuoteResponse[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
+      const teamId = await getCurrentUserTeamId();
 
       const { data: quotes, error } = await supabase
         .from('quotes')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('team_id', teamId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -447,15 +449,12 @@ export class QuoteService {
    */
   static async getQuotesByClient(clientId: string): Promise<QuoteResponse[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
+      const teamId = await getCurrentUserTeamId();
 
       const { data: quotes, error } = await supabase
         .from('quotes')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('team_id', teamId)
         .eq('client_id', clientId)
         .order('created_at', { ascending: false });
 
@@ -491,7 +490,7 @@ export class QuoteService {
   }
 
   /**
-   * Get a specific quote by ID
+   * Get a quote by ID (team-based)
    */
   static async getQuoteById(quoteId: string): Promise<QuoteResponse> {
     try {
@@ -500,11 +499,17 @@ export class QuoteService {
         throw new Error('User not authenticated');
       }
 
+      // Ensure user has a team
+      await ensureUserHasTeam();
+
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
+
       const { data: quote, error } = await supabase
         .from('quotes')
         .select('*')
         .eq('id', quoteId)
-        .eq('user_id', user.id)
+        .eq('team_id', teamId)
         .single();
 
       if (error) {
@@ -543,7 +548,7 @@ export class QuoteService {
   }
 
   /**
-   * Update quote status
+   * Update quote status (team-based)
    */
   static async updateQuoteStatus(quoteId: string, status: 'draft' | 'confirmed' | 'cancelled'): Promise<void> {
     try {
@@ -552,11 +557,17 @@ export class QuoteService {
         throw new Error('User not authenticated');
       }
 
+      // Ensure user has a team
+      await ensureUserHasTeam();
+
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
+
       const { error } = await supabase
         .from('quotes')
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', quoteId)
-        .eq('user_id', user.id);
+        .eq('team_id', teamId);
 
       if (error) {
         throw new Error(`Failed to update quote: ${error.message}`);
@@ -569,7 +580,7 @@ export class QuoteService {
   }
 
   /**
-   * Confirm a quote and create a booking
+   * Confirm a quote and create a booking (team-based)
    */
   static async confirmQuote(quoteId: string): Promise<string> {
     try {
@@ -577,6 +588,9 @@ export class QuoteService {
       if (!user) {
         throw new Error('User not authenticated');
       }
+
+      // Ensure user has a team
+      await ensureUserHasTeam();
 
       // Get the quote first
       const quote = await this.getQuoteById(quoteId);
@@ -619,7 +633,7 @@ export class QuoteService {
   }
 
   /**
-   * Create a booking from a quote
+   * Create a booking from a quote (team-based)
    */
   static async createBooking(quoteId: string, bookingData: any): Promise<string> {
     try {
@@ -628,12 +642,19 @@ export class QuoteService {
         throw new Error('User not authenticated');
       }
 
+      // Ensure user has a team
+      await ensureUserHasTeam();
+
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
+
       // Get the quote first
       const quote = await this.getQuoteById(quoteId);
 
       const bookingPayload = {
         quote_id: quoteId,
         user_id: user.id,
+        team_id: teamId,
         client_name: quote.generatedItinerary?.clientName || 'Unknown',
         booking_data: bookingData,
         total_cost: quote.totalPrice,
@@ -664,7 +685,7 @@ export class QuoteService {
   }
 
   /**
-   * Delete a quote by ID
+   * Delete a quote by ID (team-based)
    */
   static async deleteQuote(quoteId: string): Promise<void> {
     try {
@@ -673,11 +694,17 @@ export class QuoteService {
         throw new Error('User not authenticated');
       }
 
+      // Ensure user has a team
+      await ensureUserHasTeam();
+
+      // Get user's team ID
+      const teamId = await getCurrentUserTeamId();
+
       const { error } = await supabase
         .from('quotes')
         .delete()
         .eq('id', quoteId)
-        .eq('user_id', user.id);
+        .eq('team_id', teamId);
 
       if (error) {
         throw new Error(`Failed to delete quote: ${error.message}`);

@@ -39,6 +39,30 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import MediaLibrarySelector from '@/components/MediaLibrarySelector';
+import { cn } from '@/lib/utils';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -47,11 +71,6 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,13 +84,19 @@ import { format } from 'date-fns';
 
 import { InventoryService } from '@/lib/inventoryService';
 import { PackageManagerService } from '@/lib/packageManagerService';
-import { SportForm } from '@/components/package-manager/SportForm';
-import { EventForm } from '@/components/package-manager/EventForm';
-import { VenueForm } from '@/components/package-manager/VenueForm';
+import { SportForm } from '@/components/forms/SportForm';
+import { VenueForm } from '@/components/forms/VenueForm';
+import { cleanEventUpdate } from '@/components/inventory/SportsEventsManager';
 import { PackageForm } from '@/components/package-manager/PackageForm';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { PackageTierForm } from '@/components/package-manager/PackageTierForm';
 import { PackageComponentForm } from '@/components/package-manager/PackageComponentForm';
 import { PackageDetails } from '@/components/package-manager/PackageDetails';
+
+// Import custom icons
+import f1Icon from '@/assets/icons/f1.svg';
+import motogpIcon from '@/assets/icons/motogp.svg';
 
 interface Filters {
   sport_ids?: string[];
@@ -90,6 +115,34 @@ export default function PackageManager() {
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [isVenueFormOpen, setIsVenueFormOpen] = useState(false);
   const [isPackageFormOpen, setIsPackageFormOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<any>(null);
+  const queryClient = useQueryClient();
+
+  // Event mutations
+  const createEventMutation = useMutation({
+    mutationFn: (data: any) => InventoryService.createEvent(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      setIsEventFormOpen(false);
+      toast.success('Event created successfully');
+    },
+    onError: (error) => {
+      toast.error(`Failed to create event: ${error.message}`);
+    },
+  });
+
+  const updateEventMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => InventoryService.updateEvent(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      setIsEventFormOpen(false);
+      setEditingEvent(null);
+      toast.success('Event updated successfully');
+    },
+    onError: (error) => {
+      toast.error(`Failed to update event: ${error.message}`);
+    },
+  });
 
   // Fetch data
   const { data: sports } = useQuery({
@@ -111,6 +164,12 @@ export default function PackageManager() {
     queryKey: ['packages', selectedEvent?.id],
     queryFn: () => selectedEvent ? PackageManagerService.getPackagesByEvent(selectedEvent.id) : null,
     enabled: !!selectedEvent,
+  });
+
+  // Add query for all packages to get counts
+  const { data: allPackages } = useQuery({
+    queryKey: ['all-packages'],
+    queryFn: () => PackageManagerService.getPackages(),
   });
 
   const filteredEvents = events?.filter(event => {
@@ -162,7 +221,8 @@ export default function PackageManager() {
 
   const getSportIcon = (sportName: string) => {
     const icons: { [key: string]: React.ReactNode } = {
-      'Formula 1': <Car className="h-6 w-6" />,
+      'Formula 1': <img src={f1Icon} alt="Formula 1" className="h-10 w-10 brightness-0 invert" />,
+      'MotoGP': <img src={motogpIcon} alt="MotoGP" className="h-6 w-6" />,
       'Tennis': <Circle className="h-6 w-6" />,
       'Football': <Target className="h-6 w-6" />,
       'Basketball': <Circle className="h-6 w-6" />,
@@ -206,7 +266,10 @@ export default function PackageManager() {
             Export
           </Button>
           <Button 
-            onClick={() => setIsEventFormOpen(true)}
+            onClick={() => {
+              setEditingEvent(null);
+              setIsEventFormOpen(true);
+            }}
             className="bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-[var(--primary-foreground)] shadow-sm"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -458,7 +521,10 @@ export default function PackageManager() {
                     Create your first event to get started with package management and begin building travel experiences.
                   </p>
                   <Button 
-                    onClick={() => setIsEventFormOpen(true)}
+                    onClick={() => {
+                      setEditingEvent(null);
+                      setIsEventFormOpen(true);
+                    }}
                     className="bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-[var(--primary-foreground)] shadow-sm"
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -467,7 +533,7 @@ export default function PackageManager() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 lg:gap-6">
                 <AnimatePresence>
                   {filteredEvents.map((event) => (
                     <motion.div
@@ -475,37 +541,109 @@ export default function PackageManager() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.2 }}
+                      transition={{ duration: 0.3, ease: "easeOut" }}
+                      whileHover={{ y: -4 }}
+                      className="group"
                     >
                       <Card 
-                        className={`group hover:shadow-lg transition-all duration-200 cursor-pointer border-[var(--border)] hover:border-[var(--primary)]/30 relative overflow-hidden ${
+                        className={`relative overflow-hidden transition-all duration-300 cursor-pointer border-[var(--border)] hover:border-[var(--primary)]/40 hover:shadow-xl hover:shadow-[var(--primary)]/5 ${
                           event.event_image 
-                            ? 'bg-cover bg-center bg-no-repeat' 
-                            : 'bg-gradient-to-br from-[var(--card)] to-[var(--card)]/80'
+                            ? 'bg-cover bg-center bg-no-repeat min-h-[280px] sm:min-h-[320px]' 
+                            : 'bg-gradient-to-br from-[var(--card)] via-[var(--card)]/95 to-[var(--card)]/90 min-h-[280px] sm:min-h-[320px]'
                         }`}
                         style={event.event_image ? {
-                          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)), url(${event.event_image.image_url || event.event_image.thumbnail_url})`
+                          backgroundImage: `linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0.7) 100%), url(${event.event_image.image_url || event.event_image.thumbnail_url})`
                         } : undefined}
+                        onClick={() => setSelectedEvent(event)}
                       >
-                        <CardHeader className="pb-3 relative z-10">
-                          <div className="flex items-start justify-between">
+                        {/* Gradient Overlay for better text readability */}
+                        {event.event_image && (
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        )}
+                        
+                        {/* Status Badge */}
+                        <div className="absolute top-3 left-3 z-20">
+                          <Badge 
+                            variant={getEventStatus(event).status === 'ongoing' ? 'default' : 'secondary'}
+                            className={`transition-all duration-300 ${
+                              event.event_image 
+                                ? 'bg-white/20 backdrop-blur-sm text-white border-white/30 hover:bg-white/30' 
+                                : 'bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 border-[var(--primary)]/20'
+                            }`}
+                          >
+                            {getEventStatus(event).label}
+                          </Badge>
+                        </div>
+
+                        {/* Action Menu */}
+                        <div className="absolute top-3 right-3 z-20">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className={`opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 ${
+                                  event.event_image 
+                                    ? 'bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white' 
+                                    : 'hover:bg-[var(--muted)]'
+                                }`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Settings className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-[var(--card)] border-[var(--border)] shadow-lg">
+                              <DropdownMenuLabel className="text-[var(--foreground)]">Actions</DropdownMenuLabel>
+                                                              <DropdownMenuItem 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedEvent(event);
+                                  }}
+                                  className="text-[var(--foreground)] hover:bg-[var(--muted)]"
+                                >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Packages
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="bg-[var(--border)]" />
+                                                              <DropdownMenuItem 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingEvent(event);
+                                    setIsEventFormOpen(true);
+                                  }}
+                                  className="text-[var(--foreground)] hover:bg-[var(--muted)]"
+                                >
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit Event
+                                </DropdownMenuItem>
+                              <DropdownMenuItem className="text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete Event
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        <CardHeader className="pb-2 pt-16 relative z-10">
+                          <div className="space-y-3">
+                            {/* Sport Icon and Name */}
                             <div className="flex items-center gap-3">
-                              <div className={`h-12 w-12 rounded-lg flex items-center justify-center transition-colors ${
+                              <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-lg ${
                                 event.event_image 
-                                  ? 'bg-white/20 backdrop-blur-sm group-hover:bg-white/30' 
-                                  : 'bg-[var(--primary)]/10 group-hover:bg-[var(--primary)]/20'
+                                  ? 'bg-white/20 backdrop-blur-sm group-hover:bg-white/30 group-hover:scale-110' 
+                                  : 'bg-[var(--primary)]/10 group-hover:bg-[var(--primary)]/20 group-hover:scale-110'
                               }`}>
                                 {getSportIcon(event.sport?.name || '')}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <CardTitle className={`text-lg transition-colors truncate ${
+                                <CardTitle className={`text-lg font-bold transition-colors line-clamp-2 ${
                                   event.event_image 
                                     ? 'text-white group-hover:text-white/90' 
                                     : 'text-[var(--foreground)] group-hover:text-[var(--primary)]'
                                 }`}>
                                   {event.name}
                                 </CardTitle>
-                                <p className={`text-sm mt-1 ${
+                                <p className={`text-sm mt-1 font-medium ${
                                   event.event_image 
                                     ? 'text-white/80' 
                                     : 'text-[var(--muted-foreground)]'
@@ -514,92 +652,74 @@ export default function PackageManager() {
                                 </p>
                               </div>
                             </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--muted)]"
-                                >
-                                  <Settings className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="bg-[var(--card)] border-[var(--border)]">
-                                <DropdownMenuLabel className="text-[var(--foreground)]">Actions</DropdownMenuLabel>
-                                <DropdownMenuItem 
-                                  onClick={() => setSelectedEvent(event)}
-                                  className="text-[var(--foreground)] hover:bg-[var(--muted)]"
-                                >
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Packages
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => setIsPackageFormOpen(true)}
-                                  className="text-[var(--foreground)] hover:bg-[var(--muted)]"
-                                >
-                                  <Plus className="h-4 w-4 mr-2" />
-                                  Add Package
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator className="bg-[var(--border)]" />
-                                <DropdownMenuItem className="text-[var(--foreground)] hover:bg-[var(--muted)]">
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit Event
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete Event
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
                           </div>
                         </CardHeader>
-                        <CardContent className="relative z-10">
+
+                        <CardContent className="relative z-10 pt-0">
                           <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-sm">
-                              <MapPin className={`h-4 w-4 ${
+                            {/* Venue Info */}
+                            <div className="flex items-start gap-2">
+                              <MapPin className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
                                 event.event_image ? 'text-white/80' : 'text-[var(--secondary)]'
                               }`} />
-                              <span className={`truncate ${
+                              <span className={`text-sm line-clamp-2 ${
                                 event.event_image ? 'text-white/80' : 'text-[var(--muted-foreground)]'
-                              }`}>{event.venue?.name}</span>
+                              }`}>
+                                {event.venue?.name}
+                              </span>
                             </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              <Calendar className={`h-4 w-4 ${
+
+                            {/* Date Info */}
+                            <div className="flex items-start gap-2">
+                              <Calendar className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
                                 event.event_image ? 'text-white/80' : 'text-[var(--chart-4)]'
                               }`} />
-                              <span className={
+                              <span className={`text-sm ${
                                 event.event_image ? 'text-white/80' : 'text-[var(--muted-foreground)]'
-                              }>
+                              }`}>
                                 {event.start_date && format(new Date(event.start_date), 'MMM dd, yyyy')}
                                 {event.end_date && event.end_date !== event.start_date && 
                                   ` - ${format(new Date(event.end_date), 'MMM dd, yyyy')}`
                                 }
                               </span>
                             </div>
-                            <div className="flex items-center justify-between pt-2">
-                              <Badge 
-                                variant={getEventStatus(event).status === 'ongoing' ? 'default' : 'secondary'}
-                                className={
+
+                            {/* Bottom Section */}
+                            <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]/20">
+                              <div className="flex items-center gap-2">
+                                <Package className={`h-4 w-4 ${
+                                  event.event_image ? 'text-white/60' : 'text-[var(--muted-foreground)]'
+                                }`} />
+                                                                 <span className={`text-xs font-medium ${
+                                   event.event_image ? 'text-white/60' : 'text-[var(--muted-foreground)]'
+                                 }`}>
+                                   {allPackages?.filter(p => p.event_id === event.id).length || 0} packages
+                                 </span>
+                              </div>
+                              
+                              {/* View Details Button */}
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className={`opacity-0 group-hover:opacity-100 transition-all duration-300 text-xs ${
                                   event.event_image 
-                                    ? 'bg-white/20 text-white hover:bg-white/30' 
-                                    : 'bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20'
-                                }
+                                    ? 'text-white/80 hover:text-white hover:bg-white/20' 
+                                    : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]'
+                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedEvent(event);
+                                }}
                               >
-                                {getEventStatus(event).label}
-                              </Badge>
-                              <Badge 
-                                variant="outline" 
-                                className={
-                                  event.event_image 
-                                    ? 'border-white/30 text-white/80' 
-                                    : 'border-[var(--border)] text-[var(--muted-foreground)]'
-                                }
-                              >
-                                {packages?.filter(p => p.event_id === event.id).length || 0} packages
-                              </Badge>
+                                View Details
+                                <ChevronRight className="h-3 w-3 ml-1" />
+                              </Button>
                             </div>
                           </div>
                         </CardContent>
+
+                        {/* Hover Effect Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-[var(--primary)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                       </Card>
                     </motion.div>
                   ))}
@@ -634,12 +754,35 @@ export default function PackageManager() {
         open={isSportFormOpen} 
         onOpenChange={setIsSportFormOpen} 
       />
-      <EventForm 
-        open={isEventFormOpen} 
-        onOpenChange={setIsEventFormOpen}
-        sports={sports || []}
-        venues={venues || []}
-      />
+      {/* Event Form Drawer */}
+      <Drawer open={isEventFormOpen} onOpenChange={setIsEventFormOpen} direction="right">
+        <DrawerContent className="!w-[900px] max-w-none">
+          <DrawerHeader>
+            <DrawerTitle>{editingEvent ? 'Edit Event' : 'Add New Event'}</DrawerTitle>
+            <DrawerDescription>
+              {editingEvent ? 'Update event information' : 'Create a new event for packages'}
+            </DrawerDescription>
+          </DrawerHeader>
+          <EventFormDrawer
+            event={editingEvent || undefined}
+            sports={sports || []}
+            venues={venues || []}
+            onSubmit={data => {
+              if (editingEvent) {
+                updateEventMutation.mutate({ id: editingEvent.id, data: cleanEventUpdate(data) });
+              } else {
+                createEventMutation.mutate(cleanEventUpdate(data));
+              }
+            }}
+            onCancel={() => {
+              setIsEventFormOpen(false);
+              setEditingEvent(null);
+            }}
+            isLoading={createEventMutation.isPending || updateEventMutation.isPending}
+            queryClient={queryClient}
+          />
+        </DrawerContent>
+      </Drawer>
       <VenueForm 
         open={isVenueFormOpen} 
         onOpenChange={setIsVenueFormOpen} 
@@ -650,5 +793,443 @@ export default function PackageManager() {
         events={events || []}
       />
     </div>
+  );
+}
+
+// EventFormDrawer component (exact copy from SportsEventsManager)
+function EventFormDrawer({ event, sportId, sports, venues, onSubmit, onCancel, isLoading, queryClient }: {
+  event?: any;
+  sportId?: string;
+  sports: any[];
+  venues: any[];
+  onSubmit: (data: any) => void;
+  onCancel: () => void;
+  isLoading: boolean;
+  queryClient: any;
+}) {
+  const [formData, setFormData] = useState({
+    sport_id: event?.sport_id || sportId || '',
+    name: event?.name || '',
+    start_date: event?.start_date || '',
+    end_date: event?.end_date || '',
+    venue_id: event?.venue_id ?? '',
+    event_image: event?.event_image || null,
+  });
+  const [venuesList, setVenuesList] = useState<any[]>(venues || []);
+  const [venueDialogOpen, setVenueDialogOpen] = useState(false);
+  const [newVenue, setNewVenue] = useState({
+    name: '',
+    city: '',
+    country: '',
+    slug: '',
+    latitude: '',
+    longitude: '',
+    description: '',
+    map_url: '',
+    images: [] as any[],
+  });
+  const [venueLoading, setVenueLoading] = useState(false);
+  const [showImageSelector, setShowImageSelector] = useState(false);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<any[]>([]);
+
+  React.useEffect(() => { setVenuesList(venues || []); }, [venues]);
+
+  // Reset slugManuallyEdited when dialog closes
+  React.useEffect(() => {
+    if (!venueDialogOpen) setSlugManuallyEdited(false);
+  }, [venueDialogOpen]);
+
+  return (
+    <form onSubmit={e => { e.preventDefault(); onSubmit(formData); }} className="space-y-4 p-4">
+      <div className="space-y-2">
+        <Label htmlFor="sport">Sport *</Label>
+        <Select
+          value={formData.sport_id ?? ''}
+          onValueChange={v => setFormData(prev => ({ ...prev, sport_id: v }))}
+          required
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select sport" />
+          </SelectTrigger>
+          <SelectContent>
+            {sports.map(s => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="name">Event Name *</Label>
+        <Input id="name" value={formData.name} onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))} required />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="venue">Venue</Label>
+        <Select
+          value={(formData.venue_id ?? '') + ''}
+          onValueChange={v => {
+            if (v === '__create__') setVenueDialogOpen(true);
+            else setFormData(prev => ({ ...prev, venue_id: v }));
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select venue" />
+          </SelectTrigger>
+          <SelectContent>
+            {venuesList.map(v => (
+              <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+            ))}
+            <SelectItem value="__create__" className="text-primary font-semibold">+ Create new venue</SelectItem>
+          </SelectContent>
+        </Select>
+        {/* Venue creation dialog */}
+        <Dialog open={venueDialogOpen} onOpenChange={setVenueDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{'Add New Venue'}</DialogTitle>
+              <DialogDescription>{'Create a new venue for events'}</DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setVenueLoading(true);
+                // Always send images as array of objects (id, image_url, thumbnail_url, description)
+                const images = (newVenue.images || []).map((img: any) => ({
+                  id: img.id,
+                  image_url: img.image_url,
+                  thumbnail_url: img.thumbnail_url,
+                  description: img.description,
+                }));
+                const payload = { ...newVenue, images, latitude: newVenue.latitude ? parseFloat(newVenue.latitude) : undefined, longitude: newVenue.longitude ? parseFloat(newVenue.longitude) : undefined };
+                const created = await InventoryService.createVenue(payload);
+                setVenuesList((prev) => [...prev, created]);
+                setFormData((prev) => ({ ...prev, venue_id: created.id }));
+                setVenueDialogOpen(false);
+                setNewVenue({
+                  name: '',
+                  slug: '',
+                  country: '',
+                  city: '',
+                  latitude: '',
+                  longitude: '',
+                  description: '',
+                  map_url: '',
+                  images: [],
+                });
+                setVenueLoading(false);
+                queryClient.invalidateQueries({ queryKey: ['venues'] });
+                queryClient.invalidateQueries({ queryKey: ['events'] });
+                queryClient.invalidateQueries({ queryKey: ['sports'] });
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="venue-name">Venue Name *</Label>
+                  <Input
+                    id="venue-name"
+                    value={newVenue.name}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      setNewVenue((prev) => {
+                        let slug = prev.slug;
+                        if (!slugManuallyEdited) {
+                          slug = name
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, '-')
+                            .replace(/(^-|-$)+/g, '');
+                        }
+                        return { ...prev, name, slug };
+                      });
+                    }}
+                    placeholder="e.g., Circuit de Monaco"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="venue-slug">Slug</Label>
+                  <Input
+                    id="venue-slug"
+                    value={newVenue.slug}
+                    onChange={(e) => {
+                      setSlugManuallyEdited(true);
+                      setNewVenue((prev) => ({ ...prev, slug: e.target.value }));
+                    }}
+                    placeholder="e.g., circuit-de-monaco"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="venue-country">Country</Label>
+                  <Input
+                    id="venue-country"
+                    value={newVenue.country}
+                    onChange={(e) => setNewVenue((prev) => ({ ...prev, country: e.target.value }))}
+                    placeholder="e.g., Monaco"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="venue-city">City</Label>
+                  <Input
+                    id="venue-city"
+                    value={newVenue.city}
+                    onChange={(e) => setNewVenue((prev) => ({ ...prev, city: e.target.value }))}
+                    placeholder="e.g., Monte Carlo"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="venue-latitude">Latitude</Label>
+                  <Input
+                    id="venue-latitude"
+                    type="number"
+                    step="any"
+                    value={newVenue.latitude}
+                    onChange={(e) => setNewVenue((prev) => ({ ...prev, latitude: e.target.value }))}
+                    placeholder="e.g., 43.7384"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="venue-longitude">Longitude</Label>
+                  <Input
+                    id="venue-longitude"
+                    type="number"
+                    step="any"
+                    value={newVenue.longitude}
+                    onChange={(e) => setNewVenue((prev) => ({ ...prev, longitude: e.target.value }))}
+                    placeholder="e.g., 7.4246"
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="venue-description">Description</Label>
+                  <Textarea
+                    id="venue-description"
+                    value={newVenue.description}
+                    onChange={(e) => setNewVenue((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="Venue description..."
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="venue-map-url">Map URL</Label>
+                  <Input
+                    id="venue-map-url"
+                    value={newVenue.map_url}
+                    onChange={(e) => setNewVenue((prev) => ({ ...prev, map_url: e.target.value }))}
+                    placeholder="https://maps.example.com"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label>Venue Images</Label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {(newVenue.images || []).length > 0 ? (
+                    (newVenue.images as any[]).map((img) => (
+                      <div key={img.id} className="relative group w-24 h-24 border rounded overflow-hidden">
+                        <img src={img.thumbnail_url || img.image_url} alt={img.description || ''} className="object-cover w-full h-full" />
+                        <button
+                          type="button"
+                          className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                          onClick={() => setNewVenue(prev => ({ ...prev, images: (prev.images || []).filter((i: any) => i.id !== img.id) }))}
+                          aria-label="Remove image"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-muted-foreground text-sm">No images selected</span>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedImages(newVenue.images || []);
+                    setShowImageSelector(true);
+                  }}
+                >
+                  {newVenue.images && newVenue.images.length > 0 ? 'Edit Images' : 'Select Images'}
+                </Button>
+                <Dialog open={showImageSelector} onOpenChange={setShowImageSelector}>
+                  <DialogContent className="!max-w-6xl max-h-[80vh] flex flex-col">
+                    <DialogHeader className="flex-shrink-0">
+                      <DialogTitle>Select Venue Images</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-hidden min-h-0">
+                      <MediaLibrarySelector
+                        selectedItems={Array.isArray(selectedImages) ? selectedImages : []}
+                        onSelect={(item) => {
+                          setSelectedImages((prev) => {
+                            const exists = prev.find((img) => img.id === item.id);
+                            if (exists) {
+                              return prev.filter((img) => img.id !== item.id);
+                            } else {
+                              return [...prev, item];
+                            }
+                          });
+                        }}
+                        multiple={true}
+                      />
+                    </div>
+                    <DialogFooter className="flex-shrink-0">
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setNewVenue(prev => ({ ...prev, images: selectedImages }));
+                          setShowImageSelector(false);
+                        }}
+                      >
+                        Confirm Selection
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button type="submit" disabled={venueLoading}>{venueLoading ? 'Saving...' : 'Create Venue'}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+      <div className="flex gap-4">
+        <div className="space-y-2 flex-1">
+          <Label htmlFor="start_date">Start Date</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !formData.start_date && "text-muted-foreground"
+                )}
+              >
+                {formData.start_date
+                  ? new Date(formData.start_date).toLocaleDateString()
+                  : "Select date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <CalendarIcon
+                mode="single"
+                selected={formData.start_date ? new Date(formData.start_date) : undefined}
+                onSelect={(date: Date | undefined) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    start_date: date ? date.toISOString().slice(0, 10) : ''
+                  }));
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="space-y-2 flex-1">
+          <Label htmlFor="end_date">End Date</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !formData.end_date && "text-muted-foreground"
+                )}
+              >
+                {formData.end_date
+                  ? new Date(formData.end_date).toLocaleDateString()
+                  : "Select date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <CalendarIcon
+                mode="single"
+                selected={formData.end_date ? new Date(formData.end_date) : undefined}
+                onSelect={(date: Date | undefined) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    end_date: date ? date.toISOString().slice(0, 10) : ''
+                  }));
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+      
+      {/* Event Image */}
+      <div className="space-y-2">
+        <Label>Event Image</Label>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {formData.event_image ? (
+            <div className="relative group w-24 h-24 border rounded overflow-hidden">
+              <img 
+                src={formData.event_image.image_url || formData.event_image.thumbnail_url} 
+                alt={formData.event_image.description || 'Event image'} 
+                className="object-cover w-full h-full" 
+              />
+              <button
+                type="button"
+                className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                onClick={() => setFormData(prev => ({ ...prev, event_image: null }))}
+                aria-label="Remove image"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <span className="text-muted-foreground text-sm">No image selected</span>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setSelectedImages(formData.event_image ? [formData.event_image] : []);
+            setShowImageSelector(true);
+          }}
+        >
+          {formData.event_image ? 'Change Image' : 'Select Image'}
+        </Button>
+        
+        {/* Image Selection Dialog */}
+        <Dialog open={showImageSelector} onOpenChange={setShowImageSelector}>
+          <DialogContent className="!max-w-6xl max-h-[80vh] flex flex-col">
+            <DialogHeader className="flex-shrink-0">
+              <DialogTitle>Select Event Image</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden min-h-0">
+              <MediaLibrarySelector
+                selectedItems={Array.isArray(selectedImages) ? selectedImages : []}
+                onSelect={(item) => {
+                  setSelectedImages([item]); // Only allow single image selection
+                }}
+                multiple={false}
+              />
+            </div>
+            <DialogFooter className="flex-shrink-0">
+              <Button
+                type="button"
+                onClick={() => {
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    event_image: selectedImages.length > 0 ? selectedImages[0] : null 
+                  }));
+                  setShowImageSelector(false);
+                }}
+              >
+                Confirm Selection
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+      
+      <div className="flex justify-end gap-2 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" disabled={isLoading}>{isLoading ? 'Saving...' : event ? 'Update Event' : 'Create Event'}</Button>
+      </div>
+    </form>
   );
 } 

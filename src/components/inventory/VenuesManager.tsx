@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandInput, CommandList, CommandItem } from '@/components/ui/command';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { VenueForm } from '@/components/forms/VenueForm';
 
 export function VenuesManager() {
   const queryClient = useQueryClient();
@@ -151,203 +152,7 @@ export function VenuesManager() {
     return 0;
   });
 
-  // Venue Drawer Form
-  function VenueFormDrawer({ venue, onSubmit, onCancel, isLoading }: { venue?: Venue; onSubmit: (data: VenueInsert | VenueUpdate) => void; onCancel: () => void; isLoading: boolean; }) {
-    const [formData, setFormData] = useState<Omit<VenueInsert | VenueUpdate, 'id'>>({
-      name: venue?.name || '',
-      slug: venue?.slug || '',
-      country: venue?.country || '',
-      city: venue?.city || '',
-      latitude: venue?.latitude || '',
-      longitude: venue?.longitude || '',
-      description: venue?.description || '',
-      map_url: venue?.map_url || '',
-      images: venue?.images || [],
-    });
-    const [showImageSelector, setShowImageSelector] = useState(false);
-    const [selectedImages, setSelectedImages] = useState(formData.images || []);
-    const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
-    useEffect(() => {
-      setFormData({
-        name: venue?.name || '',
-        slug: venue?.slug || '',
-        country: venue?.country || '',
-        city: venue?.city || '',
-        latitude: venue?.latitude || '',
-        longitude: venue?.longitude || '',
-        description: venue?.description || '',
-        map_url: venue?.map_url || '',
-        images: venue?.images || [],
-      });
-      setSelectedImages(venue?.images || []);
-      setSlugManuallyEdited(false);
-    }, [venue]);
-    return (
-      <form onSubmit={e => {
-        e.preventDefault();
-        const payload = { ...formData, images: selectedImages };
-        console.log('[VENUE FORM SUBMIT]', editingVenue ? 'Update' : 'Create', payload);
-        onSubmit(payload);
-      }} className="space-y-4 p-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="venue-name">Venue Name *</Label>
-            <Input
-              id="venue-name"
-              value={formData.name}
-              onChange={e => {
-                const name = e.target.value;
-                setFormData(prev => {
-                  let slug = prev.slug;
-                  if (!slugManuallyEdited) {
-                    slug = name
-                      .toLowerCase()
-                      .replace(/[^a-z0-9]+/g, '-')
-                      .replace(/(^-|-$)+/g, '');
-                  }
-                  return { ...prev, name, slug };
-                });
-              }}
-              placeholder="e.g., Circuit de Monaco"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="venue-slug">Slug</Label>
-            <Input
-              id="venue-slug"
-              value={formData.slug}
-              onChange={e => {
-                setSlugManuallyEdited(true);
-                setFormData(prev => ({ ...prev, slug: e.target.value }));
-              }}
-              placeholder="e.g., circuit-de-monaco"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="venue-country">Country</Label>
-            <Input
-              id="venue-country"
-              value={formData.country}
-              onChange={e => setFormData(prev => ({ ...prev, country: e.target.value }))}
-              placeholder="e.g., Monaco"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="venue-city">City</Label>
-            <Input
-              id="venue-city"
-              value={formData.city}
-              onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))}
-              placeholder="e.g., Monte Carlo"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="venue-latitude">Latitude</Label>
-            <Input
-              id="venue-latitude"
-              type="number"
-              step="any"
-              value={formData.latitude}
-              onChange={e => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
-              placeholder="e.g., 43.7384"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="venue-longitude">Longitude</Label>
-            <Input
-              id="venue-longitude"
-              type="number"
-              step="any"
-              value={formData.longitude}
-              onChange={e => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
-              placeholder="e.g., 7.4246"
-            />
-          </div>
-          <div className="space-y-2 col-span-2">
-            <Label htmlFor="venue-description">Description</Label>
-            <Textarea
-              id="venue-description"
-              value={formData.description as string}
-              onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Venue description..."
-            />
-          </div>
-          <div className="space-y-2 col-span-2">
-            <Label htmlFor="venue-map-url">Map URL</Label>
-            <Input
-              id="venue-map-url"
-              value={formData.map_url}
-              onChange={e => setFormData(prev => ({ ...prev, map_url: e.target.value }))}
-              placeholder="https://maps.example.com"
-            />
-          </div>
-        </div>
-        <div className="space-y-2 col-span-2">
-          <Label>Venue Images</Label>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {selectedImages.length > 0 ? (
-              selectedImages.map((img: any) => (
-                <div key={img.id} className="relative group w-24 h-24 border rounded overflow-hidden">
-                  <img src={img.thumbnail_url || img.image_url} alt={img.description || ''} className="object-cover w-full h-full" />
-                  <button
-                    type="button"
-                    className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
-                    onClick={() => setSelectedImages(prev => prev.filter((i: any) => i.id !== img.id))}
-                    aria-label="Remove image"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))
-            ) : (
-              <span className="text-muted-foreground text-sm">No images selected</span>
-            )}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setShowImageSelector(true)}
-          >
-            {selectedImages.length > 0 ? 'Edit Images' : 'Select Images'}
-          </Button>
-          <Dialog open={showImageSelector} onOpenChange={setShowImageSelector}>
-            <DialogContent className="!max-w-6xl">
-              <DialogHeader>
-                <DialogTitle>Select Venue Images</DialogTitle>
-              </DialogHeader>
-              <MediaLibrarySelector
-                selectedItems={selectedImages}
-                onSelect={item => {
-                  setSelectedImages(prev => {
-                    const exists = prev.find((img: any) => img.id === item.id);
-                    if (exists) {
-                      return prev.filter((img: any) => img.id !== item.id);
-                    } else {
-                      return [...prev, item];
-                    }
-                  });
-                }}
-                multiple={true}
-              />
-              <DialogFooter>
-                <Button
-                  type="button"
-                  onClick={() => setShowImageSelector(false)}
-                >
-                  Confirm Selection
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-        <DrawerFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" disabled={isLoading}>{isLoading ? 'Saving...' : venue ? 'Update Venue' : 'Create Venue'}</Button>
-        </DrawerFooter>
-      </form>
-    );
-  }
+
 
   // Ticket Category Drawer Form
   function CategoryFormDrawer({ category, onSubmit, onCancel, isLoading }: { category?: TicketCategory; onSubmit: (data: TicketCategoryInsert | TicketCategoryUpdate) => void; onCancel: () => void; isLoading: boolean; }) {
@@ -362,9 +167,9 @@ export function VenuesManager() {
       options: category?.options || { video_wall: false, numbered_seating: false, covered_seating: false },
     });
     const [showMediaSelector, setShowMediaSelector] = useState(false);
-    const [selectedMedia, setSelectedMedia] = useState(formData.media_files || []);
+    const [selectedMedia, setSelectedMedia] = useState<any[]>(Array.isArray(formData.media_files) ? formData.media_files : []);
     // Ensure options is always an object
-    const options = typeof formData.options === 'string' ? JSON.parse(formData.options) : (formData.options || {});
+    const options: any = typeof formData.options === 'string' ? JSON.parse(formData.options) : (formData.options || {});
     const [venuePopoverOpen, setVenuePopoverOpen] = useState(false);
     const [venueSearch, setVenueSearch] = useState('');
     const filteredVenues = venues.filter(v => v.name.toLowerCase().includes(venueSearch.toLowerCase()));
@@ -733,29 +538,14 @@ export function VenuesManager() {
           </CardContent>
         </Card>
       </div>
-      {/* Venue Drawer */}
-      <Drawer open={venueDrawerOpen} onOpenChange={setVenueDrawerOpen} direction="right">
-        <DrawerContent className="!w-[500px] max-w-none">
-          <DrawerHeader>
-            <DrawerTitle>{editingVenue ? 'Edit Venue' : 'Add New Venue'}</DrawerTitle>
-            <DrawerDescription>{editingVenue ? 'Update venue information' : 'Create a new venue'}</DrawerDescription>
-          </DrawerHeader>
-          <VenueFormDrawer
-            venue={editingVenue || undefined}
-            onSubmit={data => {
-              if (editingVenue) {
-                // Remove id from data if present
-                const { id, ...updateData } = data as any;
-                updateVenueMutation.mutate({ id: editingVenue.id, data: updateData });
-              } else {
-                createVenueMutation.mutate(data);
-              }
-            }}
-            onCancel={() => setVenueDrawerOpen(false)}
-            isLoading={createVenueMutation.isPending || updateVenueMutation.isPending}
-          />
-        </DrawerContent>
-      </Drawer>
+      {/* Venue Form */}
+      <VenueForm
+        open={venueDrawerOpen}
+        onOpenChange={setVenueDrawerOpen}
+        venue={editingVenue || undefined}
+        service="inventory"
+        showDeleteButton={true}
+      />
       {/* Category Drawer */}
       <Drawer open={categoryDrawerOpen} onOpenChange={setCategoryDrawerOpen} direction="right">
         <DrawerContent className="!w-[500px] max-w-none">

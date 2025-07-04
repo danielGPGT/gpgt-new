@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { MediaItem } from '@/lib/mediaLibrary';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { SportForm } from '@/components/forms/SportForm';
 
 // Utility to clean event form data for update
 export function cleanEventUpdate(data: any) {
@@ -431,7 +432,7 @@ export function SportsEventsManager() {
             <DrawerTitle>{editingSport ? 'Edit Sport' : 'Add New Sport'}</DrawerTitle>
             <DrawerDescription>{editingSport ? 'Update sport information' : 'Create a new sport for events'}</DrawerDescription>
           </DrawerHeader>
-          <SportFormDrawer
+          <SportForm
             sport={editingSport || undefined}
             onSubmit={data => {
               if (editingSport) {
@@ -442,6 +443,7 @@ export function SportsEventsManager() {
             }}
             onCancel={() => setSportDrawerOpen(false)}
             isLoading={createSportMutation.isPending || updateSportMutation.isPending}
+            service="inventory"
           />
         </DrawerContent>
       </Drawer>
@@ -500,29 +502,7 @@ export function SportsEventsManager() {
   );
 }
 
-// --- Sport Form Drawer ---
-function SportFormDrawer({ sport, onSubmit, onCancel, isLoading }: {
-  sport?: Sport;
-  onSubmit: (data: SportInsert) => void;
-  onCancel: () => void;
-  isLoading: boolean;
-}) {
-  const [formData, setFormData] = useState<SportInsert>({
-    name: sport?.name || '',
-  });
-  return (
-    <form onSubmit={e => { e.preventDefault(); onSubmit(formData); }} className="space-y-4 p-4">
-      <div className="space-y-2">
-        <Label htmlFor="name">Sport Name *</Label>
-        <Input id="name" value={formData.name} onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))} required />
-      </div>
-      <DrawerFooter>
-        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" disabled={isLoading}>{isLoading ? 'Saving...' : sport ? 'Update Sport' : 'Create Sport'}</Button>
-      </DrawerFooter>
-    </form>
-  );
-}
+
 
 // --- Event Form Drawer ---
 function EventFormDrawer({ event, sportId, sports, venues, onSubmit, onCancel, isLoading, queryClient }: {

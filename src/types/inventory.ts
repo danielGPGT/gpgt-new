@@ -7,7 +7,39 @@ export type Venue = Database['public']['Tables']['venues']['Row'];
 export type Ticket = Database['public']['Tables']['tickets']['Row'];
 export type TicketCategory = Database['public']['Tables']['ticket_categories']['Row'];
 export type HotelRoom = Database['public']['Tables']['hotel_rooms']['Row'];
-export type CircuitTransfer = Database['public']['Tables']['circuit_transfers']['Row'];
+export type CircuitTransfer = {
+  id: string;
+  event_id: string | null;
+  hotel_id: string | null;
+  transfer_type: TransferType;
+  used: number | null;
+  coach_capacity: number;
+  days: number;
+  quote_hours: number | null;
+  expected_hours: number | null;
+  supplier: string | null;
+  coach_cost_per_day_local: number | null;
+  coach_vat: number | null;
+  parking_ticket_per_coach_per_day: number | null;
+  supplier_currency: string | null;
+  guide_included: boolean | null;
+  guide_cost_per_day: number | null;
+  guide_vat: number | null;
+  markup_percent: number | null;
+  coaches_required: number | null;
+  coach_cost_local: number | null;
+  guide_cost_local: number | null;
+  utilisation_percent: number | null;
+  utilisation_cost_per_seat_local: number | null;
+  coach_cost_gbp: number | null;
+  guide_cost_gbp: number | null;
+  utilisation_cost_per_seat_gbp: number | null;
+  sell_price_per_seat_gbp: number | null;
+  active: boolean | null;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
 export type AirportTransfer = Database['public']['Tables']['airport_transfers']['Row'];
 export type Flight = Database['public']['Tables']['flights']['Row'];
 export type LoungePass = {
@@ -34,7 +66,28 @@ export type VenueInsert = Database['public']['Tables']['venues']['Insert'];
 export type TicketInsert = Database['public']['Tables']['tickets']['Insert'];
 export type TicketCategoryInsert = Database['public']['Tables']['ticket_categories']['Insert'];
 export type HotelRoomInsert = Database['public']['Tables']['hotel_rooms']['Insert'];
-export type CircuitTransferInsert = Database['public']['Tables']['circuit_transfers']['Insert'];
+export type CircuitTransferInsert = {
+  event_id?: string | null;
+  hotel_id?: string | null;
+  transfer_type: TransferType;
+  used?: number | null;
+  coach_capacity: number;
+  days: number;
+  quote_hours?: number | null;
+  expected_hours?: number | null;
+  supplier?: string | null;
+  coach_cost_per_day_local?: number | null;
+  coach_vat?: number | null;
+  parking_ticket_per_coach_per_day?: number | null;
+  supplier_currency?: string | null;
+  guide_included?: boolean | null;
+  guide_cost_per_day?: number | null;
+  guide_vat?: number | null;
+  markup_percent?: number | null;
+  utilisation_percent?: number | null;
+  active?: boolean | null;
+  notes?: string | null;
+};
 export type AirportTransferInsert = Database['public']['Tables']['airport_transfers']['Insert'];
 export type FlightInsert = Database['public']['Tables']['flights']['Insert'];
 export type LoungePassInsert = Database['public']['Tables']['lounge_passes']['Insert'];
@@ -49,7 +102,28 @@ export type VenueUpdate = Database['public']['Tables']['venues']['Update'];
 export type TicketUpdate = Database['public']['Tables']['tickets']['Update'];
 export type TicketCategoryUpdate = Database['public']['Tables']['ticket_categories']['Update'];
 export type HotelRoomUpdate = Database['public']['Tables']['hotel_rooms']['Update'];
-export type CircuitTransferUpdate = Database['public']['Tables']['circuit_transfers']['Update'];
+export type CircuitTransferUpdate = {
+  event_id?: string | null;
+  hotel_id?: string | null;
+  transfer_type?: TransferType;
+  used?: number | null;
+  coach_capacity?: number;
+  days?: number;
+  quote_hours?: number | null;
+  expected_hours?: number | null;
+  supplier?: string | null;
+  coach_cost_per_day_local?: number | null;
+  coach_vat?: number | null;
+  parking_ticket_per_coach_per_day?: number | null;
+  supplier_currency?: string | null;
+  guide_included?: boolean | null;
+  guide_cost_per_day?: number | null;
+  guide_vat?: number | null;
+  markup_percent?: number | null;
+  utilisation_percent?: number | null;
+  active?: boolean | null;
+  notes?: string | null;
+};
 export type AirportTransferUpdate = Database['public']['Tables']['airport_transfers']['Update'];
 export type FlightUpdate = Database['public']['Tables']['flights']['Update'];
 export type LoungePassUpdate = Database['public']['Tables']['lounge_passes']['Update'];
@@ -238,40 +312,37 @@ export interface HotelRoomFormData {
 }
 
 export interface CircuitTransferFormData {
-  // Form inputs
   id?: string;
   event_id?: string | null;
   hotel_id?: string | null;
   transfer_type: TransferType;
+  used?: number | null;
   coach_capacity: number;
   days: number;
   quote_hours?: number | null;
   expected_hours?: number | null;
   supplier?: string | null;
   coach_cost_per_day_local?: number | null;
-  coach_vat?: number | null; // percentage
+  coach_vat?: number | null;
   parking_ticket_per_coach_per_day?: number | null;
   supplier_currency?: string | null;
   guide_included?: boolean | null;
   guide_cost_per_day?: number | null;
-  guide_vat?: number | null; // percentage
+  guide_vat?: number | null;
   markup_percent?: number | null;
   utilisation_percent?: number | null;
   active?: boolean | null;
   notes?: string | null;
-  // Calculated/read-only fields (calculated in frontend, sent to backend)
-  coach_cost_local?: number | undefined;
-  guide_cost_local?: number | undefined;
-  utilisation_cost_per_seat_local?: number | undefined;
-  coach_cost_gbp?: number | undefined;
-  guide_cost_gbp?: number | undefined;
-  utilisation_cost_per_seat_gbp?: number | undefined;
-  sell_price_per_seat_gbp?: number | undefined;
-  // Read-only fields (not in form, not sent on create/update)
-  // coaches_required?: number; // calculated in backend
-  // used?: number; // calculated in backend
-  created_at?: string;
-  updated_at?: string;
+  coaches_required?: number | null;
+  coach_cost_local?: number | null;
+  guide_cost_local?: number | null;
+  utilisation_cost_per_seat_local?: number | null;
+  coach_cost_gbp?: number | null;
+  guide_cost_gbp?: number | null;
+  utilisation_cost_per_seat_gbp?: number | null;
+  sell_price_per_seat_gbp?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export type AirportTransferTransportType = 'hotel_chauffeur' | 'private_car';

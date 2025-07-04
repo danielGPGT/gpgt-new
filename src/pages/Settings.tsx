@@ -1,14 +1,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SubscriptionManager } from '@/components/SubscriptionManager';
+
 import { HubSpotIntegration } from '@/components/HubSpotIntegration';
 import { User, KeyRound, CreditCard, Settings as SettingsIcon, Users, Building2, Phone, Upload, Loader2, Sparkles, Shield, Mail, Link } from 'lucide-react';
 import { useAuth } from '@/lib/AuthProvider';
-import { useStripeSubscription } from '@/hooks/useStripeSubscription';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -28,6 +29,7 @@ interface TeamInvite {
   role: string;
   status: string;
   created_at: string;
+  updated_at?: string;
 }
 
 const ProfileSettings = () => {
@@ -535,11 +537,10 @@ const SecuritySettings = () => {
 
 const TeamManagement = () => {
   const { user } = useAuth();
-  const { subscription } = useStripeSubscription();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [pendingInvites, setPendingInvites] = useState<TeamInvite[]>([]);
   const [newMemberEmail, setNewMemberEmail] = useState('');
-  const [newMemberName, setNewMemberName] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'member' | 'admin' | 'sales' | 'operations'>('member');
   const [loading, setLoading] = useState(false);
   const [teamRole, setTeamRole] = useState<string | null>(null);
 
@@ -560,53 +561,120 @@ const TeamManagement = () => {
   useEffect(() => {
     const fetchTeamData = async () => {
       try {
-        // 1. Find the user's team - check membership first, then ownership
+        // 1. Find or create the user's team
         if (!user?.id) return;
         
+        let team = null;
+        
         // First check if user is a team member
-        const { data: memberTeams } = await supabase
+        const { data: memberTeams, error: memberError } = await supabase
           .from('team_members')
           .select('team_id')
           .eq('user_id', user.id)
           .eq('status', 'active');
         
-        let team = null;
+        if (memberError) {
+          console.error('Error checking team membership:', memberError);
+        }
         
         if (memberTeams && memberTeams.length > 0) {
           // User is a team member, get their team
-          const { data: teamsAsMember } = await supabase
+          const { data: teamsAsMember, error: teamError } = await supabase
             .from('teams')
             .select('id')
             .in('id', memberTeams.map(tm => tm.team_id))
             .single();
-          team = teamsAsMember;
-        } else {
-          // Check if user owns any teams
-          const { data: ownedTeam } = await supabase
+          
+          if (teamError) {
+            console.error('Error getting team as member:', teamError);
+          } else {
+            team = teamsAsMember;
+          }
+        }
+        
+        // If no team found as member, check if user owns any teams
+        if (!team) {
+          const { data: ownedTeam, error: ownedError } = await supabase
             .from('teams')
             .select('id')
             .eq('owner_id', user.id)
             .single();
-          team = ownedTeam;
+          
+          if (ownedError) {
+            console.error('Error checking owned teams:', ownedError);
+          } else {
+            team = ownedTeam;
+          }
+        }
+        
+        // If still no team, create one
+        if (!team || !team.id) {
+          console.log('Creating new team for user:', user.id);
+          
+          // Create a new team
+          const { data: newTeam, error: createTeamError } = await supabase
+            .from('teams')
+            .insert({
+              name: user.user_metadata?.agency_name || user.user_metadata?.name || 'My Team',
+              owner_id: user.id,
+              max_members: 10
+            })
+            .select('id')
+            .single();
+          
+          if (createTeamError) {
+            console.error('Error creating team:', createTeamError);
+            return;
+          }
+          
+          team = newTeam;
+          
+          // Add user as team member with owner role
+          const { error: addMemberError } = await supabase
+            .from('team_members')
+            .insert({
+              team_id: team.id,
+              user_id: user.id,
+              email: user.email,
+              name: user.user_metadata?.name || user.email,
+              role: 'owner',
+              status: 'active',
+              joined_at: new Date().toISOString()
+            });
+          
+          if (addMemberError) {
+            console.error('Error adding user to team:', addMemberError);
+          }
         }
         
         if (!team || !team.id) return;
         
         // 2. Fetch team members
-        const { data: members } = await supabase
+        const { data: members, error: membersError } = await supabase
           .from('team_members')
           .select('id, name, email, role, status')
           .eq('team_id', team.id);
-        setTeamMembers((members as TeamMember[]) || []);
+        
+        if (membersError) {
+          console.error('Error fetching team members:', membersError);
+        } else {
+          setTeamMembers((members as TeamMember[]) || []);
+        }
         
         // 3. Fetch pending invitations
-        const { data: invites } = await supabase
+        const { data: invites, error: invitesError } = await supabase
           .from('team_invitations')
-          .select('id, email, role, status, created_at')
+          .select('id, email, role, status, created_at, updated_at')
           .eq('team_id', team.id)
           .eq('status', 'pending');
-        setPendingInvites((invites as TeamInvite[]) || []);
+        
+        if (invitesError) {
+          console.error('Error fetching invitations:', invitesError);
+        } else {
+          setPendingInvites((invites as TeamInvite[]) || []);
+        }
       } catch (err) {
+        console.error('Error in fetchTeamData:', err);
         toast.error('Failed to load team data');
       } finally {
         setLoading(false);
@@ -617,8 +685,8 @@ const TeamManagement = () => {
 
   // Invite logic
   const handleInviteMember = async () => {
-    if (!newMemberEmail || !newMemberName) {
-      toast.error('Please fill in all fields');
+    if (!newMemberEmail) {
+      toast.error('Please enter an email address');
       return;
     }
     if (!user?.id) {
@@ -628,116 +696,234 @@ const TeamManagement = () => {
     try {
       setLoading(true);
       
-      // 1. Find the user's team - check membership first, then ownership
-      const { data: memberTeams } = await supabase
+      // 1. Find or create the user's team
+      let team = null;
+      
+      // First, try to find existing team membership
+      const { data: memberTeams, error: memberError } = await supabase
         .from('team_members')
         .select('team_id')
         .eq('user_id', user.id)
         .eq('status', 'active');
       
-      let team = null;
+      if (memberError) {
+        console.error('Error checking team membership:', memberError);
+      }
       
       if (memberTeams && memberTeams.length > 0) {
         // User is a team member, get their team
-        const { data: teamsAsMember } = await supabase
+        const { data: teamsAsMember, error: teamError } = await supabase
           .from('teams')
           .select('id, name')
           .in('id', memberTeams.map(tm => tm.team_id))
           .single();
-        team = teamsAsMember;
-      } else {
-        // Check if user owns any teams
-        const { data: ownedTeam } = await supabase
+        
+        if (teamError) {
+          console.error('Error getting team as member:', teamError);
+        } else {
+          team = teamsAsMember;
+        }
+      }
+      
+      // If no team found as member, check if user owns any teams
+      if (!team) {
+        const { data: ownedTeam, error: ownedError } = await supabase
           .from('teams')
           .select('id, name')
           .eq('owner_id', user.id)
           .single();
-        team = ownedTeam;
+        
+        if (ownedError) {
+          console.error('Error checking owned teams:', ownedError);
+        } else {
+          team = ownedTeam;
+        }
       }
       
+      // If still no team, create one
       if (!team || !team.id) {
-        toast.error('Could not find your team');
-        setLoading(false);
-      return;
-    }
+        console.log('Creating new team for user:', user.id);
+        
+        // Create a new team
+        const { data: newTeam, error: createTeamError } = await supabase
+          .from('teams')
+          .insert({
+            name: user.user_metadata?.agency_name || user.user_metadata?.name || 'My Team',
+            owner_id: user.id,
+            max_members: 10
+          })
+          .select('id, name')
+          .single();
+        
+        if (createTeamError) {
+          console.error('Error creating team:', createTeamError);
+          toast.error('Failed to create team');
+          setLoading(false);
+          return;
+        }
+        
+        team = newTeam;
+        
+        // Add user as team member with owner role
+        const { error: addMemberError } = await supabase
+          .from('team_members')
+          .insert({
+            team_id: team.id,
+            user_id: user.id,
+            email: user.email,
+            name: user.user_metadata?.name || user.email,
+            role: 'owner',
+            status: 'active',
+            joined_at: new Date().toISOString()
+          });
+        
+        if (addMemberError) {
+          console.error('Error adding user to team:', addMemberError);
+        }
+      }
 
-      // 2. Call backend to create invitation and send email
-      const response = await fetch('/api/team/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // 2. Check if user is already a team member
+      const { data: existingMember } = await supabase
+        .from('team_members')
+        .select('id')
+        .eq('team_id', team.id)
+        .eq('email', newMemberEmail)
+        .single();
+
+      if (existingMember) {
+        toast.error('User is already a team member');
+        setLoading(false);
+        return;
+      }
+
+      // 3. Check if there's already a pending invitation
+      const { data: existingInvitation } = await supabase
+        .from('team_invitations')
+        .select('id')
+        .eq('team_id', team.id)
+        .eq('email', newMemberEmail)
+        .eq('status', 'pending')
+        .single();
+
+      if (existingInvitation) {
+        toast.error('Invitation already sent to this email');
+        setLoading(false);
+        return;
+      }
+
+      // 4. Create invitation directly in Supabase
+      const { data: invitation, error: inviteError } = await supabase
+        .from('team_invitations')
+        .insert({
           team_id: team.id,
           email: newMemberEmail,
-          role: 'member',
-          inviter_id: user.id,
-          inviter_name: user.user_metadata?.name || user.email || 'AItinerary Admin',
-          team_name: team.name || 'Your Team',
+          role: selectedRole,
+          invited_by: user.id,
+          token: crypto.randomUUID(),
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+          status: 'pending'
         })
-      });
-      const result = await response.json();
-      if (!result.success) {
-        toast.error('Failed to send invitation: ' + (result.error || 'Unknown error'));
-      } else {
-    toast.success(`Invitation sent to ${newMemberEmail}`);
-    setNewMemberEmail('');
-    setNewMemberName('');
-        // Refresh invites
-        const { data: invites } = await supabase
-          .from('team_invitations')
-          .select('id, email, role, status, created_at')
-          .eq('team_id', team.id)
-          .eq('status', 'pending');
-        setPendingInvites((invites as TeamInvite[]) || []);
+        .select()
+        .single();
+
+      if (inviteError) {
+        console.error('Error creating invitation:', inviteError);
+        toast.error('Failed to create invitation');
+        setLoading(false);
+        return;
       }
+
+      // 5. Show invitation link and copy to clipboard
+      const baseUrl = window.location.origin;
+      const inviteLink = `${baseUrl}/team-invitation?token=${invitation.token}`;
+      
+      toast.success(`Invitation created for ${newMemberEmail}!`);
+      
+      // Copy to clipboard automatically
+      if (navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(inviteLink);
+          toast.success('Invitation link copied to clipboard!');
+        } catch (clipboardError) {
+          console.error('Clipboard error:', clipboardError);
+          alert(`Invitation Link for ${newMemberEmail}:\n\n${inviteLink}`);
+        }
+      } else {
+        alert(`Invitation Link for ${newMemberEmail}:\n\n${inviteLink}`);
+      }
+
+      setNewMemberEmail('');
+      
+      // 6. Refresh invites
+      const { data: invites } = await supabase
+        .from('team_invitations')
+        .select('id, email, role, status, created_at, updated_at')
+        .eq('team_id', team.id)
+        .eq('status', 'pending');
+      setPendingInvites((invites as TeamInvite[]) || []);
+      
     } catch (err) {
+      console.error('Error inviting member:', err);
       toast.error('Failed to send invitation');
     } finally {
       setLoading(false);
     }
   };
 
-  const canManageTeam = subscription?.plan_type === 'agency' || subscription?.plan_type === 'enterprise';
-  const canInviteMembers = (teamRole === 'admin' || teamRole === 'owner') && canManageTeam;
+  const canInviteMembers = teamRole === 'admin' || teamRole === 'owner';
 
-  if (!canManageTeam) {
-    return (
-      <div className="space-y-6">
-        {/* Upgrade Required Card */}
-        <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
-          <CardContent className="p-12 text-center">
-            <div className="mx-auto w-20 h-20 bg-muted/50 rounded-xl flex items-center justify-center mb-6">
-              <Building2 className="h-10 w-10 text-muted-foreground" />
-            </div>
-            <h3 className="text-xl font-semibold mb-3">Team Management Not Available</h3>
-            <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-              Team management features are available on Agency and Enterprise plans. Upgrade to collaborate with your team members.
-            </p>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
-                <div className="p-4 bg-muted/30 rounded-xl border border-border/50">
-                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <Users className="h-4 w-4 text-primary" />
-                  </div>
-                  <h4 className="font-medium text-sm mb-1">Multi-seat Dashboard</h4>
-                  <p className="text-xs text-muted-foreground">Up to 10 team members</p>
-                </div>
-                <div className="p-4 bg-muted/30 rounded-xl border border-border/50">
-                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <Shield className="h-4 w-4 text-primary" />
-                  </div>
-                  <h4 className="font-medium text-sm mb-1">Role-based Permissions</h4>
-                  <p className="text-xs text-muted-foreground">Control access levels</p>
-                </div>
-              </div>
-              <Button asChild className="px-8 py-3 bg-primary hover:bg-primary/90 rounded-xl">
-                <a href="/pricing">Upgrade Plan</a>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Function to resend invitation link
+  const handleResendEmail = async (invitationId: string, email: string) => {
+    try {
+      setLoading(true);
+      
+      console.log('Resending invitation for ID:', invitationId, 'Email:', email);
+      
+      // Get invitation details
+      const { data: invitation, error: invitationError } = await supabase
+        .from('team_invitations')
+        .select('id, email, role, status, created_at, token, team_id, invited_by')
+        .eq('id', invitationId)
+        .single();
+      
+      if (invitationError || !invitation) {
+        console.error('Invitation not found:', invitationError);
+        toast.error('Invitation not found');
+        return;
+      }
+      
+      // Update the invitation's updated_at timestamp
+      await supabase
+        .from('team_invitations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', invitationId);
+      
+      // Show the invitation link and copy to clipboard
+      const baseUrl = window.location.origin;
+      const inviteLink = `${baseUrl}/team-invitation?token=${invitation.token}`;
+      
+      toast.success(`Invitation link ready for ${email}!`);
+      
+      // Copy to clipboard automatically
+      if (navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(inviteLink);
+          toast.success('Invitation link copied to clipboard!');
+        } catch (clipboardError) {
+          console.error('Clipboard error:', clipboardError);
+          alert(`Invitation link for ${email}:\n\n${inviteLink}`);
+        }
+      } else {
+        alert(`Invitation link for ${email}:\n\n${inviteLink}`);
+      }
+      
+    } catch (error) {
+      console.error('Error resending invitation:', error);
+      toast.error('Failed to resend invitation');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -767,24 +953,28 @@ const TeamManagement = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="member-name" className="text-sm font-medium">Full Name</Label>
-                <Input
-                  id="member-name"
-                  value={newMemberName}
-                  onChange={(e) => setNewMemberName(e.target.value)}
-                  placeholder="John Doe"
-                  className="h-11 rounded-xl"
-                />
+                <Label htmlFor="member-role" className="text-sm font-medium">Role</Label>
+                <Select value={selectedRole} onValueChange={(value: 'member' | 'admin' | 'sales' | 'operations') => setSelectedRole(value)}>
+                  <SelectTrigger className="h-11 rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="sales">Sales Consultant</SelectItem>
+                    <SelectItem value="operations">Operations</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <Button 
               onClick={handleInviteMember} 
-              disabled={!newMemberEmail || !newMemberName || loading}
+              disabled={!newMemberEmail || loading}
               className="px-6 bg-primary hover:bg-primary/90 rounded-xl"
             >
               <User className="h-4 w-4 mr-2" />
-              Invite Team Member
+              Send Invitation
             </Button>
           </CardContent>
         </Card>
@@ -872,10 +1062,25 @@ const TeamManagement = () => {
                     <p className="font-medium">{invite.email}</p>
                     <p className="text-sm text-muted-foreground">
                       Invited {new Date(invite.created_at).toLocaleDateString()}
+                      {invite.updated_at && invite.updated_at !== invite.created_at && (
+                        <span className="ml-2">• Last sent {new Date(invite.updated_at).toLocaleDateString()}</span>
+                      )}
                     </p>
                   </div>
                 </div>
-                <Badge variant="outline" className="capitalize">{invite.role}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="capitalize">{invite.role}</Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleResendEmail(invite.id, invite.email)}
+                    disabled={loading}
+                    className="h-8 px-3"
+                  >
+                    <Link className="h-3 w-3 mr-1" />
+                    Copy Link
+                  </Button>
+                </div>
               </div>
             ))}
           </CardContent>
@@ -940,7 +1145,6 @@ const TeamManagement = () => {
 
 export function Settings() {
   const { user } = useAuth();
-  const { subscription } = useStripeSubscription();
   const [teamRole, setTeamRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -958,20 +1162,7 @@ export function Settings() {
     fetchRole();
   }, [user]);
 
-  const getPlanBadgeColor = (planType: string) => {
-    switch (planType) {
-      case 'free':
-        return 'bg-blue-100 text-blue-800';
-      case 'pro':
-        return 'bg-purple-100 text-purple-800';
-      case 'agency':
-        return 'bg-green-100 text-green-800';
-      case 'enterprise':
-        return 'bg-orange-100 text-orange-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+
 
   return (
     <div className="mx-auto px-8 py-0 space-y-8">
@@ -980,42 +1171,19 @@ export function Settings() {
         <div>
           <h1 className="text-2xl font-bold">Account Settings</h1>
           <p className="text-muted-foreground mt-2">
-            Manage your account, subscription, and team with a beautiful, modern dashboard.
+            Manage your account and team with a beautiful, modern dashboard.
           </p>
         </div>
       </div>
 
-      {/* Plan Summary */}
-      {subscription && (
-        <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm pt-0 pb-0">
-          <CardContent className="p-6 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-                <CreditCard className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <div className="font-semibold capitalize text-lg">{subscription.plan_type} Plan</div>
-                <div className="text-sm text-muted-foreground">
-                  {subscription.status === 'active' ? 'Active' : subscription.status}
-                </div>
-              </div>
-            </div>
-            <Badge className={getPlanBadgeColor(subscription.plan_type) + ' text-base px-4 py-1 rounded-full'}>
-              {subscription.plan_type.toUpperCase()}
-            </Badge>
-          </CardContent>
-        </Card>
-      )}
+
 
       {/* Main Settings Card */}
       <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
         <CardContent className="p-0">
-          <Tabs defaultValue="subscription" className="space-y-4">
+          <Tabs defaultValue="profile" className="space-y-4">
             <TabsList className="bg-card rounded-t-2xl p-1">
-              <TabsTrigger value="subscription" className="transition-all duration-200 text-base py-4 rounded-xl">
-                <CreditCard className="mr-2 h-4 w-4" />
-                Subscription
-              </TabsTrigger>
+
               <TabsTrigger value="profile" className="transition-all duration-200 text-base py-4 rounded-xl">
                 <User className="mr-2 h-4 w-4" />
                 Profile
@@ -1033,15 +1201,7 @@ export function Settings() {
                 Security
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="subscription" className="space-y-4 p-8">
-              {(teamRole === 'admin' || teamRole === 'owner') ? (
-                <SubscriptionManager />
-              ) : (
-                <div className="text-muted-foreground">
-                  You do not have permission to view or manage billing details or change plans.
-                </div>
-              )}
-            </TabsContent>
+
             <TabsContent value="profile" className="space-y-4 p-8">
               <ProfileSettings />
             </TabsContent>

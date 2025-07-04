@@ -16,7 +16,7 @@ import {
   Globe
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { TierManager } from '@/lib/tierManager';
+
 import { useAuth } from '@/lib/AuthProvider';
 
 export function UsageDashboard() {
@@ -37,19 +37,7 @@ export function UsageDashboard() {
 
     try {
       setLoading(true);
-      const tierManager = TierManager.getInstance();
-      await tierManager.initialize(user.id);
-      
-      const currentUsage = await tierManager.getCurrentUsage();
-      const currentPlan = tierManager.getCurrentPlan();
-      const planInfo = tierManager.getPlanInfo();
-      
-      setUsage(currentUsage);
-      setPlan(currentPlan);
-      setLimits(planInfo);
-    } catch (error) {
-      console.error('Error loading usage data:', error);
-      // Set default values on error
+      // All features are unlimited now
       setUsage({
         itineraries_created: 0,
         pdf_downloads: 0,
@@ -60,15 +48,17 @@ export function UsageDashboard() {
           api_calls: false,
         },
       });
-      setPlan('starter');
+      setPlan('unlimited');
       setLimits({
-        itineraries_per_month: 5,
-        pdf_downloads_per_month: 10,
-        api_calls_per_month: 0,
-        media_library: false,
-        custom_branding: false,
-        team_collaboration: false,
+        itineraries_per_month: -1,
+        pdf_downloads_per_month: -1,
+        api_calls_per_month: -1,
+        media_library: true,
+        custom_branding: true,
+        team_collaboration: true,
       });
+    } catch (error) {
+      console.error('Error loading usage data:', error);
     } finally {
       setLoading(false);
     }
@@ -199,19 +189,12 @@ export function UsageDashboard() {
                 <span className="ml-1 capitalize">{plan}</span>
               </Badge>
             </CardTitle>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/pricing">
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Upgrade Plan
-              </Link>
-            </Button>
+
           </div>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            {plan === 'starter' && 'Perfect for individual travel agents getting started.'}
-            {plan === 'professional' && 'Ideal for growing travel agencies with advanced needs.'}
-            {plan === 'enterprise' && 'For large travel organizations requiring custom solutions.'}
+            All features are now available to all users with unlimited access.
           </p>
         </CardContent>
       </Card>

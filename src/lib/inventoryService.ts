@@ -245,6 +245,14 @@ export class InventoryService {
     return data;
   }
 
+  static async deleteVenue(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('venues')
+      .delete()
+      .eq('id', id);
+    if (error) throw new Error(`Failed to delete venue: ${error.message}`);
+  }
+
   // Tickets
   static async getTickets(filters?: TicketFilters): Promise<TicketWithEvent[]> {
     let query = supabase
@@ -541,29 +549,26 @@ export class InventoryService {
     if (filters?.transfer_type) {
       query = query.eq('transfer_type', filters.transfer_type);
     }
-    if (filters?.seat_capacity_min) {
-      query = query.gte('seat_capacity', filters.seat_capacity_min);
+    if (filters?.coach_capacity_min) {
+      query = query.gte('coach_capacity', filters.coach_capacity_min);
     }
-    if (filters?.seat_capacity_max) {
-      query = query.lte('seat_capacity', filters.seat_capacity_max);
-    }
-    if (filters?.seats_available_min) {
-      query = query.gte('seats_available', filters.seats_available_min);
-    }
-    if (filters?.seats_available_max) {
-      query = query.lte('seats_available', filters.seats_available_max);
+    if (filters?.coach_capacity_max) {
+      query = query.lte('coach_capacity', filters.coach_capacity_max);
     }
     if (filters?.price_min) {
-      query = query.gte('price_per_seat', filters.price_min);
+      query = query.gte('sell_price_per_seat_gbp', filters.price_min);
     }
     if (filters?.price_max) {
-      query = query.lte('price_per_seat', filters.price_max);
-    }
-    if (filters?.currency) {
-      query = query.eq('currency', filters.currency);
+      query = query.lte('sell_price_per_seat_gbp', filters.price_max);
     }
     if (filters?.supplier) {
       query = query.eq('supplier', filters.supplier);
+    }
+    if (filters?.active !== undefined) {
+      query = query.eq('active', filters.active);
+    }
+    if (filters?.search) {
+      query = query.or(`notes.ilike.%${filters.search}%,supplier.ilike.%${filters.search}%`);
     }
 
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -576,9 +581,71 @@ export class InventoryService {
   }
 
   static async createCircuitTransfer(transfer: CircuitTransferInsert): Promise<CircuitTransfer> {
+    const {
+      event_id,
+      hotel_id,
+      transfer_type,
+      used,
+      coach_capacity,
+      days,
+      quote_hours,
+      expected_hours,
+      supplier,
+      coach_cost_per_day_local,
+      coach_vat,
+      parking_ticket_per_coach_per_day,
+      supplier_currency,
+      guide_included,
+      guide_cost_per_day,
+      guide_vat,
+      markup_percent,
+      utilisation_percent,
+      active,
+      notes,
+      coach_extra_cost_per_hour_local,
+      guide_extra_cost_per_hour_local,
+      coach_cost_local,
+      guide_cost_local,
+      utilisation_cost_per_seat_local,
+      coach_cost_gbp,
+      guide_cost_gbp,
+      utilisation_cost_per_seat_gbp,
+      sell_price_per_seat_gbp,
+    } = transfer;
+    const insertPayload = {
+      event_id,
+      hotel_id,
+      transfer_type,
+      used,
+      coach_capacity,
+      days,
+      quote_hours,
+      expected_hours,
+      supplier,
+      coach_cost_per_day_local,
+      coach_vat,
+      parking_ticket_per_coach_per_day,
+      supplier_currency,
+      guide_included,
+      guide_cost_per_day,
+      guide_vat,
+      markup_percent,
+      utilisation_percent,
+      active,
+      notes,
+      coach_extra_cost_per_hour_local,
+      guide_extra_cost_per_hour_local,
+      coach_cost_local,
+      guide_cost_local,
+      utilisation_cost_per_seat_local,
+      coach_cost_gbp,
+      guide_cost_gbp,
+      utilisation_cost_per_seat_gbp,
+      sell_price_per_seat_gbp,
+    };
     const { data, error } = await supabase
       .from('circuit_transfers')
-      .insert(transfer)
+      .insert(insertPayload)
       .select()
       .single();
 
@@ -590,9 +657,72 @@ export class InventoryService {
   }
 
   static async updateCircuitTransfer(id: string, updates: CircuitTransferUpdate): Promise<CircuitTransfer> {
+    const {
+      event_id,
+      hotel_id,
+      transfer_type,
+      used,
+      coach_capacity,
+      days,
+      quote_hours,
+      expected_hours,
+      supplier,
+      coach_cost_per_day_local,
+      coach_vat,
+      parking_ticket_per_coach_per_day,
+      supplier_currency,
+      guide_included,
+      guide_cost_per_day,
+      guide_vat,
+      markup_percent,
+      utilisation_percent,
+      active,
+      notes,
+      coach_extra_cost_per_hour_local,
+      guide_extra_cost_per_hour_local,
+      coach_cost_local,
+      guide_cost_local,
+      utilisation_cost_per_seat_local,
+      coach_cost_gbp,
+      guide_cost_gbp,
+      utilisation_cost_per_seat_gbp,
+      sell_price_per_seat_gbp,
+    } = updates;
+    const updatePayload = {
+      event_id,
+      hotel_id,
+      transfer_type,
+      used,
+      coach_capacity,
+      days,
+      quote_hours,
+      expected_hours,
+      supplier,
+      coach_cost_per_day_local,
+      coach_vat,
+      parking_ticket_per_coach_per_day,
+      supplier_currency,
+      guide_included,
+      guide_cost_per_day,
+      guide_vat,
+      markup_percent,
+      utilisation_percent,
+      active,
+      notes,
+      coach_extra_cost_per_hour_local,
+      guide_extra_cost_per_hour_local,
+      coach_cost_local,
+      guide_cost_local,
+      utilisation_cost_per_seat_local,
+      coach_cost_gbp,
+      guide_cost_gbp,
+      utilisation_cost_per_seat_gbp,
+      sell_price_per_seat_gbp,
+      updated_at: new Date().toISOString(),
+    };
     const { data, error } = await supabase
       .from('circuit_transfers')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();

@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Loader2, Upload, Search, Image as ImageIcon, Sparkles, RefreshCw, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { TierRestriction } from './TierRestriction';
+
 import UnsplashSearch from './UnsplashSearch';
 import { ImageProcessor } from '../lib/imageProcessor';
 
@@ -194,8 +194,7 @@ export default function MediaLibrarySelector({
   };
 
   return (
-    <TierRestriction type="media_library">
-      <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0">
         {/* Upload Section */}
         <div className="flex items-center gap-4 mb-4 p-4 bg-muted rounded-lg">
           <div className="relative flex-1">
@@ -374,6 +373,5 @@ export default function MediaLibrarySelector({
           onImageAdded={handleImageAdded}
         />
       </div>
-    </TierRestriction>
   );
 } 

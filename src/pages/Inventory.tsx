@@ -15,7 +15,7 @@ import { TicketsManager } from '@/components/inventory/TicketsManager';
 import HotelManager from '@/components/inventory/HotelManager';
 
 import { AirportTransfersTable } from '@/components/inventory/AirportTransfersTable';
-import { FlightsTable } from '@/components/inventory/FlightsTable';
+import FlightsManager from '@/components/inventory/FlightsManager';
 import { LoungePassesManager } from '@/components/inventory/LoungePassesManager';
 import { SportsEventsManager } from '@/components/inventory/SportsEventsManager';
 import { VenuesManager } from '@/components/inventory/VenuesManager';
@@ -83,7 +83,7 @@ export default function InventoryPage() {
         {tab === 'hotel-rooms' && <HotelManager />}
         {tab === 'airport-transfers' && <AirportTransfersManager />}
         {tab === 'circuit-transfers' && <CircuitTransfersManager />}
-        {tab === 'flights' && <FlightsTable />}
+        {tab === 'flights' && <FlightsManager />}
         {tab === 'sports-events' && <SportsEventsManager />}
         {tab === 'venues' && <VenuesManager />}
         {tab === 'packages' && null /* <PackagesManager /> */}

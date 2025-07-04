@@ -207,11 +207,11 @@ create table public.airport_transfers (
 ) TABLESPACE pg_default;
 create table public.package_components (
   id uuid not null default gen_random_uuid (),
-  tier_id uuid null,
-  event_id uuid null,
+  tier_id uuid not null,
+  event_id uuid not null,
   component_type text not null,
   component_id uuid not null,
-  quantity integer null default 1,
+  default_quantity integer null default 1,
   price_override numeric(10, 2) null,
   notes text null,
   constraint package_components_pkey primary key (id),
@@ -225,8 +225,7 @@ create table public.package_components (
           'hotel_room'::text,
           'circuit_transfer'::text,
           'airport_transfer'::text,
-          'flight'::text,
-          'lounge_pass'::text
+          'flight'::text
         ]
       )
     )
@@ -236,12 +235,12 @@ create table public.package_tiers (
   id uuid not null default gen_random_uuid (),
   package_id uuid null,
   name text not null,
-  short_label text null,
   description text null,
-  display_order integer null,
   price_override numeric(10, 2) null,
   created_at timestamp without time zone null default now(),
   updated_at timestamp without time zone null default now(),
+  short_label text null,
+  display_order integer null,
   constraint package_tiers_pkey primary key (id),
   constraint package_tiers_package_id_fkey foreign KEY (package_id) references packages (id) on delete CASCADE
 ) TABLESPACE pg_default;
@@ -257,7 +256,12 @@ create table public.packages (
   updated_at timestamp without time zone null default now(),
   constraint packages_pkey primary key (id),
   constraint packages_slug_key unique (slug),
-  constraint packages_event_id_fkey foreign KEY (event_id) references events (id) on delete CASCADE
+  constraint packages_event_id_fkey foreign KEY (event_id) references events (id) on delete CASCADE,
+  constraint packages_base_type_check check (
+    (
+      base_type = any (array['Grandstand'::text, 'VIP'::text])
+    )
+  )
 ) TABLESPACE pg_default;
 create table public.sports (
   id uuid not null default gen_random_uuid (),
@@ -309,6 +313,7 @@ create table public.tickets (
   paid_at timestamp without time zone null,
   tickets_received boolean null default false,
   tickets_received_at timestamp without time zone null,
+  active boolean null default true,
   created_at timestamp without time zone null default now(),
   updated_at timestamp without time zone null default now(),
   metadata jsonb null,
@@ -364,42 +369,41 @@ create table lounge_passes (
   created_at timestamp default now(),
   updated_at timestamp default now()
 );
-create table flights (
-  id uuid primary key default gen_random_uuid(),
-  event_id uuid references events(id) on delete cascade,
+CREATE TABLE public.flights (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id uuid REFERENCES events(id),
 
-  departure_airport_code text not null,
-  arrival_airport_code text not null,
-  return_departure_airport_code text,
-  return_arrival_airport_code text,
+  -- Outbound flight
+  outbound_flight_number text NOT NULL,
+  outbound_departure_airport_code text NOT NULL,
+  outbound_departure_airport_name text NOT NULL,
+  outbound_arrival_airport_code text NOT NULL,
+  outbound_arrival_airport_name text NOT NULL,
+  outbound_departure_datetime timestamp NOT NULL,
+  outbound_arrival_datetime timestamp NOT NULL,
 
+  -- Inbound flight (optional for one-way trips)
+  inbound_flight_number text,
+  inbound_departure_airport_code text,
+  inbound_departure_airport_name text,
+  inbound_arrival_airport_code text,
+  inbound_arrival_airport_name text,
+  inbound_departure_datetime timestamp,
+  inbound_arrival_datetime timestamp,
+
+  -- Pricing & meta
   airline text,
-  flight_class text,
-  outbound_flight_number text,
-  return_flight_number text,
-
-  outbound_departure_datetime timestamptz,
-  outbound_arrival_datetime timestamptz,
-  return_departure_datetime timestamptz,
-  return_arrival_datetime timestamptz,
-
-  stops_outbound integer default 0,
-  stops_return integer default 0,
-
-  layovers_outbound jsonb, -- e.g. [{"airport_code": "FRA", "duration_mins": 90}]
-  layovers_return jsonb,   -- e.g. [{"airport_code": "CDG", "duration_mins": 120}]
-
-  supplier text,
-  quote_currency text default 'GBP',
-  supplier_quote numeric(10, 2),
-  markup_percent numeric(5, 2) default 0,
-  price_gbp numeric(10, 2) generated always as (
-    supplier_quote + (supplier_quote * markup_percent / 100)
-  ) stored,
-
-  baggage_policy text,
+  cabin text,
+  total_price_gbp numeric(10,2) NOT NULL,
+  currency text DEFAULT 'GBP',
+  refundable boolean DEFAULT false,
+  baggage_allowance text,
   notes text,
-  is_active boolean default true,
-  created_at timestamp default now(),
-  updated_at timestamp default now()
+  supplier text,
+  supplier_ref text,
+
+  -- Availability & Timestamps
+  active boolean DEFAULT true,
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now()
 );

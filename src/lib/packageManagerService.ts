@@ -163,9 +163,9 @@ export interface PackageComponent {
   id: string;
   tier_id?: string;
   event_id?: string;
-  component_type: 'ticket' | 'hotel_room' | 'circuit_transfer' | 'airport_transfer' | 'flight' | 'lounge_pass';
+  component_type: 'ticket' | 'hotel_room' | 'circuit_transfer' | 'airport_transfer' | 'flight';
   component_id: string;
-  quantity?: number;
+  default_quantity?: number;
   price_override?: number;
   notes?: string;
   component_data?: any; // The actual component data (ticket, room, etc.)
@@ -176,9 +176,9 @@ export interface PackageComponent {
 export interface PackageComponentInsert {
   tier_id?: string;
   event_id?: string;
-  component_type: 'ticket' | 'hotel_room' | 'circuit_transfer' | 'airport_transfer' | 'flight' | 'lounge_pass';
+  component_type: 'ticket' | 'hotel_room' | 'circuit_transfer' | 'airport_transfer' | 'flight';
   component_id: string;
-  quantity?: number;
+  default_quantity?: number;
   price_override?: number;
   notes?: string;
 }
@@ -186,9 +186,9 @@ export interface PackageComponentInsert {
 export interface PackageComponentUpdate {
   tier_id?: string;
   event_id?: string;
-  component_type?: 'ticket' | 'hotel_room' | 'circuit_transfer' | 'airport_transfer' | 'flight' | 'lounge_pass';
+  component_type?: 'ticket' | 'hotel_room' | 'circuit_transfer' | 'airport_transfer' | 'flight';
   component_id?: string;
-  quantity?: number;
+  default_quantity?: number;
   price_override?: number;
   notes?: string;
 }
@@ -438,6 +438,27 @@ export class PackageManagerService {
       throw new Error(`Failed to fetch packages: ${error.message}`);
     }
 
+    // Fetch actual component data for each package component
+    if (data) {
+      for (const pkg of data) {
+        if (pkg.tiers) {
+          for (const tier of pkg.tiers) {
+            if (tier.components) {
+              for (const component of tier.components) {
+                try {
+                  const componentData = await this.getComponentData(component.component_type, component.component_id);
+                  component.component_data = componentData;
+                } catch (error) {
+                  console.warn(`Failed to fetch component data for ${component.component_type}:${component.component_id}`, error);
+                  component.component_data = null;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     return data || [];
   }
 
@@ -569,37 +590,152 @@ export class PackageManagerService {
     }
   }
 
-  // Get available components for an event
-  static async getAvailableComponents(eventId: string, componentType: string): Promise<any[]> {
-    let tableName: string;
+  // Get component data by type and ID
+  static async getComponentData(componentType: string, componentId: string): Promise<any> {
+    let query;
+    
     switch (componentType) {
       case 'ticket':
-        tableName = 'tickets';
+        query = supabase
+          .from('tickets')
+          .select(`
+            *,
+            ticket_category:ticket_categories(category_name)
+          `)
+          .eq('id', componentId)
+          .single();
         break;
+        
       case 'hotel_room':
-        tableName = 'hotel_rooms';
+        query = supabase
+          .from('hotel_rooms')
+          .select(`
+            *,
+            hotel:gpgt_hotels(name, brand, star_rating)
+          `)
+          .eq('id', componentId)
+          .single();
         break;
+        
       case 'circuit_transfer':
-        tableName = 'circuit_transfers';
+        query = supabase
+          .from('circuit_transfers')
+          .select(`
+            *,
+            hotel:gpgt_hotels(name, brand, star_rating)
+          `)
+          .eq('id', componentId)
+          .single();
         break;
+        
       case 'airport_transfer':
-        tableName = 'airport_transfers';
+        query = supabase
+          .from('airport_transfers')
+          .select(`
+            *,
+            hotel:gpgt_hotels(name, brand, star_rating)
+          `)
+          .eq('id', componentId)
+          .single();
         break;
+        
       case 'flight':
-        tableName = 'flights';
+        query = supabase
+          .from('flights')
+          .select('*')
+          .eq('id', componentId)
+          .single();
         break;
-      case 'lounge_pass':
-        tableName = 'lounge_passes';
-        break;
+
       default:
         throw new Error(`Invalid component type: ${componentType}`);
     }
 
-    const { data, error } = await supabase
-      .from(tableName)
-      .select('*')
-      .eq('event_id', eventId)
-      .eq('active', true);
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to fetch component data: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  // Get available components for an event with pricing and related data
+  static async getAvailableComponents(eventId: string, componentType: string, hotelId?: string): Promise<any[]> {
+    let query;
+    
+    switch (componentType) {
+      case 'ticket':
+        // Tickets filtered by event_id and active status
+        query = supabase
+          .from('tickets')
+          .select(`
+            *,
+            ticket_category:ticket_categories(category_name)
+          `)
+          .eq('event_id', eventId)
+          .eq('active', true)
+          .gt('quantity_available', 0); // Only show tickets with availability
+        break;
+        
+      case 'hotel_room':
+        // Hotel rooms filtered by event_id only
+        query = supabase
+          .from('hotel_rooms')
+          .select(`
+            *,
+            hotel:gpgt_hotels(name, brand, star_rating)
+          `)
+          .eq('event_id', eventId)
+          .eq('active', true);
+        break;
+        
+      case 'circuit_transfer':
+        // Circuit transfers filtered by event_id and hotel_id
+        query = supabase
+          .from('circuit_transfers')
+          .select(`
+            *,
+            hotel:gpgt_hotels(name, brand, star_rating)
+          `)
+          .eq('event_id', eventId)
+          .eq('active', true);
+        
+        if (hotelId) {
+          query = query.eq('hotel_id', hotelId);
+        }
+        break;
+        
+      case 'airport_transfer':
+        // Airport transfers filtered by event_id and hotel_id
+        query = supabase
+          .from('airport_transfers')
+          .select(`
+            *,
+            hotel:gpgt_hotels(name, brand, star_rating)
+          `)
+          .eq('event_id', eventId)
+          .eq('active', true);
+        
+        if (hotelId) {
+          query = query.eq('hotel_id', hotelId);
+        }
+        break;
+        
+      case 'flight':
+        // Flights filtered by event_id and active status
+        query = supabase
+          .from('flights')
+          .select('*')
+          .eq('event_id', eventId)
+          .eq('active', true);
+        break;
+
+      default:
+        throw new Error(`Invalid component type: ${componentType}`);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new Error(`Failed to fetch available components: ${error.message}`);
@@ -607,4 +743,4 @@ export class PackageManagerService {
 
     return data || [];
   }
-} 
+}

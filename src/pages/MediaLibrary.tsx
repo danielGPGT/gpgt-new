@@ -12,7 +12,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Loader2, Upload, Search, Edit, Trash2, RefreshCw, Eye, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import { TierRestriction } from '../components/TierRestriction';
+
 import UnsplashSearch from '../components/UnsplashSearch';
 import { ImageProcessor } from '../lib/imageProcessor';
 
@@ -186,8 +186,7 @@ export default function MediaLibrary() {
   };
 
   return (
-    <TierRestriction type="media_library">
-      <div className="p-6">
+    <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold">Media Library</h1>
@@ -447,6 +446,6 @@ export default function MediaLibrary() {
           onImageAdded={handleImageAdded}
         />
       </div>
-    </TierRestriction>
+    
   );
 }

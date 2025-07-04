@@ -1,54 +1,58 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/AuthProvider';
-import { tierManager } from '@/lib/tierManager';
+import { TierManager } from '@/lib/tierManager';
 
 export function useTier() {
   const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentPlan, setCurrentPlan] = useState<'starter' | 'professional' | 'enterprise'>('starter');
-  const [usage, setUsage] = useState<{
-    itineraries_created: number;
-    pdf_downloads: number;
-    api_calls: number;
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState('unlimited');
+  const [usage, setUsage] = useState({
+    itineraries_created: 0,
+    pdf_downloads: 0,
+    api_calls: 0,
     limit_reached: {
-      itineraries: boolean;
-      pdf_downloads: boolean;
-      api_calls: boolean;
-    };
-  } | null>(null);
+      itineraries: false,
+      pdf_downloads: false,
+      api_calls: false,
+    },
+  });
 
-  useEffect(() => {
-    if (user) {
-      initializeTier();
-    } else {
+  const tierManager = TierManager.getInstance();
+
+  const initializeTier = useCallback(async () => {
+    if (!user?.id) {
       setIsLoading(false);
+      return;
     }
-  }, [user]);
 
-  const initializeTier = async () => {
-    if (!user) return;
-    
     setIsLoading(true);
     try {
       await tierManager.initialize(user.id);
       setCurrentPlan(tierManager.getCurrentPlan());
-      setUsage(tierManager.getCurrentUsage());
+      
+      const currentUsage = await tierManager.getCurrentUsage();
+      setUsage(currentUsage);
     } catch (error) {
-      console.error('Error initializing tier manager:', error);
+      console.error('Error initializing tier:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  const incrementUsage = async (type: 'itineraries' | 'pdf_downloads' | 'api_calls') => {
-    if (!user) return false;
+  useEffect(() => {
+    initializeTier();
+  }, [initializeTier]);
+
+  const incrementUsage = useCallback(async (type: 'itineraries' | 'pdf_downloads' | 'api_calls') => {
+    if (!user?.id) return false;
     
     const success = await tierManager.incrementUsage(type);
     if (success) {
-      setUsage(tierManager.getCurrentUsage());
+      const currentUsage = await tierManager.getCurrentUsage();
+      setUsage(currentUsage);
     }
     return success;
-  };
+  }, [user?.id]);
 
   const canCreateItinerary = () => {
     return tierManager.canCreateItinerary();

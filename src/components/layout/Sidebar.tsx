@@ -272,9 +272,7 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
                   <DropdownMenuItem>
                     <User className="w-4 h-4 mr-2" /> Account
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <CreditCard className="w-4 h-4 mr-2" /> Billing
-                  </DropdownMenuItem>
+
                   <DropdownMenuItem>
                     <Bell className="w-4 h-4 mr-2" /> Notifications
                   </DropdownMenuItem>

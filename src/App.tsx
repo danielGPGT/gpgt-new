@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from "./lib/AuthProvider";
 import { Home } from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import { Pricing } from "./pages/Pricing";
+
 import { Features } from "./pages/Features";
 import { About } from "./pages/About";
 import { HowItWorks } from "./pages/HowItWorks";
@@ -89,11 +89,7 @@ function AppContent() {
             <Signup />
           </PublicLayout>
         } />
-        <Route path="/pricing" element={
-          <PublicLayout>
-            <Pricing />
-          </PublicLayout>
-        } />
+
         <Route path="/features" element={
           <PublicLayout>
             <Features />
@@ -150,6 +146,11 @@ function AppContent() {
           </PublicLayout>
         } />
         <Route path="/team-invite" element={
+          <PublicLayout>
+            <TeamInvitation />
+          </PublicLayout>
+        } />
+        <Route path="/team-invitation" element={
           <PublicLayout>
             <TeamInvitation />
           </PublicLayout>

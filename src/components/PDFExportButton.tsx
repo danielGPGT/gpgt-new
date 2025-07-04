@@ -4,7 +4,7 @@ import { useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { SavedItinerary } from '@/lib/itineraryService';
-import { useTier } from '@/hooks/useTier';
+
 import { toast } from 'sonner';
 
 // Helper function to format date with day of the week
@@ -26,14 +26,11 @@ interface PDFExportButtonProps {
 
 export function PDFExportButton({ itinerary, className }: PDFExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false);
-  const { canDownloadPDF, getLimitReachedMessage, incrementUsage } = useTier();
+
 
   const exportToPDF = async () => {
     // Check if user can download PDFs
-    if (!canDownloadPDF()) {
-      toast.error(getLimitReachedMessage('pdf_downloads'));
-      return;
-    }
+
 
     setIsExporting(true);
     try {
@@ -198,8 +195,6 @@ export function PDFExportButton({ itinerary, className }: PDFExportButtonProps) 
       // Save the PDF
       pdf.save(`${itinerary.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_itinerary.pdf`);
 
-      // Increment usage after successful download
-      await incrementUsage('pdf_downloads');
       toast.success('PDF exported successfully!');
 
     } catch (error) {
@@ -213,7 +208,7 @@ export function PDFExportButton({ itinerary, className }: PDFExportButtonProps) 
   return (
     <Button
       onClick={exportToPDF}
-      disabled={isExporting || !canDownloadPDF()}
+      disabled={isExporting}
       variant="outline"
       size="sm"
       className={className}

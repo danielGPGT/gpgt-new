@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import MediaLibrarySelector from './MediaLibrarySelector';
 import { MediaItem } from '@/lib/mediaLibrary';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { TierManager } from '@/lib/tierManager';
+
 
 // Helper function to detect blob URLs
 const isBlobUrl = (url: string): boolean => {
@@ -110,10 +110,8 @@ export function ImageUpload({
 
   useEffect(() => {
     if (user?.id) {
-      const tierManager = TierManager.getInstance();
-      tierManager.initialize(user.id).then(() => {
-        setHasMediaLibraryAccess(tierManager.hasFeature('media_library'));
-      });
+      // All users now have media library access
+      setHasMediaLibraryAccess(true);
     }
   }, [user?.id]);
 

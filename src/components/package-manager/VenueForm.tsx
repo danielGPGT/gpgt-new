@@ -3,13 +3,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -122,205 +122,210 @@ export function VenueForm({ open, onOpenChange, venue }: VenueFormProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{venue ? 'Edit Venue' : 'Add New Venue'}</DialogTitle>
-          <DialogDescription>
+    <Drawer open={open} onOpenChange={onOpenChange} direction="right">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{venue ? 'Edit Venue' : 'Add New Venue'}</DrawerTitle>
+          <DrawerDescription>
             {venue ? 'Update venue information' : 'Create a new venue for events'}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Venue Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g., Circuit de Monaco"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="slug">Slug</Label>
-              <Input
-                id="slug"
-                value={formData.slug}
-                onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
-                placeholder="e.g., circuit-de-monaco"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="country">Country</Label>
-              <Input
-                id="country"
-                value={formData.country}
-                onChange={(e) => setFormData(prev => ({ ...prev, country: e.target.value }))}
-                placeholder="e.g., Monaco"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="city">City</Label>
-              <Input
-                id="city"
-                value={formData.city}
-                onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
-                placeholder="e.g., Monte Carlo"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="timezone">Timezone</Label>
-              <Input
-                id="timezone"
-                value={formData.timezone}
-                onChange={(e) => setFormData(prev => ({ ...prev, timezone: e.target.value }))}
-                placeholder="e.g., Europe/Monaco"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="latitude">Latitude</Label>
-              <Input
-                id="latitude"
-                type="number"
-                step="any"
-                value={formData.latitude || ''}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  latitude: e.target.value ? parseFloat(e.target.value) : undefined 
-                }))}
-                placeholder="e.g., 43.7384"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="longitude">Longitude</Label>
-              <Input
-                id="longitude"
-                type="number"
-                step="any"
-                value={formData.longitude || ''}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  longitude: e.target.value ? parseFloat(e.target.value) : undefined 
-                }))}
-                placeholder="e.g., 7.4246"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="website">Website</Label>
-              <Input
-                id="website"
-                type="url"
-                value={formData.website}
-                onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
-                placeholder="e.g., https://www.monaco-grand-prix.com"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="map_url">Map URL</Label>
-            <Input
-              id="map_url"
-              type="url"
-              value={formData.map_url}
-              onChange={(e) => setFormData(prev => ({ ...prev, map_url: e.target.value }))}
-              placeholder="e.g., https://maps.google.com/..."
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Brief description of the venue..."
-              rows={3}
-            />
-          </div>
-
-          {/* Images Section */}
-          <div className="space-y-2">
-            <Label>Venue Images</Label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {(formData.images || []).length > 0 ? (
-                (formData.images as MediaItem[]).map((img) => (
-                  <div key={img.id} className="relative group w-24 h-24 border rounded overflow-hidden">
-                    <img src={img.thumbnail_url || img.image_url} alt={img.description || ''} className="object-cover w-full h-full" />
-                    <button
-                      type="button"
-                      className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
-                      onClick={() => handleRemoveImage(img.id)}
-                      aria-label="Remove image"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <span className="text-muted-foreground text-sm">No images selected</span>
-              )}
-            </div>
-            <Button type="button" variant="outline" onClick={() => setShowImageSelector(true)}>
-              {formData.images && formData.images.length > 0 ? 'Edit Images' : 'Select Images'}
-            </Button>
-            <ModalDialog open={showImageSelector} onOpenChange={setShowImageSelector}>
-              <ModalDialogContent className="!max-w-6xl">
-                <ModalDialogHeader>
-                  <ModalDialogTitle>Select Venue Images</ModalDialogTitle>
-                </ModalDialogHeader>
-                <MediaLibrarySelector
-                  multiple
-                  selectedItems={formData.images || []}
-                  onSelect={(item) => {
-                    let imgs = Array.isArray(formData.images) ? [...formData.images] : [];
-                    const exists = imgs.find((i: any) => i.id === item.id);
-                    if (exists) {
-                      imgs = imgs.filter((i: any) => i.id !== item.id);
-                    } else {
-                      imgs.push(item);
-                    }
-                    setFormData(prev => ({ ...prev, images: imgs }));
-                  }}
-                  maxItems={8}
+          </DrawerDescription>
+        </DrawerHeader>
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Venue Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g., Circuit de Monaco"
+                  required
                 />
-                <ModalDialogFooter>
-                  <Button type="button" onClick={() => setShowImageSelector(false)}>
-                    Done
-                  </Button>
-                </ModalDialogFooter>
-              </ModalDialogContent>
-            </ModalDialog>
-          </div>
+              </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            {venue && (
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={handleDelete}
-                disabled={deleteLoading}
-              >
-                {deleteLoading ? 'Deleting...' : 'Delete'}
+              <div className="space-y-2">
+                <Label htmlFor="slug">Slug</Label>
+                <Input
+                  id="slug"
+                  value={formData.slug}
+                  onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
+                  placeholder="e.g., circuit-de-monaco"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="country">Country</Label>
+                <Input
+                  id="country"
+                  value={formData.country}
+                  onChange={(e) => setFormData(prev => ({ ...prev, country: e.target.value }))}
+                  placeholder="e.g., Monaco"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <Input
+                  id="city"
+                  value={formData.city}
+                  onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                  placeholder="e.g., Monte Carlo"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="timezone">Timezone</Label>
+                <Input
+                  id="timezone"
+                  value={formData.timezone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, timezone: e.target.value }))}
+                  placeholder="e.g., Europe/Monaco"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="latitude">Latitude</Label>
+                <Input
+                  id="latitude"
+                  type="number"
+                  step="any"
+                  value={formData.latitude || ''}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    latitude: e.target.value ? parseFloat(e.target.value) : undefined 
+                  }))}
+                  placeholder="e.g., 43.7384"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="longitude">Longitude</Label>
+                <Input
+                  id="longitude"
+                  type="number"
+                  step="any"
+                  value={formData.longitude || ''}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    longitude: e.target.value ? parseFloat(e.target.value) : undefined 
+                  }))}
+                  placeholder="e.g., 7.4246"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="website">Website</Label>
+                <Input
+                  id="website"
+                  type="url"
+                  value={formData.website}
+                  onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
+                  placeholder="e.g., https://www.monaco-grand-prix.com"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="map_url">Map URL</Label>
+              <Input
+                id="map_url"
+                type="url"
+                value={formData.map_url}
+                onChange={(e) => setFormData(prev => ({ ...prev, map_url: e.target.value }))}
+                placeholder="e.g., https://maps.google.com/..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Brief description of the venue..."
+                rows={3}
+              />
+            </div>
+
+            {/* Images Section */}
+            <div className="space-y-2">
+              <Label>Venue Images</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {(formData.images || []).length > 0 ? (
+                  (formData.images as MediaItem[]).map((img) => (
+                    <div key={img.id} className="relative group w-24 h-24 border rounded overflow-hidden">
+                      <img src={img.thumbnail_url || img.image_url} alt={img.description || ''} className="object-cover w-full h-full" />
+                      <button
+                        type="button"
+                        className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                        onClick={() => handleRemoveImage(img.id)}
+                        aria-label="Remove image"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-muted-foreground text-sm">No images selected</span>
+                )}
+              </div>
+              <Button type="button" variant="outline" onClick={() => setShowImageSelector(true)}>
+                {formData.images && formData.images.length > 0 ? 'Edit Images' : 'Select Images'}
               </Button>
-            )}
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? 'Saving...' : venue ? 'Update Venue' : 'Create Venue'}
+              <ModalDialog open={showImageSelector} onOpenChange={setShowImageSelector}>
+                <ModalDialogContent className="!max-w-6xl">
+                  <ModalDialogHeader>
+                    <ModalDialogTitle>Select Venue Images</ModalDialogTitle>
+                  </ModalDialogHeader>
+                  <MediaLibrarySelector
+                    multiple
+                    selectedItems={formData.images || []}
+                    onSelect={(item) => {
+                      let imgs = Array.isArray(formData.images) ? [...formData.images] : [];
+                      const exists = imgs.find((i: any) => i.id === item.id);
+                      if (exists) {
+                        imgs = imgs.filter((i: any) => i.id !== item.id);
+                      } else {
+                        imgs.push(item);
+                      }
+                      setFormData(prev => ({ ...prev, images: imgs }));
+                    }}
+                    maxItems={8}
+                  />
+                  <ModalDialogFooter>
+                    <Button type="button" onClick={() => setShowImageSelector(false)}>
+                      Done
+                    </Button>
+                  </ModalDialogFooter>
+                </ModalDialogContent>
+              </ModalDialog>
+            </div>
+          </form>
+        </div>
+        <DrawerFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          {venue && (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete'}
             </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          )}
+          <Button 
+            type="submit" 
+            disabled={isLoading}
+            onClick={handleSubmit}
+          >
+            {isLoading ? 'Saving...' : venue ? 'Update Venue' : 'Create Venue'}
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 } 

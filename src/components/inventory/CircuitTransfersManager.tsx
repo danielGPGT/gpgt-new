@@ -30,36 +30,55 @@ const COLUMN_CONFIG = [
   { key: 'event', label: 'Event' },
   { key: 'hotel', label: 'Hotel' },
   { key: 'transfer_type', label: 'Type' },
+  { key: 'used', label: 'Used' },
   { key: 'coach_capacity', label: 'Coach Capacity' },
   { key: 'coaches_required', label: 'Coaches Required' },
   { key: 'days', label: 'Days' },
   { key: 'quote_hours', label: 'Quote Hours' },
   { key: 'expected_hours', label: 'Expected Hours' },
   { key: 'supplier', label: 'Supplier' },
-  { key: 'coach_cost_per_day_local', label: 'Coach Cost/Day (Local)' },
-  { key: 'cost_per_extra_hour_per_coach_per_day', label: 'Extra Hour/Coach/Day' },
-  { key: 'coach_vat_tax_if_not_included_in_price', label: 'Coach VAT %' },
+  { key: 'coach_cost_per_day_local', label: 'Coach Cost/Day' },
+  { key: 'coach_cost_per_hour_local', label: 'Coach Cost/Hour' },
+  { key: 'coach_extra_cost_per_hour_local', label: 'Coach Extra/Hour' },
+  { key: 'coach_vat', label: 'Coach VAT' },
   { key: 'parking_ticket_per_coach_per_day', label: 'Parking/Coach/Day' },
-  { key: 'supplier_currency', label: 'Supplier Currency' },
-  { key: 'guide_included_in_coach_cost', label: 'Guide Included in Coach Cost' },
+  { key: 'supplier_currency', label: 'Currency' },
+  { key: 'guide_included', label: 'Guide Included' },
   { key: 'guide_cost_per_day', label: 'Guide Cost/Day' },
-  { key: 'cost_per_extra_hour_per_guide_per_day', label: 'Extra Hour/Guide/Day' },
-  { key: 'vat_tax_if_not_included_in_guide_price', label: 'Guide VAT %' },
-  { key: 'total_coach_cost_local', label: 'Total Coach Cost Local' },
-  { key: 'total_coach_cost_gbp', label: 'Total Coach Cost GBP' },
-  { key: 'total_guide_cost_local', label: 'Total Guide Cost Local' },
-  { key: 'total_guide_cost_gbp', label: 'Total Guide Cost GBP' },
-  { key: 'provider_guides', label: 'Provider Guides' },
-  { key: 'utilisation_percent', label: 'Utilisation %' },
-  { key: 'utilisation_cost_per_seat_local', label: 'Utilisation/Seat Local' },
-  { key: 'utilisation_cost_per_seat_gbp', label: 'Utilisation/Seat GBP' },
-  { key: 'markup_percent', label: 'Markup %' },
-  { key: 'sell_price_per_seat_gbp', label: 'Sell Price/Seat GBP' },
+  { key: 'guide_cost_per_hour_local', label: 'Guide Cost/Hour' },
+  { key: 'guide_extra_cost_per_hour_local', label: 'Guide Extra/Hour' },
+  { key: 'guide_vat', label: 'Guide VAT' },
+  { key: 'markup_percent', label: 'Markup' },
+  { key: 'utilisation_percent', label: 'Utilisation' },
+  { key: 'coach_cost_local', label: 'Coach Cost Total' },
+  { key: 'guide_cost_local', label: 'Guide Cost Total' },
+  { key: 'utilisation_cost_per_seat_local', label: 'Cost/Seat' },
+  { key: 'coach_cost_gbp', label: 'Coach Cost (£)' },
+  { key: 'guide_cost_gbp', label: 'Guide Cost (£)' },
+  { key: 'utilisation_cost_per_seat_gbp', label: 'Cost/Seat (£)' },
+  { key: 'sell_price_per_seat_gbp', label: 'Sell Price/Seat (£)' },
   { key: 'active', label: 'Active' },
   { key: 'notes', label: 'Notes' },
   { key: 'actions', label: 'Actions' },
 ];
-const DEFAULT_COLUMNS = COLUMN_CONFIG.map(c => c.key);
+const DEFAULT_COLUMNS = [
+  'event',
+  'hotel', 
+  'transfer_type',
+  'used',
+  'coach_capacity',
+  'coaches_required',
+  'days',
+  'supplier',
+  'coach_cost_per_day_local',
+  'supplier_currency',
+  'guide_included',
+  'markup_percent',
+  'utilisation_percent',
+  'sell_price_per_seat_gbp',
+  'active',
+  'actions'
+];
 const COLUMN_STORAGE_KEY = 'circuitTransfersManagerTableVisibleColumns_v1';
 
 // Utility to calculate price with markup
@@ -174,6 +193,11 @@ function getSafeProp<T, K extends keyof T>(obj: T, key: K, fallback: any = ''): 
   return obj && typeof obj === 'object' && key in obj ? obj[key] : fallback;
 }
 
+// Utility to round to 2 decimals
+function round2(val: number): number {
+  return Math.round((val + Number.EPSILON) * 100) / 100;
+}
+
 export default function CircuitTransfersManager() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -202,6 +226,9 @@ export default function CircuitTransfersManager() {
 
   // Form state for only editable fields
   const [form, setForm] = useState<Partial<CircuitTransferFormData>>({});
+
+  // Add state for validation errors
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   // Fetch events, hotels, and circuit transfers
   const { data: events = [] } = useQuery({
@@ -327,7 +354,7 @@ export default function CircuitTransfersManager() {
   };
   const handleCreate = () => {
     setEditingTransfer(null);
-    setForm({});
+    setForm({ markup_percent: 60 });
     setDrawerOpen(true);
   };
   const handleDelete = (id: string) => {
@@ -336,15 +363,53 @@ export default function CircuitTransfersManager() {
     }
   };
   const handleSubmit = () => {
+    if (!validateForm()) return;
+    const payload = {
+      event_id: form.event_id,
+      hotel_id: form.hotel_id,
+      transfer_type: form.transfer_type,
+      coach_capacity: form.coach_capacity,
+      days: form.days,
+      quote_hours: form.quote_hours,
+      expected_hours: form.expected_hours,
+      supplier: form.supplier,
+      coach_cost_per_day_local: form.coach_cost_per_day_local,
+      coach_cost_per_hour_local: calculated.coach_cost_per_hour_local,
+      coach_vat: form.coach_vat,
+      parking_ticket_per_coach_per_day: form.parking_ticket_per_coach_per_day,
+      supplier_currency: form.supplier_currency,
+      guide_included: form.guide_included,
+      guide_cost_per_day: form.guide_cost_per_day,
+      guide_cost_per_hour_local: calculated.guide_cost_per_hour_local,
+      guide_vat: form.guide_vat,
+      markup_percent: form.markup_percent,
+      utilisation_percent: form.utilisation_percent,
+      active: form.active,
+      notes: form.notes,
+      // Calculated fields
+      coach_extra_cost_per_hour_local: calculated.coach_extra_cost_per_hour_local,
+      guide_extra_cost_per_hour_local: !form.guide_included ? calculated.guide_extra_cost_per_hour_local : 0,
+      coach_cost_local: calculated.coach_cost_local,
+      guide_cost_local: !form.guide_included ? calculated.guide_cost_local : 0,
+      utilisation_cost_per_seat_local: calculated.utilisation_cost_per_seat_local,
+      coach_cost_gbp: calculated.coach_cost_gbp,
+      guide_cost_gbp: !form.guide_included ? calculated.guide_cost_gbp : 0,
+      utilisation_cost_per_seat_gbp: calculated.utilisation_cost_per_seat_gbp,
+      sell_price_per_seat_gbp: calculated.sell_price_per_seat_gbp,
+    };
     if (editingTransfer) {
-      updateMutation.mutate({ id: editingTransfer.id, updates: form as CircuitTransferUpdate });
+      updateMutation.mutate({ id: editingTransfer.id, updates: payload });
     } else {
-      createMutation.mutate(form as CircuitTransferInsert);
+      createMutation.mutate(payload);
     }
   };
 
   // Live calculations for derived fields
   const [calculated, setCalculated] = useState({
+    coach_cost_per_hour_local: 0,
+    guide_cost_per_hour_local: 0,
+    coach_extra_cost_per_hour_local: 0,
+    guide_extra_cost_per_hour_local: 0,
     coach_cost_local: 0,
     guide_cost_local: 0,
     utilisation_cost_per_seat_local: 0,
@@ -352,32 +417,63 @@ export default function CircuitTransfersManager() {
     guide_cost_gbp: 0,
     utilisation_cost_per_seat_gbp: 0,
     sell_price_per_seat_gbp: 0,
-    coaches_required: 0,
   });
 
   useEffect(() => {
-    // Helper for coalesce
     const coalesce = (v: any, fallback: any) => v != null ? v : fallback;
-    // Calculate coaches_required (read-only, backend-calculated, but needed for frontend calculations)
-    // If used is not available, fallback to 0
-    const used = 0; // You may want to fetch this if needed
+    const used = coalesce(form.used, 0);
     const coach_capacity = coalesce(form.coach_capacity, 1);
+    const days = coalesce(form.days, 0);
+    const quote_hours = coalesce(form.quote_hours, 1);
+    const expected_hours = coalesce(form.expected_hours, quote_hours);
+    const coach_cost_per_day_local = coalesce(form.coach_cost_per_day_local, 0);
+    const coach_vat = coalesce(form.coach_vat, 0);
+    const parking_ticket_per_coach_per_day = coalesce(form.parking_ticket_per_coach_per_day, 0);
+    const supplier_currency = form.supplier_currency || 'EUR';
+    const guide_included = !!form.guide_included;
+    const guide_cost_per_day = coalesce(form.guide_cost_per_day, 0);
+    const guide_vat = coalesce(form.guide_vat, 0);
+    const markup_percent = coalesce(form.markup_percent, 0);
+    const utilisation_percent = coalesce(form.utilisation_percent, 100);
+    const exchange_rate = exchangeRate;
+    // Calculated fields
     const coaches_required = Math.ceil(used / Math.max(coach_capacity, 1));
-    const typedForm = form as import('@/types/inventory').CircuitTransferFormData;
+    // Coach cost per hour
+    const coach_cost_per_hour_local = quote_hours > 0 ? round2(coach_cost_per_day_local / quote_hours) : 0;
+    // Guide cost per hour
+    const guide_cost_per_hour_local = (!guide_included && quote_hours > 0) ? round2(guide_cost_per_day / quote_hours) : 0;
+    // Coach extra cost per hour
+    const coach_extra_cost_per_hour_local = quote_hours > 0 ? round2(coach_cost_per_day_local / quote_hours) : 0;
+    // Guide extra cost per hour
+    const guide_extra_cost_per_hour_local = (!guide_included && quote_hours > 0) ? round2(guide_cost_per_day / quote_hours) : 0;
     // Coach cost local
-    const coach_cost_local = ((coalesce(form.coach_cost_per_day_local, 0) * coalesce(form.days, 0) + coalesce(form.parking_ticket_per_coach_per_day, 0) * coalesce(form.days, 0) * coaches_required) * (1 + coalesce(typedForm.coach_vat, 0) / 100));
+    const coach_cost_local = round2((
+      (coach_cost_per_day_local * days) +
+      (coach_extra_cost_per_hour_local * (expected_hours - quote_hours) * days) +
+      (parking_ticket_per_coach_per_day * days)
+    ) * (1 + coach_vat / 100));
     // Guide cost local
-    const guide_cost_local = typedForm.guide_included
-      ? 0
-      : (coalesce(form.guide_cost_per_day, 0) * coalesce(form.days, 0) * (1 + coalesce(typedForm.guide_vat, 0) / 100));
+    let guide_cost_local = 0;
+    if (!guide_included) {
+      guide_cost_local = round2((
+        (guide_cost_per_day * days) +
+        (guide_extra_cost_per_hour_local * (expected_hours - quote_hours) * days)
+      ) * (1 + guide_vat / 100));
+    }
     // Utilisation cost per seat local
-    const utilisation_cost_per_seat_local = (coach_cost_local + guide_cost_local) / (coach_capacity * (coalesce(form.utilisation_percent, 100) / 100));
-    // GBP calculations
-    const coach_cost_gbp = coach_cost_local * exchangeRate;
-    const guide_cost_gbp = guide_cost_local * exchangeRate;
-    const utilisation_cost_per_seat_gbp = (coach_cost_gbp + guide_cost_gbp) / (coach_capacity * (coalesce(form.utilisation_percent, 100) / 100));
-    const sell_price_per_seat_gbp = utilisation_cost_per_seat_gbp * (1 + coalesce(form.markup_percent, 0) / 100);
+    const utilisation_cost_per_seat_local = round2((coach_cost_local + guide_cost_local) / (coach_capacity * (utilisation_percent / 100)));
+    // GBP conversions
+    const coach_cost_gbp = round2(coach_cost_local * exchange_rate);
+    const guide_cost_gbp = !guide_included ? round2(guide_cost_local * exchange_rate) : 0;
+    // Utilisation cost per seat GBP
+    const utilisation_cost_per_seat_gbp = round2((coach_cost_gbp + guide_cost_gbp) / (coach_capacity * (utilisation_percent / 100)));
+    // Sell price per seat GBP
+    const sell_price_per_seat_gbp = round2(utilisation_cost_per_seat_gbp * (1 + markup_percent / 100));
     setCalculated({
+      coach_cost_per_hour_local,
+      guide_cost_per_hour_local,
+      coach_extra_cost_per_hour_local,
+      guide_extra_cost_per_hour_local,
       coach_cost_local,
       guide_cost_local,
       utilisation_cost_per_seat_local,
@@ -385,31 +481,22 @@ export default function CircuitTransfersManager() {
       guide_cost_gbp,
       utilisation_cost_per_seat_gbp,
       sell_price_per_seat_gbp,
-      coaches_required,
     });
-    // Also update these in the form state for submission
-    setForm((f: Partial<CircuitTransferFormData>) => ({
-      ...f,
-      coach_cost_local,
-      guide_cost_local,
-      utilisation_cost_per_seat_local,
-      coach_cost_gbp,
-      guide_cost_gbp,
-      utilisation_cost_per_seat_gbp,
-      sell_price_per_seat_gbp,
-    }));
   }, [
-    form.coach_cost_per_day_local,
-    form.days,
-    form.parking_ticket_per_coach_per_day,
-    // form.coaches_required, // not in form
-    (form as import('@/types/inventory').CircuitTransferFormData).coach_vat,
-    (form as import('@/types/inventory').CircuitTransferFormData).guide_included,
-    form.guide_cost_per_day,
-    (form as import('@/types/inventory').CircuitTransferFormData).guide_vat,
-    form.utilisation_percent,
+    form.used,
     form.coach_capacity,
+    form.days,
+    form.quote_hours,
+    form.expected_hours,
+    form.coach_cost_per_day_local,
+    form.coach_vat,
+    form.parking_ticket_per_coach_per_day,
+    form.supplier_currency,
+    form.guide_included,
+    form.guide_cost_per_day,
+    form.guide_vat,
     form.markup_percent,
+    form.utilisation_percent,
     exchangeRate,
   ]);
 
@@ -431,35 +518,48 @@ export default function CircuitTransfersManager() {
 
   // Move getColumnValue inside the CircuitTransfersManager component, after events, hotels, and form are defined.
   function getColumnValue(tr: CircuitTransfer, key: string) {
+    const formatCurrency = (amount: number | null, currency: string) => {
+      if (amount == null) return '';
+      const symbol = getCurrencySymbol(currency);
+      return `${symbol}${amount.toFixed(2)}`;
+    };
+
+    const formatPercent = (value: number | null) => {
+      if (value == null) return '';
+      return `${value.toFixed(1)}%`;
+    };
+
     switch (key) {
       case 'event': return events.find(e => e.id === tr.event_id)?.name || '';
       case 'hotel': return hotels.find(h => h.id === tr.hotel_id)?.name || '';
       case 'transfer_type': return tr.transfer_type;
+      case 'used': return tr.used;
       case 'coach_capacity': return tr.coach_capacity;
       case 'coaches_required': return tr.coaches_required;
       case 'days': return tr.days;
       case 'quote_hours': return tr.quote_hours;
       case 'expected_hours': return tr.expected_hours;
       case 'supplier': return tr.supplier;
-      case 'coach_cost_per_day_local': return tr.coach_cost_per_day_local;
-      case 'cost_per_extra_hour_per_coach_per_day': return tr.cost_per_extra_hour_per_coach_per_day;
-      case 'coach_vat_tax_if_not_included_in_price': return tr.coach_vat_tax_if_not_included_in_price;
-      case 'parking_ticket_per_coach_per_day': return tr.parking_ticket_per_coach_per_day;
+      case 'coach_cost_per_day_local': return formatCurrency(tr.coach_cost_per_day_local, tr.supplier_currency);
+      case 'coach_cost_per_hour_local': return formatCurrency(tr.coach_cost_per_hour_local, tr.supplier_currency);
+      case 'coach_extra_cost_per_hour_local': return formatCurrency(tr.coach_extra_cost_per_hour_local, tr.supplier_currency);
+      case 'coach_vat': return formatPercent(tr.coach_vat);
+      case 'parking_ticket_per_coach_per_day': return formatCurrency(tr.parking_ticket_per_coach_per_day, tr.supplier_currency);
       case 'supplier_currency': return tr.supplier_currency;
-      case 'guide_included_in_coach_cost': return tr.guide_included_in_coach_cost ? 'Yes' : 'No';
-      case 'guide_cost_per_day': return tr.guide_cost_per_day;
-      case 'cost_per_extra_hour_per_guide_per_day': return tr.cost_per_extra_hour_per_guide_per_day;
-      case 'vat_tax_if_not_included_in_guide_price': return tr.vat_tax_if_not_included_in_guide_price;
-      case 'total_coach_cost_local': return tr.total_coach_cost_local;
-      case 'total_coach_cost_gbp': return tr.total_coach_cost_gbp;
-      case 'total_guide_cost_local': return tr.total_guide_cost_local;
-      case 'total_guide_cost_gbp': return tr.total_guide_cost_gbp;
-      case 'provider_guides': return tr.provider_guides;
-      case 'utilisation_percent': return tr.utilisation_percent;
-      case 'utilisation_cost_per_seat_local': return tr.utilisation_cost_per_seat_local;
-      case 'utilisation_cost_per_seat_gbp': return tr.utilisation_cost_per_seat_gbp;
-      case 'markup_percent': return tr.markup_percent;
-      case 'sell_price_per_seat_gbp': return tr.sell_price_per_seat_gbp;
+      case 'guide_included': return tr.guide_included ? 'Yes' : 'No';
+      case 'guide_cost_per_day': return formatCurrency(tr.guide_cost_per_day, tr.supplier_currency);
+      case 'guide_cost_per_hour_local': return formatCurrency(tr.guide_cost_per_hour_local, tr.supplier_currency);
+      case 'guide_extra_cost_per_hour_local': return formatCurrency(tr.guide_extra_cost_per_hour_local, tr.supplier_currency);
+      case 'guide_vat': return formatPercent(tr.guide_vat);
+      case 'markup_percent': return formatPercent(tr.markup_percent);
+      case 'utilisation_percent': return formatPercent(tr.utilisation_percent);
+      case 'coach_cost_local': return formatCurrency(tr.coach_cost_local, tr.supplier_currency);
+      case 'guide_cost_local': return formatCurrency(tr.guide_cost_local, tr.supplier_currency);
+      case 'utilisation_cost_per_seat_local': return formatCurrency(tr.utilisation_cost_per_seat_local, tr.supplier_currency);
+      case 'coach_cost_gbp': return formatCurrency(tr.coach_cost_gbp, 'GBP');
+      case 'guide_cost_gbp': return formatCurrency(tr.guide_cost_gbp, 'GBP');
+      case 'utilisation_cost_per_seat_gbp': return formatCurrency(tr.utilisation_cost_per_seat_gbp, 'GBP');
+      case 'sell_price_per_seat_gbp': return formatCurrency(tr.sell_price_per_seat_gbp, 'GBP');
       case 'active': return tr.active ? 'Yes' : 'No';
       case 'notes': return tr.notes;
       default: return '';
@@ -491,6 +591,33 @@ export default function CircuitTransfersManager() {
       notes: transfer.notes,
     };
   }
+
+  // Validation logic before submit
+  const validateForm = () => {
+    const newErrors: { [key: string]: string } = {};
+    // Coach details required
+    if (!form.event_id) newErrors.event_id = 'Event is required';
+    if (!form.hotel_id) newErrors.hotel_id = 'Hotel is required';
+    if (!form.transfer_type) newErrors.transfer_type = 'Transfer type is required';
+    if (form.coach_capacity == null || form.coach_capacity <= 0) newErrors.coach_capacity = 'Coach capacity is required';
+    if (form.days == null || form.days <= 0) newErrors.days = 'Days is required';
+    if (form.quote_hours == null || form.quote_hours <= 0) newErrors.quote_hours = 'Quote hours is required';
+    if (form.expected_hours == null || form.expected_hours <= 0) newErrors.expected_hours = 'Expected hours is required';
+    if (form.coach_cost_per_day_local == null || form.coach_cost_per_day_local < 0) newErrors.coach_cost_per_day_local = 'Coach cost/day is required';
+    if (form.coach_vat == null || form.coach_vat < 0) newErrors.coach_vat = 'Coach VAT is required';
+    if (form.parking_ticket_per_coach_per_day == null || form.parking_ticket_per_coach_per_day < 0) newErrors.parking_ticket_per_coach_per_day = 'Parking/Coach/Day is required';
+    if (!form.supplier_currency) newErrors.supplier_currency = 'Supplier currency is required';
+    // Guide fields required if not included in cost
+    if (!form.guide_included) {
+      if (form.guide_cost_per_day == null || form.guide_cost_per_day < 0) newErrors.guide_cost_per_day = 'Guide cost/day is required';
+      if (form.guide_vat == null || form.guide_vat < 0) newErrors.guide_vat = 'Guide VAT is required';
+    }
+    // Utilisation and markup required
+    if (form.utilisation_percent == null || form.utilisation_percent <= 0) newErrors.utilisation_percent = 'Utilisation % is required';
+    if (form.markup_percent == null || form.markup_percent < 0) newErrors.markup_percent = 'Markup % is required';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   return (
     <div className="space-y-6">
@@ -665,10 +792,10 @@ export default function CircuitTransfersManager() {
                 {COLUMN_CONFIG.filter(col => visibleColumns.has(col.key)).map(col => (
                   <TableHead
                     key={col.key}
-                    className={['event', 'hotel', 'transfer_type', 'seat_capacity', 'supplier', 'total_cost', 'currency', 'markup_percent', 'price_per_seat', 'active'].includes(col.key) ? 'cursor-pointer select-none' : ''}
+                    className={['event', 'hotel', 'transfer_type', 'used', 'coach_capacity', 'coaches_required', 'days', 'quote_hours', 'expected_hours', 'supplier', 'coach_cost_per_day_local', 'coach_cost_per_hour_local', 'coach_extra_cost_per_hour_local', 'coach_vat', 'parking_ticket_per_coach_per_day', 'supplier_currency', 'guide_included', 'guide_cost_per_day', 'guide_cost_per_hour_local', 'guide_extra_cost_per_hour_local', 'guide_vat', 'markup_percent', 'utilisation_percent', 'coach_cost_local', 'guide_cost_local', 'utilisation_cost_per_seat_local', 'coach_cost_gbp', 'guide_cost_gbp', 'utilisation_cost_per_seat_gbp', 'sell_price_per_seat_gbp', 'active'].includes(col.key) ? 'cursor-pointer select-none' : ''}
                     onClick={() => {
                       if ([
-                        'event', 'hotel', 'transfer_type', 'seat_capacity', 'supplier', 'total_cost', 'currency', 'markup_percent', 'price_per_seat', 'active'
+                        'event', 'hotel', 'transfer_type', 'used', 'coach_capacity', 'coaches_required', 'days', 'quote_hours', 'expected_hours', 'supplier', 'coach_cost_per_day_local', 'coach_cost_per_hour_local', 'coach_extra_cost_per_hour_local', 'coach_vat', 'parking_ticket_per_coach_per_day', 'supplier_currency', 'guide_included', 'guide_cost_per_day', 'guide_cost_per_hour_local', 'guide_extra_cost_per_hour_local', 'guide_vat', 'markup_percent', 'utilisation_percent', 'coach_cost_local', 'guide_cost_local', 'utilisation_cost_per_seat_local', 'coach_cost_gbp', 'guide_cost_gbp', 'utilisation_cost_per_seat_gbp', 'sell_price_per_seat_gbp', 'active'
                       ].includes(col.key)) {
                         setSortKey(col.key);
                         setSortDir(sortKey === col.key && sortDir === 'asc' ? 'desc' : 'asc');
@@ -706,26 +833,92 @@ export default function CircuitTransfersManager() {
                   {visibleColumns.has('transfer_type') && (
                     <TableCell>{getColumnValue(tr, 'transfer_type')}</TableCell>
                   )}
-                  {visibleColumns.has('seat_capacity') && (
-                    <TableCell>{getColumnValue(tr, 'seat_capacity')}</TableCell>
+                  {visibleColumns.has('used') && (
+                    <TableCell>{getColumnValue(tr, 'used')}</TableCell>
+                  )}
+                  {visibleColumns.has('coach_capacity') && (
+                    <TableCell>{getColumnValue(tr, 'coach_capacity')}</TableCell>
+                  )}
+                  {visibleColumns.has('coaches_required') && (
+                    <TableCell>{getColumnValue(tr, 'coaches_required')}</TableCell>
+                  )}
+                  {visibleColumns.has('days') && (
+                    <TableCell>{getColumnValue(tr, 'days')}</TableCell>
+                  )}
+                  {visibleColumns.has('quote_hours') && (
+                    <TableCell>{getColumnValue(tr, 'quote_hours')}</TableCell>
+                  )}
+                  {visibleColumns.has('expected_hours') && (
+                    <TableCell>{getColumnValue(tr, 'expected_hours')}</TableCell>
                   )}
                   {visibleColumns.has('supplier') && (
                     <TableCell>{getColumnValue(tr, 'supplier')}</TableCell>
                   )}
-                  {visibleColumns.has('total_cost') && (
-                    <TableCell>{getColumnValue(tr, 'total_cost')}</TableCell>
+                  {visibleColumns.has('coach_cost_per_day_local') && (
+                    <TableCell>{getColumnValue(tr, 'coach_cost_per_day_local')}</TableCell>
                   )}
-                  {visibleColumns.has('currency') && (
-                    <TableCell>{getColumnValue(tr, 'currency')}</TableCell>
+                  {visibleColumns.has('coach_cost_per_hour_local') && (
+                    <TableCell>{getColumnValue(tr, 'coach_cost_per_hour_local')}</TableCell>
+                  )}
+                  {visibleColumns.has('coach_extra_cost_per_hour_local') && (
+                    <TableCell>{getColumnValue(tr, 'coach_extra_cost_per_hour_local')}</TableCell>
+                  )}
+                  {visibleColumns.has('coach_vat') && (
+                    <TableCell>{getColumnValue(tr, 'coach_vat')}</TableCell>
+                  )}
+                  {visibleColumns.has('parking_ticket_per_coach_per_day') && (
+                    <TableCell>{getColumnValue(tr, 'parking_ticket_per_coach_per_day')}</TableCell>
+                  )}
+                  {visibleColumns.has('supplier_currency') && (
+                    <TableCell>{getColumnValue(tr, 'supplier_currency')}</TableCell>
+                  )}
+                  {visibleColumns.has('guide_included') && (
+                    <TableCell>{getColumnValue(tr, 'guide_included')}</TableCell>
+                  )}
+                  {visibleColumns.has('guide_cost_per_day') && (
+                    <TableCell>{getColumnValue(tr, 'guide_cost_per_day')}</TableCell>
+                  )}
+                  {visibleColumns.has('guide_cost_per_hour_local') && (
+                    <TableCell>{getColumnValue(tr, 'guide_cost_per_hour_local')}</TableCell>
+                  )}
+                  {visibleColumns.has('guide_extra_cost_per_hour_local') && (
+                    <TableCell>{getColumnValue(tr, 'guide_extra_cost_per_hour_local')}</TableCell>
+                  )}
+                  {visibleColumns.has('guide_vat') && (
+                    <TableCell>{getColumnValue(tr, 'guide_vat')}</TableCell>
                   )}
                   {visibleColumns.has('markup_percent') && (
                     <TableCell>{getColumnValue(tr, 'markup_percent')}</TableCell>
                   )}
-                  {visibleColumns.has('price_per_seat') && (
-                    <TableCell>{getColumnValue(tr, 'price_per_seat')}</TableCell>
+                  {visibleColumns.has('utilisation_percent') && (
+                    <TableCell>{getColumnValue(tr, 'utilisation_percent')}</TableCell>
+                  )}
+                  {visibleColumns.has('coach_cost_local') && (
+                    <TableCell>{getColumnValue(tr, 'coach_cost_local')}</TableCell>
+                  )}
+                  {visibleColumns.has('guide_cost_local') && (
+                    <TableCell>{getColumnValue(tr, 'guide_cost_local')}</TableCell>
+                  )}
+                  {visibleColumns.has('utilisation_cost_per_seat_local') && (
+                    <TableCell>{getColumnValue(tr, 'utilisation_cost_per_seat_local')}</TableCell>
+                  )}
+                  {visibleColumns.has('coach_cost_gbp') && (
+                    <TableCell>{getColumnValue(tr, 'coach_cost_gbp')}</TableCell>
+                  )}
+                  {visibleColumns.has('guide_cost_gbp') && (
+                    <TableCell>{getColumnValue(tr, 'guide_cost_gbp')}</TableCell>
+                  )}
+                  {visibleColumns.has('utilisation_cost_per_seat_gbp') && (
+                    <TableCell>{getColumnValue(tr, 'utilisation_cost_per_seat_gbp')}</TableCell>
+                  )}
+                  {visibleColumns.has('sell_price_per_seat_gbp') && (
+                    <TableCell>{getColumnValue(tr, 'sell_price_per_seat_gbp')}</TableCell>
                   )}
                   {visibleColumns.has('active') && (
                     <TableCell>{getColumnValue(tr, 'active')}</TableCell>
+                  )}
+                  {visibleColumns.has('notes') && (
+                    <TableCell>{getColumnValue(tr, 'notes')}</TableCell>
                   )}
                   {visibleColumns.has('actions') && (
                     <TableCell>
@@ -818,6 +1011,7 @@ export default function CircuitTransfersManager() {
                         {events.map(evt => <SelectItem key={evt.id} value={evt.id}>{evt.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {errors.event_id && <div className="text-destructive text-xs mt-1">{errors.event_id}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="hotel_id">Hotel *</Label>
@@ -827,6 +1021,7 @@ export default function CircuitTransfersManager() {
                         {hotels.map(hotel => <SelectItem key={hotel.id} value={hotel.id}>{hotel.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {errors.hotel_id && <div className="text-destructive text-xs mt-1">{errors.hotel_id}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="transfer_type">Transfer Type *</Label>
@@ -837,6 +1032,7 @@ export default function CircuitTransfersManager() {
                         <SelectItem value="mpv">MPV</SelectItem>
                       </SelectContent>
                     </Select>
+                    {errors.transfer_type && <div className="text-destructive text-xs mt-1">{errors.transfer_type}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="active">Active</Label>
@@ -844,7 +1040,7 @@ export default function CircuitTransfersManager() {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="notes">Notes</Label>
-                    <Textarea id="notes" value={form.notes ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, notes: e.target.value }))} />
+                    <Textarea id="notes" value={form.notes ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes..." />
                   </div>
                 </div>
               </div>
@@ -857,39 +1053,66 @@ export default function CircuitTransfersManager() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="coach_capacity">Coach Capacity</Label>
-                    <Input type="number" id="coach_capacity" value={form.coach_capacity ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, coach_capacity: Number(e.target.value) }))} />
+                    <Input type="number" id="coach_capacity" value={form.coach_capacity ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, coach_capacity: Number(e.target.value) }))} placeholder="e.g. 50" />
+                    {errors.coach_capacity && <div className="text-destructive text-xs mt-1">{errors.coach_capacity}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="days">Days</Label>
-                    <Input type="number" id="days" value={form.days ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, days: Number(e.target.value) }))} />
+                    <Input type="number" id="days" value={form.days ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, days: Number(e.target.value) }))} placeholder="e.g. 3" />
+                    {errors.days && <div className="text-destructive text-xs mt-1">{errors.days}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="quote_hours">Quote Hours</Label>
-                    <Input type="number" id="quote_hours" value={form.quote_hours ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, quote_hours: Number(e.target.value) }))} />
+                    <Input type="number" id="quote_hours" value={form.quote_hours ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, quote_hours: Number(e.target.value) }))} placeholder="e.g. 8" />
+                    {errors.quote_hours && <div className="text-destructive text-xs mt-1">{errors.quote_hours}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="expected_hours">Expected Hours</Label>
-                    <Input type="number" id="expected_hours" value={form.expected_hours ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, expected_hours: Number(e.target.value) }))} />
+                    <Input type="number" id="expected_hours" value={form.expected_hours ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, expected_hours: Number(e.target.value) }))} placeholder="e.g. 10" />
+                    {errors.expected_hours && <div className="text-destructive text-xs mt-1">{errors.expected_hours}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="supplier">Supplier</Label>
-                    <Input id="supplier" value={form.supplier ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, supplier: e.target.value }))} />
+                    <Input id="supplier" value={form.supplier ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, supplier: e.target.value }))} placeholder="e.g. ABC Coaches Ltd" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="coach_cost_per_day_local">Coach Cost/Day (Local)</Label>
-                    <Input type="number" id="coach_cost_per_day_local" value={form.coach_cost_per_day_local ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, coach_cost_per_day_local: Number(e.target.value) }))} />
+                    <Input type="number" id="coach_cost_per_day_local" value={form.coach_cost_per_day_local ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, coach_cost_per_day_local: Number(e.target.value) }))} placeholder="e.g. 500" />
+                    {errors.coach_cost_per_day_local && <div className="text-destructive text-xs mt-1">{errors.coach_cost_per_day_local}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="coach_vat">Coach VAT %</Label>
-                    <Input type="number" id="coach_vat" value={form.coach_vat ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, coach_vat: Number(e.target.value) }))} />
+                    <Input type="number" id="coach_vat" value={form.coach_vat ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, coach_vat: Number(e.target.value) }))} placeholder="e.g. 20" />
+                    {errors.coach_vat && <div className="text-destructive text-xs mt-1">{errors.coach_vat}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="parking_ticket_per_coach_per_day">Parking/Coach/Day</Label>
-                    <Input type="number" id="parking_ticket_per_coach_per_day" value={form.parking_ticket_per_coach_per_day ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, parking_ticket_per_coach_per_day: Number(e.target.value) }))} />
+                    <Input type="number" id="parking_ticket_per_coach_per_day" value={form.parking_ticket_per_coach_per_day ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, parking_ticket_per_coach_per_day: Number(e.target.value) }))} placeholder="e.g. 25" />
+                    {errors.parking_ticket_per_coach_per_day && <div className="text-destructive text-xs mt-1">{errors.parking_ticket_per_coach_per_day}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="supplier_currency">Supplier Currency</Label>
-                    <Input id="supplier_currency" value={form.supplier_currency ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, supplier_currency: e.target.value }))} />
+                    <Select
+                      value={form.supplier_currency || 'EUR'}
+                      onValueChange={v => setForm(f => ({ ...f, supplier_currency: v }))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select currency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                        <SelectItem value="GBP">GBP (£)</SelectItem>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="CAD">CAD (C$)</SelectItem>
+                        <SelectItem value="AUD">AUD (A$)</SelectItem>
+                        <SelectItem value="JPY">JPY (¥)</SelectItem>
+                        <SelectItem value="CHF">CHF</SelectItem>
+                        <SelectItem value="SEK">SEK (kr)</SelectItem>
+                        <SelectItem value="NOK">NOK (kr)</SelectItem>
+                        <SelectItem value="DKK">DKK (kr)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.supplier_currency && <div className="text-destructive text-xs mt-1">{errors.supplier_currency}</div>}
                   </div>
                 </div>
               </div>
@@ -901,17 +1124,23 @@ export default function CircuitTransfersManager() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5 flex items-center gap-2">
-                    <Label htmlFor="guide_included">Guide Included</Label>
+                    <Label htmlFor="guide_included">Guide Included in Cost</Label>
                     <Checkbox id="guide_included" checked={!!form.guide_included} onCheckedChange={(checked) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, guide_included: Boolean(checked) }))} />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="guide_cost_per_day">Guide Cost/Day</Label>
-                    <Input type="number" id="guide_cost_per_day" value={form.guide_cost_per_day ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, guide_cost_per_day: Number(e.target.value) }))} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="guide_vat">Guide VAT %</Label>
-                    <Input type="number" id="guide_vat" value={form.guide_vat ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, guide_vat: Number(e.target.value) }))} />
-                  </div>
+                  {!form.guide_included && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="guide_cost_per_day">Guide Cost/Day</Label>
+                        <Input type="number" id="guide_cost_per_day" value={form.guide_cost_per_day ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, guide_cost_per_day: Number(e.target.value) }))} placeholder="e.g. 150" />
+                        {errors.guide_cost_per_day && <div className="text-destructive text-xs mt-1">{errors.guide_cost_per_day}</div>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="guide_vat">Guide VAT %</Label>
+                        <Input type="number" id="guide_vat" value={form.guide_vat ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, guide_vat: Number(e.target.value) }))} placeholder="e.g. 10" />
+                        {errors.guide_vat && <div className="text-destructive text-xs mt-1">{errors.guide_vat}</div>}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               {/* Section 4: Pricing & Utilisation */}
@@ -923,47 +1152,72 @@ export default function CircuitTransfersManager() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="utilisation_percent">Utilisation %</Label>
-                    <Input type="number" id="utilisation_percent" value={form.utilisation_percent ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, utilisation_percent: Number(e.target.value) }))} />
+                    <Input type="number" id="utilisation_percent" value={form.utilisation_percent ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, utilisation_percent: Number(e.target.value) }))} placeholder="e.g. 90" />
+                    {errors.utilisation_percent && <div className="text-destructive text-xs mt-1">{errors.utilisation_percent}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="markup_percent">Markup %</Label>
-                    <Input type="number" id="markup_percent" value={form.markup_percent ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, markup_percent: Number(e.target.value) }))} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Exchange Rate (to GBP)</Label>
-                    <Input type="number" value={exchangeRate} readOnly />
-                    {isFetchingRate && <span className="text-xs text-muted-foreground">Fetching rate...</span>}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Coach Cost Local</Label>
-                    <Input type="number" value={calculated.coach_cost_local} readOnly />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Guide Cost Local</Label>
-                    <Input type="number" value={calculated.guide_cost_local} readOnly />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Utilisation Cost/Seat Local</Label>
-                    <Input type="number" value={calculated.utilisation_cost_per_seat_local} readOnly />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Coach Cost GBP</Label>
-                    <Input type="number" value={calculated.coach_cost_gbp} readOnly />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Guide Cost GBP</Label>
-                    <Input type="number" value={calculated.guide_cost_gbp} readOnly />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Utilisation Cost/Seat GBP</Label>
-                    <Input type="number" value={calculated.utilisation_cost_per_seat_gbp} readOnly />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Sell Price/Seat GBP</Label>
-                    <Input type="number" value={calculated.sell_price_per_seat_gbp} readOnly />
+                    <Input type="number" id="markup_percent" value={form.markup_percent ?? ''} onChange={(e) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, markup_percent: Number(e.target.value) }))} placeholder="e.g. 15" />
+                    {errors.markup_percent && <div className="text-destructive text-xs mt-1">{errors.markup_percent}</div>}
                   </div>
                 </div>
               </div>
+              {/* Cost Breakdown */}
+              <Card className="mt-6 border-primary/30 bg-muted/50">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold">Cost Breakdown</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Coach Extra Cost/Hour (Local)</span>
+                        <span className="text-right">{calculated.coach_extra_cost_per_hour_local.toFixed(2)}</span>
+                      </div>
+                      {!form.guide_included && (
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">Guide Extra Cost/Hour (Local)</span>
+                          <span className="text-right">{calculated.guide_extra_cost_per_hour_local.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Coach Cost Local</span>
+                        <span className="text-right">{calculated.coach_cost_local.toFixed(2)}</span>
+                      </div>
+                      {!form.guide_included && (
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">Guide Cost Local</span>
+                          <span className="text-right">{calculated.guide_cost_local.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Utilisation Cost/Seat Local</span>
+                        <span className="text-right">{calculated.utilisation_cost_per_seat_local.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Coach Cost GBP</span>
+                        <span className="text-right">{calculated.coach_cost_gbp.toFixed(2)}</span>
+                      </div>
+                      {!form.guide_included && (
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">Guide Cost GBP</span>
+                          <span className="text-right">{calculated.guide_cost_gbp.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Utilisation Cost/Seat GBP</span>
+                        <span className="text-right">{calculated.utilisation_cost_per_seat_gbp.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Sell Price/Seat GBP</span>
+                        <span className="text-right">{calculated.sell_price_per_seat_gbp.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </form>
           </div>
           <DrawerFooter>

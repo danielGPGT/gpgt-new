@@ -3,11 +3,12 @@ import { toast } from 'sonner';
 
 export interface TeamMember {
   id: string;
-  subscription_id: string;
+  team_id?: string;
+  subscription_id?: string;
   user_id?: string;
   email: string;
   name?: string;
-  role: 'owner' | 'admin' | 'member';
+  role: 'owner' | 'admin' | 'member' | 'sales' | 'operations';
   status: 'active' | 'invited' | 'inactive';
   invited_at: string;
   joined_at?: string;
@@ -16,14 +17,35 @@ export interface TeamMember {
 
 export interface TeamInvitation {
   id: string;
-  subscription_id: string;
+  team_id?: string;
+  subscription_id?: string;
   email: string;
-  role: 'owner' | 'admin' | 'member';
+  role: 'owner' | 'admin' | 'member' | 'sales' | 'operations';
   invited_by: string;
   token: string;
   expires_at: string;
   status: 'pending' | 'accepted' | 'expired';
   created_at: string;
+}
+
+export interface EventConsultant {
+  id: string;
+  event_id: string;
+  consultant_id: string;
+  assigned_by: string;
+  assigned_at: string;
+  notes?: string;
+  status: 'active' | 'inactive' | 'completed';
+  created_at: string;
+  updated_at: string;
+  consultant?: TeamMember;
+  event?: {
+    id: string;
+    name: string;
+    location?: string;
+    start_date?: string;
+    end_date?: string;
+  };
 }
 
 export interface Team {
@@ -96,7 +118,7 @@ export class TeamService {
   static async inviteTeamMember(
     subscriptionId: string,
     email: string,
-    role: 'admin' | 'member' = 'member'
+    role: 'admin' | 'member' | 'sales' | 'operations' = 'member'
   ) {
     try {
       // Check if user is already a team member
@@ -239,7 +261,7 @@ export class TeamService {
   }
 
   // Update team member role
-  static async updateTeamMemberRole(teamMemberId: string, role: 'admin' | 'member') {
+  static async updateTeamMemberRole(teamMemberId: string, role: 'admin' | 'member' | 'sales' | 'operations') {
     try {
       const { error } = await supabase
         .from('team_members')
@@ -327,5 +349,135 @@ export class TeamService {
       .single();
 
     return teamMember?.role === 'admin';
+  }
+
+  // Consultant Management Methods
+
+  // Get team consultants (sales team members)
+  static async getTeamConsultants(teamId: string): Promise<TeamMember[]> {
+    const { data, error } = await supabase
+      .from('team_members')
+      .select('*')
+      .eq('team_id', teamId)
+      .eq('role', 'sales')
+      .eq('status', 'active')
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Error getting team consultants:', error);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  // Assign consultant to event
+  static async assignConsultantToEvent(
+    eventId: string,
+    consultantId: string,
+    notes?: string
+  ): Promise<string> {
+    const { data, error } = await supabase.rpc('assign_consultant_to_event', {
+      p_event_id: eventId,
+      p_consultant_id: consultantId,
+      p_notes: notes
+    });
+
+    if (error) {
+      console.error('Error assigning consultant to event:', error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  // Get events for a consultant
+  static async getConsultantEvents(consultantId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('get_consultant_events', {
+      p_consultant_id: consultantId
+    });
+
+    if (error) {
+      console.error('Error getting consultant events:', error);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  // Get event consultants
+  static async getEventConsultants(eventId: string): Promise<EventConsultant[]> {
+    const { data, error } = await supabase
+      .from('event_consultants')
+      .select(`
+        *,
+        consultant:team_members(*),
+        event:events(id, name, location, start_date, end_date)
+      `)
+      .eq('event_id', eventId)
+      .eq('status', 'active')
+      .order('assigned_at', { ascending: false });
+
+    if (error) {
+      console.error('Error getting event consultants:', error);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  // Remove consultant from event
+  static async removeConsultantFromEvent(eventId: string, consultantId: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('event_consultants')
+      .update({ 
+        status: 'inactive',
+        updated_at: new Date().toISOString()
+      })
+      .eq('event_id', eventId)
+      .eq('consultant_id', consultantId);
+
+    if (error) {
+      console.error('Error removing consultant from event:', error);
+      throw error;
+    }
+
+    return true;
+  }
+
+  // Check if user is a consultant
+  static async isConsultant(userId: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('team_members')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'sales')
+      .eq('status', 'active')
+      .single();
+
+    if (error) {
+      console.error('Error checking if user is consultant:', error);
+      return false;
+    }
+
+    return !!data;
+  }
+
+  // Get consultant's assigned events
+  static async getMyConsultantEvents(): Promise<any[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data: teamMember } = await supabase
+      .from('team_members')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('role', 'sales')
+      .eq('status', 'active')
+      .single();
+
+    if (!teamMember) return [];
+
+    return this.getConsultantEvents(teamMember.id);
   }
 } 

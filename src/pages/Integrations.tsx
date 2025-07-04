@@ -38,7 +38,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { HubSpotIntegration } from '@/components/integrations/HubSpotIntegration';
-import { useTier } from '@/hooks/useTier';
+
 import { 
   SiHubspot, 
   SiSalesforce, 
@@ -250,7 +250,7 @@ export default function Integrations() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loadingIntegration, setLoadingIntegration] = useState<string | null>(null);
   const [syncingIntegration, setSyncingIntegration] = useState<string | null>(null);
-  const { currentPlan } = useTier();
+
 
   useEffect(() => {
     // Get the user's team ID
@@ -323,22 +323,7 @@ export default function Integrations() {
     ? integrations
     : integrations.filter(i => i.category === selectedCategory);
 
-  const getTierRestrictions = () => {
-    if (currentPlan === 'starter') {
-      return {
-        maxIntegrations: 3,
-        currentIntegrations: 1,
-        message: 'Upgrade to Pro to connect unlimited integrations'
-      };
-    }
-    return {
-      maxIntegrations: 50,
-      currentIntegrations: integrations.length,
-      message: null
-    };
-  };
 
-  const restrictions = getTierRestrictions();
 
   if (loadingIntegration) {
     return (

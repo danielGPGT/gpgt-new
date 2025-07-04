@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { WandSparkles, Instagram, Github, Linkedin, User, Settings, LogOut, ChevronDown, Sun, Moon, Menu, X, Calendar, Clock, Phone, Mail, TrendingUp, Star, Search as SearchIcon, ChevronLeft, ChevronRight, PanelLeft, Crown, HelpCircle, Bell, Plus, ShieldCheck, Briefcase } from 'lucide-react';
+import { WandSparkles, Instagram, Github, Linkedin, User, Settings, LogOut, ChevronDown, Sun, Moon, Menu, X, Calendar, Clock, Phone, Mail, TrendingUp, Star, Search as SearchIcon, ChevronLeft, ChevronRight, PanelLeft, Crown, HelpCircle, Bell, Plus, ShieldCheck, Briefcase, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthProvider';
 import { supabase } from '@/lib/supabase';
@@ -15,10 +15,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import LuxeLogo from '@/assets/imgs/logo.svg';
+
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useRole } from '@/lib/RoleContext';
+import { useEffect } from 'react';
 
 interface HeaderProps {
   showNavigation?: boolean;
@@ -31,7 +32,39 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
   const { theme, setTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const { role, setRole, loading: roleLoading } = useRole();
+  // Role context is no longer used since we show actual team member role
+  // const { role, setRole, loading: roleLoading } = useRole();
+  const [teamMemberRole, setTeamMemberRole] = useState<string | null>(null);
+  const [loadingTeamRole, setLoadingTeamRole] = useState(false);
+
+  // Fetch team member role
+  useEffect(() => {
+    const fetchTeamMemberRole = async () => {
+      if (!user?.id) return;
+      
+      setLoadingTeamRole(true);
+      try {
+        const { data: member, error } = await supabase
+          .from('team_members')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        
+        if (error) {
+          console.error('Error fetching team member role:', error);
+        } else {
+          setTeamMemberRole(member?.role || null);
+        }
+      } catch (error) {
+        console.error('Error fetching team member role:', error);
+      } finally {
+        setLoadingTeamRole(false);
+      }
+    };
+
+    fetchTeamMemberRole();
+  }, [user?.id]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -91,7 +124,7 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button asChild size="small" className="p-1 bg-primary rounded-full hover:bg-primary/80 text-primary-foreground ml-1">
+              <Button asChild size="xs" className="p-1 bg-primary rounded-full hover:bg-primary/80 text-primary-foreground ml-1">
                 <Link to="/new-proposal">
                   <Plus className="h-6 w-6" />
                 </Link>
@@ -99,30 +132,66 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
             </TooltipTrigger>
             <TooltipContent variant="default">+ New Proposal</TooltipContent>
           </Tooltip>
-          {/* Role Switcher */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="px-3 py-1 shadow-sm font-semibold uppercase gap-1 flex items-center">
-                {role === 'operations' ? (
-                  <ShieldCheck className="w-4 h-4 text-green-600" />
-                ) : (
-                  <Briefcase className="w-4 h-4 text-blue-600" />
-                )}
-                {roleLoading ? 'Loading...' : role === 'operations' ? 'Operations' : 'Sales'}
-                <ChevronDown className="w-4 h-4 ml-1" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Switch Role (Demo)</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setRole('operations')}>
-                <ShieldCheck className="w-4 h-4 mr-2 text-green-600" /> Operations (Full CRUD)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setRole('sales')}>
-                <Briefcase className="w-4 h-4 mr-2 text-blue-600" /> Sales (Read Only)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Team Member Role Badge - Switchable for Testing */}
+          {user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="px-3 py-1 shadow-sm font-semibold uppercase gap-1 flex items-center">
+                  {loadingTeamRole ? (
+                    <div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : teamMemberRole === 'owner' ? (
+                    <Crown className="w-4 h-4 text-primary" />
+                  ) : teamMemberRole === 'admin' ? (
+                    <ShieldCheck className="w-4 h-4 text-primary" />
+                  ) : teamMemberRole === 'sales' ? (
+                    <Briefcase className="w-4 h-4 text-primary" />
+                  ) : teamMemberRole === 'operations' ? (
+                    <ShieldCheck className="w-4 h-4 text-primary" />
+                  ) : (
+                    <User className="w-4 h-4 text-primary" />
+                  )}
+                  {loadingTeamRole ? 'Loading...' : teamMemberRole ? teamMemberRole.charAt(0).toUpperCase() + teamMemberRole.slice(1) : 'Member'}
+                  <ChevronDown className="w-4 h-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Switch Role (Testing)</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setTeamMemberRole('owner')}>
+                  <Crown className="w-4 h-4 mr-2 text-primary" /> Owner
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTeamMemberRole('admin')}>
+                  <ShieldCheck className="w-4 h-4 mr-2 text-primary" /> Admin
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTeamMemberRole('sales')}>
+                  <Briefcase className="w-4 h-4 mr-2 text-primary" /> Sales
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTeamMemberRole('operations')}>
+                  <ShieldCheck className="w-4 h-4 mr-2 text-primary" /> Operations
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTeamMemberRole('member')}>
+                  <User className="w-4 h-4 mr-2 text-primary" /> Member
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => {
+                  // Reset to actual database role
+                  const fetchTeamMemberRole = async () => {
+                    if (!user?.id) return;
+                    const { data: member } = await supabase
+                      .from('team_members')
+                      .select('role')
+                      .eq('user_id', user.id)
+                      .eq('status', 'active')
+                      .maybeSingle();
+                    setTeamMemberRole(member?.role || null);
+                  };
+                  fetchTeamMemberRole();
+                }}>
+                  <RefreshCw className="w-4 h-4 mr-2" /> Reset to Database Role
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
         {/* Divider (desktop only) */}
         <div className="hidden sm:block h-8 w-px bg-border mx-3" />

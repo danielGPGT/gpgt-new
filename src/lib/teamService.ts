@@ -8,6 +8,7 @@ export interface TeamMember {
   user_id?: string;
   email: string;
   name?: string;
+  phone?: string;
   role: 'owner' | 'admin' | 'member' | 'sales' | 'operations';
   status: 'active' | 'invited' | 'inactive';
   invited_at: string;

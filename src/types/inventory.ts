@@ -142,6 +142,25 @@ export interface EventWithRelations extends Event {
   flights?: Flight[];
   lounge_passes?: LoungePass[];
   packages?: Package[];
+  event_consultants?: EventConsultant[];
+}
+
+export interface EventConsultant {
+  id: string;
+  event_id: string;
+  consultant_id: string;
+  assigned_at: string;
+  notes?: string;
+  status: 'active' | 'inactive' | 'completed';
+  created_at: string;
+  updated_at: string;
+  consultant?: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    role: string;
+  };
 }
 
 export interface TicketWithEvent extends Ticket {

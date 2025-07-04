@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { HubSpotIntegration } from '@/components/HubSpotIntegration';
-import { User, KeyRound, CreditCard, Settings as SettingsIcon, Users, Building2, Phone, Upload, Loader2, Sparkles, Shield, Mail, Link } from 'lucide-react';
+import { User, KeyRound, CreditCard, Settings as SettingsIcon, Users, Building2, Phone, Upload, Loader2, Sparkles, Shield, Mail, Link, Check, X, Edit } from 'lucide-react';
 import { useAuth } from '@/lib/AuthProvider';
 
 import { Badge } from '@/components/ui/badge';
@@ -37,13 +37,21 @@ const ProfileSettings = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
+  const [showEmailChange, setShowEmailChange] = useState(false);
   
   // Form state
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [confirmNewEmail, setConfirmNewEmail] = useState('');
   const [agencyName, setAgencyName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  
+  // Team member data
+  const [teamMemberId, setTeamMemberId] = useState<string | null>(null);
 
   // Load user data on component mount
   useEffect(() => {
@@ -51,10 +59,42 @@ const ProfileSettings = () => {
       console.log('Loading user data:', user.user_metadata);
       setName(user.user_metadata?.name || '');
       setPhone(user.user_metadata?.phone || '');
+      setEmail(user.email || '');
       setAgencyName(user.user_metadata?.agency_name || '');
       setLogoUrl(user.user_metadata?.logo_url || '');
+      
+      // Load team member data
+      loadTeamMemberData();
     }
   }, [user]);
+
+  const loadTeamMemberData = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: teamMember, error } = await supabase
+        .from('team_members')
+        .select('id, name, email, phone')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      if (error) {
+        console.error('Error loading team member data:', error);
+        return;
+      }
+
+      if (teamMember) {
+        setTeamMemberId(teamMember.id);
+        // Use team member data if available, otherwise fall back to user metadata
+        setName(teamMember.name || user.user_metadata?.name || '');
+        setPhone(teamMember.phone || user.user_metadata?.phone || '');
+        setEmail(teamMember.email || user.email || '');
+      }
+    } catch (error) {
+      console.error('Error loading team member data:', error);
+    }
+  };
 
   const refreshUserData = async () => {
     const { data: { user: refreshedUser } } = await supabase.auth.getUser();
@@ -117,14 +157,58 @@ const ProfileSettings = () => {
     }
   };
 
+  // Add phone formatting function
+  const formatPhoneNumber = (value: string): string => {
+    // Remove all non-digits
+    const phoneNumber = value.replace(/\D/g, '');
+    
+    // Format based on length
+    if (phoneNumber.length === 0) return '';
+    if (phoneNumber.length <= 3) return `(${phoneNumber}`;
+    if (phoneNumber.length <= 6) return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`;
+    if (phoneNumber.length <= 10) return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6)}`;
+    
+    // For longer numbers (international), just add spaces
+    return phoneNumber.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setPhone(formatted);
+  };
+
+  // Update phone validation to be more lenient
+  const validatePhone = (phone: string): boolean => {
+    // Remove formatting and check if it's a reasonable length
+    const digitsOnly = phone.replace(/\D/g, '');
+    return digitsOnly.length >= 10 && digitsOnly.length <= 15;
+  };
+
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSave = async () => {
     if (!user) return;
+    
+    // Validate inputs
+    if (name.trim().length < 2) {
+      toast.error('Name must be at least 2 characters long');
+      return;
+    }
+
+    if (phone && !validatePhone(phone)) {
+      toast.error('Please enter a valid phone number');
+      return;
+    }
     
     setIsLoading(true);
     try {
       console.log('Saving profile with data:', {
         name,
         phone,
+        email,
         agency_name: agencyName,
         logo_url: logoUrl,
       });
@@ -165,12 +249,32 @@ const ProfileSettings = () => {
         console.log('Users table updated successfully');
       }
 
-    toast.success('Profile updated successfully');
+      // Update team_members table if user is a team member
+      if (teamMemberId) {
+        const { error: teamError } = await supabase
+          .from('team_members')
+          .update({
+            name,
+            phone,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', teamMemberId);
+
+        if (teamError) {
+          console.error('Team member update error:', teamError);
+          // Don't throw here as other updates succeeded
+        } else {
+          console.log('Team member table updated successfully');
+        }
+      }
+
+      toast.success('Profile updated successfully');
       setIsEditing(false);
       setLogoFile(null);
       
       // Refresh user data to show updated values
       await refreshUserData();
+      await loadTeamMemberData();
       
     } catch (error: any) {
       console.error('Save error:', error);
@@ -185,11 +289,62 @@ const ProfileSettings = () => {
     if (user) {
       setName(user.user_metadata?.name || '');
       setPhone(user.user_metadata?.phone || '');
+      setEmail(user.email || '');
       setAgencyName(user.user_metadata?.agency_name || '');
       setLogoUrl(user.user_metadata?.logo_url || '');
     }
     setLogoFile(null);
     setIsEditing(false);
+    setShowEmailChange(false);
+    setNewEmail('');
+    setConfirmNewEmail('');
+  };
+
+  const handleEmailChange = async () => {
+    if (!user) return;
+
+    // Validate email
+    if (!validateEmail(newEmail)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    if (newEmail !== confirmNewEmail) {
+      toast.error('Email addresses do not match');
+      return;
+    }
+
+    if (newEmail === email) {
+      toast.error('New email must be different from current email');
+      return;
+    }
+
+    setIsChangingEmail(true);
+    try {
+      // Update email in Supabase Auth (this will send verification email)
+      const { error } = await supabase.auth.updateUser({
+        email: newEmail
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('Verification email sent to your new email address. Please check your inbox and click the verification link.');
+      setShowEmailChange(false);
+      setNewEmail('');
+      setConfirmNewEmail('');
+      
+      // Refresh user data
+      await refreshUserData();
+      await loadTeamMemberData();
+      
+    } catch (error: any) {
+      console.error('Email change error:', error);
+      toast.error('Failed to update email: ' + error.message);
+    } finally {
+      setIsChangingEmail(false);
+    }
   };
 
   return (
@@ -254,66 +409,18 @@ const ProfileSettings = () => {
 
       {/* Profile Information */}
       <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <User className="h-5 w-5 text-primary" />
-            Personal Information
-          </CardTitle>
-          <CardDescription>
-            Update your contact details and agency information
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium">Full Name</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={!isEditing}
-                placeholder="Enter your full name"
-                className="h-11 rounded-xl"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
-              <Input
-                id="email"
-                value={user?.email || ''}
-                disabled
-                className="h-11 bg-muted/50 rounded-xl"
-              />
-              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm font-medium">Phone Number</Label>
-              <Input
-                id="phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={!isEditing}
-                placeholder="Enter your phone number"
-                className="h-11 rounded-xl"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="agencyName" className="text-sm font-medium">Agency Name</Label>
-              <Input
-                id="agencyName"
-                value={agencyName}
-                onChange={(e) => setAgencyName(e.target.value)}
-                disabled={!isEditing}
-                placeholder="Enter your agency name"
-                className="h-11 rounded-xl"
-              />
-            </div>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <User className="h-5 w-5 text-primary" />
+              Personal Information
+            </CardTitle>
+            <CardDescription>
+              Update your contact details and agency information
+            </CardDescription>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Action Buttons */}
-      <div className="flex justify-end gap-4 pt-6 border-t border-border/50">
+           {/* Action Buttons */}
+      <div className="flex justify-end gap-4">
         {isEditing ? (
           <>
             <Button
@@ -348,6 +455,144 @@ const ProfileSettings = () => {
           </Button>
         )}
       </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="name" className="text-sm font-medium">Full Name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={!isEditing}
+                placeholder="Enter your full name"
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
+              <Input
+                id="email"
+                value={email}
+                disabled
+                className="h-11 bg-muted/50 rounded-xl"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowEmailChange(!showEmailChange)}
+                className="mt-2"
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Change Email
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="text-sm font-medium">Phone Number</Label>
+              <Input
+                id="phone"
+                value={phone}
+                onChange={handlePhoneChange}
+                disabled={!isEditing}
+                placeholder="(555) 123-4567"
+                className="h-11 rounded-xl"
+                type="tel"
+              />
+              <p className="text-xs text-muted-foreground">Enter your phone number with area code</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="agencyName" className="text-sm font-medium">Agency Name</Label>
+              <Input
+                id="agencyName"
+                value={agencyName}
+                onChange={(e) => setAgencyName(e.target.value)}
+                disabled={!isEditing}
+                placeholder="Enter your agency name"
+                className="h-11 rounded-xl"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Email Change Section */}
+      {showEmailChange && (
+        <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Mail className="h-5 w-5 text-primary" />
+              Change Email Address
+            </CardTitle>
+            <CardDescription>
+              Update your email address. You'll receive a verification email to confirm the change.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="newEmail" className="text-sm font-medium">New Email Address</Label>
+                <Input
+                  id="newEmail"
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="Enter new email address"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmNewEmail" className="text-sm font-medium">Confirm New Email</Label>
+                <Input
+                  id="confirmNewEmail"
+                  type="email"
+                  value={confirmNewEmail}
+                  onChange={(e) => setConfirmNewEmail(e.target.value)}
+                  placeholder="Confirm new email address"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleEmailChange}
+                disabled={isChangingEmail || !newEmail || !confirmNewEmail}
+                className="px-6 bg-primary hover:bg-primary/90 rounded-xl"
+              >
+                {isChangingEmail ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Sending...
+                  </>
+                ) : (
+                  'Send Verification Email'
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowEmailChange(false);
+                  setNewEmail('');
+                  setConfirmNewEmail('');
+                }}
+                disabled={isChangingEmail}
+                className="px-6 rounded-xl"
+              >
+                Cancel
+              </Button>
+            </div>
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+              <p className="text-sm text-blue-800">
+                <Shield className="h-4 w-4 inline mr-2" />
+                <strong>Security Note:</strong> You'll receive a verification email at your new address. 
+                Click the verification link to complete the email change.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+     
     </div>
   );
 };
@@ -543,6 +788,8 @@ const TeamManagement = () => {
   const [selectedRole, setSelectedRole] = useState<'member' | 'admin' | 'sales' | 'operations'>('member');
   const [loading, setLoading] = useState(false);
   const [teamRole, setTeamRole] = useState<string | null>(null);
+  const [editingRole, setEditingRole] = useState<string | null>(null);
+  const [newRole, setNewRole] = useState<string>('');
 
   useEffect(() => {
     async function fetchRole() {
@@ -871,6 +1118,87 @@ const TeamManagement = () => {
   };
 
   const canInviteMembers = teamRole === 'admin' || teamRole === 'owner';
+  const canManageRoles = teamRole === 'admin' || teamRole === 'owner';
+
+  // Function to handle role changes
+  const handleRoleChange = async (memberId: string, newRole: string) => {
+    if (!user?.id) return;
+    
+    try {
+      setLoading(true);
+      
+      // Update the team member's role
+      const { error } = await supabase
+        .from('team_members')
+        .update({ 
+          role: newRole,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', memberId);
+      
+      if (error) {
+        console.error('Error updating role:', error);
+        toast.error('Failed to update role');
+        return;
+      }
+      
+      toast.success('Role updated successfully');
+      setEditingRole(null);
+      setNewRole('');
+      
+      // Refresh team data
+      const fetchTeamData = async () => {
+        try {
+          let team = null;
+          
+          // Find user's team
+          const { data: memberTeams } = await supabase
+            .from('team_members')
+            .select('team_id')
+            .eq('user_id', user.id)
+            .eq('status', 'active');
+          
+          if (memberTeams && memberTeams.length > 0) {
+            const { data: teamsAsMember } = await supabase
+              .from('teams')
+              .select('id')
+              .in('id', memberTeams.map(tm => tm.team_id))
+              .single();
+            team = teamsAsMember;
+          }
+          
+          if (!team) {
+            const { data: ownedTeam } = await supabase
+              .from('teams')
+              .select('id')
+              .eq('owner_id', user.id)
+              .single();
+            team = ownedTeam;
+          }
+          
+          if (!team || !team.id) return;
+          
+          // Refresh team members
+          const { data: members } = await supabase
+            .from('team_members')
+            .select('id, name, email, role, status')
+            .eq('team_id', team.id);
+          
+          setTeamMembers((members as TeamMember[]) || []);
+        } catch (err) {
+          console.error('Error refreshing team data:', err);
+        }
+      };
+      
+      await fetchTeamData();
+      
+    } catch (error) {
+      console.error('Error changing role:', error);
+      toast.error('Failed to update role');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Function to resend invitation link
   const handleResendEmail = async (invitationId: string, email: string) => {
@@ -1034,7 +1362,62 @@ const TeamManagement = () => {
                     <p className="text-sm text-muted-foreground">{member.email}</p>
                   </div>
                 </div>
-                <Badge variant="secondary" className="capitalize">{member.role}</Badge>
+                <div className="flex items-center gap-2">
+                  {editingRole === member.id ? (
+                    <div className="flex items-center gap-2">
+                      <Select 
+                        value={newRole} 
+                        onValueChange={(value: string) => setNewRole(value)}
+                      >
+                        <SelectTrigger className="w-32 h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="member">Member</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="sales">Sales</SelectItem>
+                          <SelectItem value="operations">Operations</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        onClick={() => handleRoleChange(member.id, newRole)}
+                        disabled={loading || !newRole}
+                        className="h-8 px-2"
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingRole(null);
+                          setNewRole('');
+                        }}
+                        className="h-8 px-2"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="capitalize">{member.role}</Badge>
+                      {canManageRoles && member.role !== 'owner' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingRole(member.id);
+                            setNewRole(member.role);
+                          }}
+                          className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             ))
           )}
@@ -1192,10 +1575,6 @@ export function Settings() {
                 <Users className="mr-2 h-4 w-4" />
                 Team
               </TabsTrigger>
-              <TabsTrigger value="integrations" className="transition-all duration-200 text-base py-4 rounded-xl">
-                <Link className="mr-2 h-4 w-4" />
-                Integrations
-              </TabsTrigger>
               <TabsTrigger value="security" className="transition-all duration-200 text-base py-4 rounded-xl">
                 <KeyRound className="mr-2 h-4 w-4" />
                 Security
@@ -1207,15 +1586,6 @@ export function Settings() {
             </TabsContent>
             <TabsContent value="team" className="space-y-4 p-8">
               <TeamManagement />
-            </TabsContent>
-            <TabsContent value="integrations" className="space-y-4 p-8">
-              {(teamRole === 'admin' || teamRole === 'owner') ? (
-                <HubSpotIntegration />
-              ) : (
-                <div className="text-muted-foreground">
-                  You do not have permission to manage integrations.
-                </div>
-              )}
             </TabsContent>
             <TabsContent value="security" className="space-y-4 p-8">
               <SecuritySettings />

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
 import { InventoryService } from '@/lib/inventoryService';
-import type { Sport, SportInsert, SportUpdate, Event, EventInsert, EventUpdate, Venue } from '@/types/inventory';
+import type { Sport, SportInsert, SportUpdate, Event, EventInsert, EventUpdate, Venue, EventWithRelations } from '@/types/inventory';
 import { Plus, Edit, Trash2, Calendar, Search, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, Image } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogClose, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -19,6 +19,7 @@ import type { MediaItem } from '@/lib/mediaLibrary';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { SportForm } from '@/components/forms/SportForm';
+import { EventConsultantSelector } from '@/components/EventConsultantSelector';
 
 // Utility to clean event form data for update
 export function cleanEventUpdate(data: any) {
@@ -81,7 +82,7 @@ export function SportsEventsManager() {
   const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ['events', selectedSport?.id ?? 'all'],
     queryFn: () => selectedSport ? InventoryService.getEvents({ sport_id: selectedSport.id }) : InventoryService.getEvents(),
-  });
+  }) as { data: EventWithRelations[], isLoading: boolean };
 
   // Fetch venues for event form
   const { data: venues = [] } = useQuery({
@@ -373,6 +374,7 @@ export function SportsEventsManager() {
                       )}
                     </span>
                   </TableHead>
+                  <TableHead>Consultant</TableHead>
                   <TableHead className='text-right'>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -404,6 +406,33 @@ export function SportsEventsManager() {
                           <Badge variant="default">Active</Badge>
                         )}
                       </TableCell>
+                      <TableCell>
+                        {event.event_consultants && event.event_consultants.length > 0 ? (
+                          <div className="space-y-1">
+                            {event.event_consultants.map(consultant => (
+                              <div key={consultant.id} className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {consultant.consultant?.name || consultant.consultant?.email || 'Unknown'}
+                                  </Badge>
+                                  {consultant.status !== 'active' && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {consultant.status}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {consultant.consultant?.phone && (
+                                  <div className="text-xs text-muted-foreground">
+                                    📞 {consultant.consultant.phone}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className='text-right'>
                         <Button size="icon" variant="ghost" onClick={() => { setEditingEvent(event); setEventDrawerOpen(true); }}><Edit className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" onClick={() => setConfirmDeleteEvent(event)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
@@ -412,7 +441,7 @@ export function SportsEventsManager() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       <AlertTriangle className="inline-block mr-2 text-yellow-500" />
                       No events found
                     </TableCell>
@@ -933,6 +962,21 @@ function EventFormDrawer({ event, sportId, sports, venues, onSubmit, onCancel, i
           </DialogContent>
         </Dialog>
       </div>
+      
+      {/* Consultant Assignment - Only show for existing events */}
+      {event && (
+        <div className="space-y-4 pt-4 border-t">
+          <EventConsultantSelector
+            eventId={event.id}
+            eventName={event.name}
+            compact={true}
+            onConsultantAssigned={() => {
+              // Optionally refresh data or show success message
+              console.log('Consultant assigned to event:', event.name);
+            }}
+          />
+        </div>
+      )}
       
       <DrawerFooter>
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>

@@ -80,11 +80,6 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
       href: "/media-library",
       premium: true,
     },
-    {
-      label: "Package Builder",
-      icon: PackageIcon,
-      href: "/package-builder",
-    },
   ];
 
   // CRM section

@@ -6,14 +6,16 @@ type Role = 'operations' | 'sales';
 interface RoleContextValue {
   role: Role;
   setRole: (role: Role) => void;
+  loading: boolean;
 }
 
 const RoleContext = createContext<RoleContextValue | undefined>(undefined);
 
 export const RoleProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<Role>('operations');
+  const [loading, setLoading] = useState(false);
   return (
-    <RoleContext.Provider value={{ role, setRole }}>
+    <RoleContext.Provider value={{ role, setRole, loading }}>
       {children}
     </RoleContext.Provider>
   );

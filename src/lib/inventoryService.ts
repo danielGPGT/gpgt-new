@@ -60,13 +60,27 @@ import type {
 
 export class InventoryService {
   // Events
-  static async getEvents(filters?: InventoryFilters): Promise<Event[]> {
+  static async getEvents(filters?: InventoryFilters): Promise<EventWithRelations[]> {
     let query = supabase
       .from('events')
       .select(`
         *,
         sport:sports(*),
-        venue:venues(*)
+        venue:venues(*),
+        event_consultants(
+          id,
+          consultant_id,
+          assigned_at,
+          notes,
+          status,
+          consultant:team_members(
+            id,
+            name,
+            email,
+            phone,
+            role
+          )
+        )
       `);
 
     if (filters?.sport_id) {

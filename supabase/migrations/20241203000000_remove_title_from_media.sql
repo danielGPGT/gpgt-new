@@ -1,1 +1,0 @@
-ALTER TABLE public.media_library DROP COLUMN IF EXISTS title; 

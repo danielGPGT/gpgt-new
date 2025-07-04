@@ -20,10 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 import { PackageManagerService } from '@/lib/packageManagerService';
 import type { Event, EventInsert, EventUpdate, Sport, Venue } from '@/lib/packageManagerService';
 import { cleanEventUpdate } from '@/components/inventory/SportsEventsManager';
+import { EventConsultantSelector } from '@/components/EventConsultantSelector';
 
 interface EventFormProps {
   open: boolean;
@@ -43,6 +49,73 @@ export function EventForm({ open, onOpenChange, event, sports, venues }: EventFo
     sport_id: event?.sport_id || '',
     venue_id: event?.venue_id || '',
   });
+
+  // Convert string dates to Date objects for the calendar
+  const startDate = formData.start_date ? new Date(formData.start_date) : undefined;
+  const endDate = formData.end_date ? new Date(formData.end_date) : undefined;
+
+  // State for calendar month navigation
+  const [startDateMonth, setStartDateMonth] = useState<Date>(startDate || new Date());
+  const [endDateMonth, setEndDateMonth] = useState<Date>(endDate || new Date());
+
+  // Generate years array (current year - 3 to current year + 17)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 21 }, (_, i) => currentYear - 3 + i);
+
+  // Generate months array
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  // Handle start date change and auto-set end date to 2 days later
+  const handleStartDateChange = (date: Date | undefined) => {
+    if (date) {
+      const startDateStr = format(date, 'yyyy-MM-dd');
+      const endDate = new Date(date);
+      endDate.setDate(endDate.getDate() + 2);
+      const endDateStr = format(endDate, 'yyyy-MM-dd');
+      
+      setFormData(prev => ({
+        ...prev,
+        start_date: startDateStr,
+        end_date: endDateStr
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        start_date: '',
+        end_date: ''
+      }));
+    }
+  };
+
+  // Handle end date change
+  const handleEndDateChange = (date: Date | undefined) => {
+    if (date) {
+      const endDateStr = format(date, 'yyyy-MM-dd');
+      setFormData(prev => ({
+        ...prev,
+        end_date: endDateStr
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        end_date: ''
+      }));
+    }
+  };
+
+  // Handle month navigation
+  const handleStartMonthChange = (month: number, year: number) => {
+    const newDate = new Date(year, month, 1);
+    setStartDateMonth(newDate);
+  };
+
+  const handleEndMonthChange = (month: number, year: number) => {
+    const newDate = new Date(year, month, 1);
+    setEndDateMonth(newDate);
+  };
 
   const createEventMutation = useMutation({
     mutationFn: (data: EventInsert) => PackageManagerService.createEvent(data),
@@ -83,7 +156,7 @@ export function EventForm({ open, onOpenChange, event, sports, venues }: EventFo
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
-      <DrawerContent>
+      <DrawerContent className='!max-w-4xl'>
         <DrawerHeader>
           <DrawerTitle>{event ? 'Edit Event' : 'Add New Event'}</DrawerTitle>
           <DrawerDescription>
@@ -91,7 +164,7 @@ export function EventForm({ open, onOpenChange, event, sports, venues }: EventFo
           </DrawerDescription>
         </DrawerHeader>
         <div className="flex-1 overflow-y-auto px-4 py-3">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Event Name *</Label>
@@ -99,7 +172,7 @@ export function EventForm({ open, onOpenChange, event, sports, venues }: EventFo
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., Monaco Grand Prix 2024"
+                  placeholder="e.g., Monaco Grand Prix 2026"
                   required
                 />
               </div>
@@ -162,24 +235,146 @@ export function EventForm({ open, onOpenChange, event, sports, venues }: EventFo
 
               <div className="space-y-2">
                 <Label htmlFor="start_date">Start Date</Label>
-                <Input
-                  id="start_date"
-                  type="date"
-                  value={formData.start_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !startDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {startDate ? format(startDate, "PPP") : <span>Pick a start date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <div className="p-3 border-b">
+                      <div className="flex items-center justify-between mb-2">
+                        <Select
+                          value={startDateMonth.getMonth().toString()}
+                          onValueChange={(value) => handleStartMonthChange(parseInt(value), startDateMonth.getFullYear())}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {months.map((month, index) => (
+                              <SelectItem key={index} value={index.toString()}>
+                                {month}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={startDateMonth.getFullYear().toString()}
+                          onValueChange={(value) => handleStartMonthChange(startDateMonth.getMonth(), parseInt(value))}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {years.map((year) => (
+                              <SelectItem key={year} value={year.toString()}>
+                                {year}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Calendar
+                      mode="single"
+                      selected={startDate}
+                      onSelect={handleStartDateChange}
+                      month={startDateMonth}
+                      onMonthChange={setStartDateMonth}
+                      initialFocus
+                      disabled={(date) => date < new Date()}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="end_date">End Date</Label>
-                <Input
-                  id="end_date"
-                  type="date"
-                  value={formData.end_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !endDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {endDate ? format(endDate, "PPP") : <span>Pick an end date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <div className="p-3 border-b">
+                      <div className="flex items-center justify-between mb-2">
+                        <Select
+                          value={endDateMonth.getMonth().toString()}
+                          onValueChange={(value) => handleEndMonthChange(parseInt(value), endDateMonth.getFullYear())}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {months.map((month, index) => (
+                              <SelectItem key={index} value={index.toString()}>
+                                {month}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={endDateMonth.getFullYear().toString()}
+                          onValueChange={(value) => handleEndMonthChange(endDateMonth.getMonth(), parseInt(value))}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {years.map((year) => (
+                              <SelectItem key={year} value={year.toString()}>
+                                {year}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Calendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={handleEndDateChange}
+                      month={endDateMonth}
+                      onMonthChange={setEndDateMonth}
+                      initialFocus
+                      disabled={(date) => 
+                        date < new Date() || 
+                        (startDate ? date < startDate : false)
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
+
+            {/* Consultant Assignment - Only show for existing events */}
+            {event && (
+              <EventConsultantSelector
+                eventId={event.id}
+                eventName={event.name}
+                compact={true}
+                onConsultantAssigned={() => {
+                  // Optionally refresh data or show success message
+                  toast.success('Consultant assignment updated');
+                }}
+              />
+            )}
           </form>
         </div>
         <DrawerFooter>

@@ -70,7 +70,7 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
   const navItems = [
     { label: "Dashboard", icon: Home, href: "/dashboard" },
     { label: "Analytics", icon: BarChart3, href: "/analytics" },
-    { label: "New Proposal", icon: FilePlus2, href: "/new-proposal" },
+    { label: "New Proposal", icon: FilePlus2, href: "/package-intake-test" },
     { label: "Quotes", icon: FileText, href: "/quotes" },
     { label: "Bookings", icon: CheckCircle, href: "/bookings" },
     { label: "Itineraries", icon: Calendar, href: "/itineraries" },
@@ -197,19 +197,6 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
               >
                 <Trophy className="w-5 h-5" />
                 {!collapsed && <span className="truncate flex-1 text-left">Package Manager</span>}
-              </Button>
-            </Link>
-            <Link to="/package-intake-test" tabIndex={collapsed ? -1 : 0}>
-              <Button
-                variant="ghost"
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                  location.pathname.startsWith('/package-intake-test')
-                    ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] font-semibold"
-                    : "text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]"
-                } ${collapsed ? "justify-center px-2" : "justify-start"}`}
-              >
-                <Trophy className="w-5 h-5" />
-                {!collapsed && <span className="truncate flex-1 text-left">Package Intake Test</span>}
               </Button>
             </Link>
           </div>

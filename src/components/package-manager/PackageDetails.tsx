@@ -251,7 +251,7 @@ export function PackageDetails({ event, packages, onClose }: PackageDetailsProps
       <div className="border-b border-border p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold">{event.name}</h2>
+            <h2 className="text-xl font-semibold">{event.name} Packages</h2>
             <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
               <div className="flex items-center gap-1">
                 <Trophy className="h-4 w-4" />
@@ -263,7 +263,7 @@ export function PackageDetails({ event, packages, onClose }: PackageDetailsProps
               </div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
-                <span>{event.start_date}</span>
+                <span>{event.start_date} - {event.end_date}</span>
               </div>
             </div>
           </div>
@@ -517,6 +517,19 @@ function PackageCard({
           </DropdownMenu>
         </div>
       </CardHeader>
+      
+      {/* Package Image */}
+      {pkg.package_image && (
+        <div className="px-4 pb-2">
+          <div className="w-full h-32 rounded-lg overflow-hidden">
+            <img 
+              src={pkg.package_image.image_url || pkg.package_image.thumbnail_url} 
+              alt={pkg.package_image.description || 'Package image'} 
+              className="object-cover w-full h-full" 
+            />
+          </div>
+        </div>
+      )}
       
       {pkg.description && (
         <CardContent className="pt-0 pb-2">

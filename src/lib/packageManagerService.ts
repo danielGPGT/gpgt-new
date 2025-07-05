@@ -104,6 +104,7 @@ export interface Package {
   description?: string;
   base_type?: string;
   active?: boolean;
+  package_image?: any;
   event?: Event;
   tiers?: PackageTier[];
   created_at: string;
@@ -117,6 +118,7 @@ export interface PackageInsert {
   description?: string;
   base_type?: string;
   active?: boolean;
+  package_image?: any;
 }
 
 export interface PackageUpdate {
@@ -126,6 +128,7 @@ export interface PackageUpdate {
   description?: string;
   base_type?: string;
   active?: boolean;
+  package_image?: any;
 }
 
 export interface PackageTier {

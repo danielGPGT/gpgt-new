@@ -45,6 +45,7 @@ import { NewIntakeTest } from "./pages/NewIntakeTest";
 import PackageBuilderPage from './pages/PackageBuilderPage';
 import InventoryPage from './pages/Inventory';
 import PackageManager from './pages/PackageManager';
+import { PackageIntakeTest } from "./pages/PackageIntakeTest";
 import "./App.css";
 
 // Create a client
@@ -199,6 +200,7 @@ function AppContent() {
                   <Route path="/inventory" element={<InventoryPage />} />
                   {/* Package Manager Route */}
                   <Route path="/package-manager" element={<PackageManager />} />
+                  <Route path="/package-intake-test" element={<PackageIntakeTest />} />
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
 
                 </Routes>

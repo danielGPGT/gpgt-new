@@ -735,12 +735,6 @@ export default function PackageManager() {
       {selectedEvent && (
         <Sheet open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
           <SheetContent className="w-[800px] sm:max-w-[800px]">
-            <SheetHeader>
-              <SheetTitle>{selectedEvent.name} - Packages</SheetTitle>
-              <SheetDescription>
-                Manage packages and tiers for this event
-              </SheetDescription>
-            </SheetHeader>
             <PackageDetails 
               event={selectedEvent} 
               packages={packages || []}

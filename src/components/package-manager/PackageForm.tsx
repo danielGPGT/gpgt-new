@@ -10,6 +10,14 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +35,8 @@ import { Info } from 'lucide-react';
 
 import { PackageManagerService } from '@/lib/packageManagerService';
 import type { Package as PackageType, PackageInsert, PackageUpdate, Event } from '@/lib/packageManagerService';
+import MediaLibrarySelector from '@/components/MediaLibrarySelector';
+import type { MediaItem } from '@/lib/mediaLibrary';
 
 interface PackageFormProps {
   open: boolean;
@@ -55,16 +65,50 @@ export function PackageForm({ open, onOpenChange, package: packageData, events, 
     base_type: packageData?.base_type || '',
     event_id: event?.id || '',
     active: packageData?.active ?? true,
+    package_image: packageData?.package_image || null,
   });
+
+  // State for media library selector
+  const [showImageSelector, setShowImageSelector] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<MediaItem[]>([]);
+
+  // Update form data when packageData changes (for editing)
+  useEffect(() => {
+    if (packageData) {
+      setFormData({
+        name: packageData.name || '',
+        slug: packageData.slug || '',
+        description: packageData.description || '',
+        base_type: packageData.base_type || '',
+        event_id: event?.id || '',
+        active: packageData.active ?? true,
+        package_image: packageData.package_image || null,
+      });
+      // Also update selected images for the media library selector
+      setSelectedImages(packageData.package_image ? [packageData.package_image] : []);
+    } else {
+      // Reset form for new package
+      setFormData({
+        name: '',
+        slug: '',
+        description: '',
+        base_type: '',
+        event_id: event?.id || '',
+        active: true,
+        package_image: null,
+      });
+      setSelectedImages([]);
+    }
+  }, [packageData, event?.id]);
 
   // Check if a package of the selected type already exists
   const existingPackageOfType = existingPackages?.find(pkg => 
     pkg.base_type === formData.base_type && pkg.id !== packageData?.id
   );
 
-  // Get available package types (types that don't have packages yet)
+  // Get available package types (types that don't have packages yet, or include current package's type when editing)
   const availableTypes = ['Grandstand', 'VIP'].filter(type => 
-    !existingPackages?.some(pkg => pkg.base_type === type)
+    !existingPackages?.some(pkg => pkg.base_type === type && pkg.id !== packageData?.id)
   );
 
   // Auto-generate name and slug when base_type changes (for new packages)
@@ -83,7 +127,7 @@ export function PackageForm({ open, onOpenChange, package: packageData, events, 
 
   // Auto-generate slug when name changes (for existing packages)
   useEffect(() => {
-    if (packageData && formData.name) {
+    if (packageData && formData.name && formData.name !== packageData.name) {
       const generatedSlug = createSlug(formData.name);
       setFormData(prev => ({
         ...prev,
@@ -217,6 +261,12 @@ export function PackageForm({ open, onOpenChange, package: packageData, events, 
                         {type}
                       </SelectItem>
                     ))}
+                    {/* Show current package type when editing */}
+                    {packageData && packageData.base_type && !availableTypes.includes(packageData.base_type) && (
+                      <SelectItem value={packageData.base_type}>
+                        {packageData.base_type}
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -241,6 +291,74 @@ export function PackageForm({ open, onOpenChange, package: packageData, events, 
                 placeholder="Describe what's included in this package..."
                 rows={3}
               />
+            </div>
+
+            {/* Package Image */}
+            <div className="space-y-2">
+              <Label>Package Image</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {formData.package_image ? (
+                  <div className="relative group w-24 h-24 border rounded overflow-hidden">
+                    <img 
+                      src={formData.package_image.image_url || formData.package_image.thumbnail_url} 
+                      alt={formData.package_image.description || 'Package image'} 
+                      className="object-cover w-full h-full" 
+                    />
+                    <button
+                      type="button"
+                      className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                      onClick={() => setFormData(prev => ({ ...prev, package_image: null }))}
+                      aria-label="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground text-sm">No image selected</span>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSelectedImages(formData.package_image ? [formData.package_image] : []);
+                  setShowImageSelector(true);
+                }}
+              >
+                {formData.package_image ? 'Change Image' : 'Select Image'}
+              </Button>
+              
+              {/* Image Selection Dialog */}
+              <Dialog open={showImageSelector} onOpenChange={setShowImageSelector}>
+                <DialogContent className="!max-w-6xl max-h-[80vh] flex flex-col">
+                  <DialogHeader className="flex-shrink-0">
+                    <DialogTitle>Select Package Image</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex-1 overflow-hidden min-h-0">
+                    <MediaLibrarySelector
+                      selectedItems={Array.isArray(selectedImages) ? selectedImages : []}
+                      onSelect={(item) => {
+                        setSelectedImages([item]); // Only allow single image selection
+                      }}
+                      multiple={false}
+                    />
+                  </div>
+                  <DialogFooter className="flex-shrink-0">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          package_image: selectedImages.length > 0 ? selectedImages[0] : null 
+                        }));
+                        setShowImageSelector(false);
+                      }}
+                    >
+                      Confirm Selection
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
 
             <div className="flex items-center space-x-2">

@@ -45,7 +45,8 @@ import {
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthProvider';
 import { toast } from 'sonner';
-import { useForm, FormProvider } from 'react-hook-form';
+import { useForm, FormProvider, useFormContext } from 'react-hook-form';
+import { supabase } from '@/lib/supabase';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { StepClientSelection } from '@/components/forms/steps/StepClientSelection';
@@ -345,6 +346,100 @@ export function PackageIntakeTest() {
     },
   });
 
+  // Price Summary Card Component - defined inside to have access to form context
+  function PriceSummaryCardContent() {
+    const { watch } = useFormContext();
+    const components = watch('components') || { tickets: [], hotels: [], circuitTransfers: [], airportTransfers: [] };
+    const [hotelRooms, setHotelRooms] = useState<any[]>([]);
+    
+    // Fetch hotel room data for price calculation
+    useEffect(() => {
+      if (components.hotels && components.hotels.length > 0) {
+        const roomIds = components.hotels.map((h: any) => h.roomId);
+        supabase
+          .from('hotel_rooms')
+          .select('*')
+          .in('id', roomIds)
+          .then(({ data }) => {
+            setHotelRooms(data || []);
+          });
+      }
+    }, [components.hotels]);
+    
+    // Calculate hotel room prices dynamically
+    const calculateHotelPrice = (hotelSelection: any) => {
+      const room = hotelRooms.find(r => r.id === hotelSelection.roomId);
+      if (!room) return 0;
+      
+      const checkIn = hotelSelection.checkIn || room.check_in;
+      const checkOut = hotelSelection.checkOut || room.check_out;
+      const nights = (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24);
+      const baseNights = (new Date(room.check_out).getTime() - new Date(room.check_in).getTime()) / (1000 * 60 * 60 * 24);
+      const extraNights = Math.max(0, nights - baseNights);
+      const basePrice = (room.total_price_per_stay_gbp_with_markup || room.total_price_per_stay_gbp || 0) * (hotelSelection.quantity || 1);
+      const extraNightPrice = (room.extra_night_price_gbp || 0) * (hotelSelection.quantity || 1);
+      return basePrice + extraNights * extraNightPrice;
+    };
+    
+    const ticketsTotal = (components.tickets || []).reduce((sum: number, t: any) => {
+      const ticketPrice = (t.price || 0) * (t.quantity || 0);
+      return sum + ticketPrice;
+    }, 0);
+    
+    const hotelsTotal = (components.hotels || []).reduce((sum: number, h: any) => {
+      const hotelPrice = calculateHotelPrice(h);
+      return sum + hotelPrice;
+    }, 0);
+    
+    const circuitTransfersTotal = (components.circuitTransfers || []).reduce((sum: number, c: any) => {
+      const transferPrice = (c.price || 0) * (c.quantity || 0);
+      return sum + transferPrice;
+    }, 0);
+    
+    const airportTransfersTotal = (components.airportTransfers || []).reduce((sum: number, a: any) => {
+      const transferPrice = (a.price || 0) * (a.quantity || 0);
+      return sum + transferPrice;
+    }, 0);
+    
+    const total = ticketsTotal + hotelsTotal + circuitTransfersTotal + airportTransfersTotal;
+
+    return (
+      <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-green-600" />
+            Price Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-base font-semibold">
+              <span>Total</span>
+              <span>£{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between text-sm">
+              <span>Tickets {components.tickets?.length > 0 && `x ${components.tickets.reduce((sum: number, t: any) => sum + (t.quantity || 0), 0)}`}</span>
+              <span>£{ticketsTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Hotels {components.hotels?.length > 0 && `x ${components.hotels.reduce((sum: number, h: any) => sum + (h.quantity || 0), 0)}`}</span>
+              <span>£{hotelsTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Circuit Transfers {components.circuitTransfers?.length > 0 && `x ${components.circuitTransfers.reduce((sum: number, c: any) => sum + (c.quantity || 0), 0)}`}</span>
+              <span>£{circuitTransfersTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Airport Transfers {components.airportTransfers?.length > 0 && `x ${components.airportTransfers.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0)}`}</span>
+              <span>£{airportTransfersTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Calculate progress percentage
   const progressPercentage = ((currentStep + 1) / totalSteps) * 100;
 
@@ -472,9 +567,10 @@ export function PackageIntakeTest() {
       
       {/* Main Content */}
       <div className="mx-auto py-6">
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-8">
-          {/* Form Section */}
-          <div className="space-y-6">
+        <FormProvider {...form}>
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-8">
+            {/* Form Section */}
+            <div className="space-y-6">
             {/* Step Indicator */}
             <Card className="bg-gradient-to-b py-0 from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
               <CardContent className="p-6">
@@ -514,9 +610,7 @@ export function PackageIntakeTest() {
                   )}
                   
                   <div className="space-y-6">
-                    <FormProvider {...form}>
-                      {renderStep()}
-                    </FormProvider>
+                    {renderStep()}
                   </div>
                 </CardContent>
 
@@ -550,6 +644,11 @@ export function PackageIntakeTest() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Price Summary - only show during components step */}
+            {currentStep === 4 && (
+              <PriceSummaryCardContent />
+            )}
+
             {/* Pro Tips Card */}
             <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
               <CardHeader className="pb-4">
@@ -638,6 +737,7 @@ export function PackageIntakeTest() {
             </Card>
           </div>
         </div>
+        </FormProvider>
       </div>
     </div>
   );

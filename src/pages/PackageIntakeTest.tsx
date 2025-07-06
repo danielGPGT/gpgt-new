@@ -131,6 +131,7 @@ const packageIntakeSchema = z.object({
       quantity: z.number().min(1),
       price: z.number(),
       transportType: z.string(),
+      transferDirection: z.enum(['outbound', 'return', 'both']).optional().default('outbound'),
     })).default([]),
   }).default({
     tickets: [],
@@ -315,9 +316,9 @@ export function PackageIntakeTest() {
       },
       isNewClient: false,
       travelers: {
-        adults: 1,
+        adults: 2,
         children: 0,
-        total: 1,
+        total: 2,
       },
       selectedEvent: undefined,
       selectedPackage: undefined,
@@ -397,7 +398,8 @@ export function PackageIntakeTest() {
     }, 0);
     
     const airportTransfersTotal = (components.airportTransfers || []).reduce((sum: number, a: any) => {
-      const transferPrice = (a.price || 0) * (a.quantity || 0);
+      const directionMultiplier = a.transferDirection === 'both' ? 2 : 1;
+      const transferPrice = (a.price || 0) * (a.quantity || 0) * directionMultiplier;
       return sum + transferPrice;
     }, 0);
     
@@ -431,9 +433,27 @@ export function PackageIntakeTest() {
               <span>£{circuitTransfersTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span>Airport Transfers {components.airportTransfers?.length > 0 && `x ${components.airportTransfers.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0)}`}</span>
+              <span>Airport Transfers {components.airportTransfers?.length > 0 && `x ${components.airportTransfers.reduce((sum: number, a: any) => {
+                const directionMultiplier = a.transferDirection === 'both' ? 2 : 1;
+                return sum + ((a.quantity || 0) * directionMultiplier);
+              }, 0)}`}</span>
               <span>£{airportTransfersTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
+            {components.airportTransfers?.length > 0 && (
+              <div className="ml-4 text-xs text-[var(--color-muted-foreground)]">
+                {components.airportTransfers.map((a: any, i: number) => {
+                  const directionMultiplier = a.transferDirection === 'both' ? 2 : 1;
+                  const totalTransfers = (a.quantity || 0) * directionMultiplier;
+                  const transferPrice = (a.price || 0) * (a.quantity || 0) * directionMultiplier;
+                  return (
+                    <div key={i} className="flex justify-between">
+                      <span>• {a.transferDirection || 'outbound'} ({totalTransfers} transfers)</span>
+                      <span>£{transferPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

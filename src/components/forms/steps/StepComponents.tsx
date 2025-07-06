@@ -286,6 +286,7 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
                 id: transfer.id,
                 quantity: 1, // Default to 1 vehicle
                 price: transfer.price_per_car_gbp_markup || 0,
+                transferDirection: 'both' as const, // Default to both (outbound + return)
                 packageComponentId: airportTransferComponents.find(comp => comp.component_id === transfer.id)?.id
               }));
               console.log('[AIRPORT TRANSFER INIT] Setting initial transfers:', initialTransfers);
@@ -1328,7 +1329,7 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
             {/* Right: Quantity Selector, Remove */}
             <div className="flex flex-row items-center gap-2 flex-shrink-0 justify-end">
               <Label htmlFor={`quantity-${transfer.id}`} className="text-xs font-semibold text-[var(--color-muted-foreground)] mr-2">
-                Seats
+                Vehicles
               </Label>
               <Button
                 variant="outline"
@@ -1349,21 +1350,21 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
                   handleQuantityChange(Number.isFinite(val) && val > 0 ? val : 1, index);
                 }}
                 min={1}
-                max={adults}
+                max={10} // Reasonable max for vehicles
                 className="w-12 text-center font-bold text-base bg-transparent border-none focus:ring-2 focus:ring-[var(--color-primary)]"
               />
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleQuantityChange((selected.quantity || 1) + 1, index)}
-                disabled={(selected.quantity || 1) >= adults}
+                disabled={(selected.quantity || 1) >= 10}
                 className="w-8 h-8 p-0"
                 tabIndex={-1}
               >
                 +
               </Button>
               <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
-                Max: {adults}
+                Max: 10
               </span>
               {selectedTransfers.length > 1 && (
                 <Button
@@ -1548,6 +1549,7 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
                 id: transfer.id,
                 quantity: 1, // Default to 1 vehicle
                 price: transfer.price_per_car_gbp_markup || 0,
+                transferDirection: 'both' as const, // Default to both (outbound + return)
                 packageComponentId: packageComps.find(comp => comp.component_id === transfer.id)?.id
               }));
               setSelectedTransfers(initialTransfers);
@@ -1614,6 +1616,7 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
       id: nextTransfer.id,
       quantity: 1, // Default to 1 vehicle
       price: nextTransfer.price_per_car_gbp_markup || 0,
+      transferDirection: 'both' as const, // Default to both (outbound + return)
       packageComponentId: null
     };
     const updated = [...selectedTransfers, newTransfer];
@@ -1630,7 +1633,8 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
       ...updatedTransfers[index],
       id: transferId,
       quantity: 1, // Reset to 1 vehicle when changing transfer type
-      price: selectedTransfer.price_per_car_gbp_markup || 0
+      price: selectedTransfer.price_per_car_gbp_markup || 0,
+      transferDirection: updatedTransfers[index].transferDirection || 'outbound' // Preserve existing direction
     };
     setSelectedTransfers(updatedTransfers);
     setValue('components.airportTransfers', updatedTransfers);
@@ -1648,9 +1652,13 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
   function TransferCard({ transfer, selected, onChange, index }: any) {
     const hotel = getHotel(transfer.hotel_id);
     const pricePerVehicle = transfer.price_per_car_gbp_markup || 0;
-    const totalPrice = pricePerVehicle * (selected.quantity || 1);
+    const transferDirection = selected.transferDirection || 'outbound';
+    const directionMultiplier = transferDirection === 'both' ? 2 : 1;
+    // For 'both', we need quantity * 2 transfers (e.g., 2 vehicles = 2 outbound + 2 return = 4 total)
+    const totalTransfers = (selected.quantity || 1) * directionMultiplier;
+    const totalPrice = pricePerVehicle * totalTransfers; // Price doubles when 'both' is selected
     const vehicleCapacity = transfer.max_capacity || 0;
-    const totalCapacityForThisTransfer = vehicleCapacity * (selected.quantity || 1);
+    const totalCapacityForThisTransfer = vehicleCapacity * totalTransfers; // Capacity based on doubled quantity
     return (
       <Card className="mb-6 bg-[var(--color-card)]/95 py-0 border border-[var(--color-border)] shadow-lg rounded-2xl overflow-hidden">
         <div className="p-6">
@@ -1696,10 +1704,82 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
               </span>
               <span className="text-xs text-[var(--color-muted-foreground)]">
                 £{pricePerVehicle.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per vehicle
+                {directionMultiplier > 1 && ` × ${directionMultiplier} (${transferDirection})`}
               </span>
             </div>
           </div>
-          {/* Second row: Transfer Info (left), Quantity, Remove (right) */}
+
+          {/* Transfer Direction Badges - placed under transfer type */}
+          <div className="mb-4">
+            <Label className="text-xs font-semibold text-[var(--color-muted-foreground)] mb-2 block">Transfer Direction</Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = { ...selected, transferDirection: 'outbound' as const };
+                  console.log('[AIRPORT_TRANSFER] Direction changed: outbound for transfer:', transfer.id);
+                  setSelectedTransfers(prev => {
+                    const newTransfers = [...prev];
+                    newTransfers[index] = updated;
+                    console.log('[AIRPORT_TRANSFER] Updated transfers:', newTransfers);
+                    setValue('components.airportTransfers', newTransfers);
+                    return newTransfers;
+                  });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  transferDirection === 'outbound'
+                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                    : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]/80'
+                }`}
+              >
+                Outbound
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = { ...selected, transferDirection: 'return' as const };
+                  console.log('[AIRPORT_TRANSFER] Direction changed: return for transfer:', transfer.id);
+                  setSelectedTransfers(prev => {
+                    const newTransfers = [...prev];
+                    newTransfers[index] = updated;
+                    console.log('[AIRPORT_TRANSFER] Updated transfers:', newTransfers);
+                    setValue('components.airportTransfers', newTransfers);
+                    return newTransfers;
+                  });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  transferDirection === 'return'
+                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                    : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]/80'
+                }`}
+              >
+                Return
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = { ...selected, transferDirection: 'both' as const };
+                  console.log('[AIRPORT_TRANSFER] Direction changed: both for transfer:', transfer.id);
+                  setSelectedTransfers(prev => {
+                    const newTransfers = [...prev];
+                    newTransfers[index] = updated;
+                    console.log('[AIRPORT_TRANSFER] Updated transfers:', newTransfers);
+                    setValue('components.airportTransfers', newTransfers);
+                    return newTransfers;
+                  });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  transferDirection === 'both'
+                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                    : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]/80'
+                }`}
+              >
+                Both (×2)
+              </button>
+            </div>
+          </div>
+
+                    {/* Second row: Transfer Info (left), Quantity, Remove (right) */}
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 w-full justify-between">
             {/* Left: Icon, hotel, details */}
             <div className="flex flex-row items-center gap-3 flex-1 min-w-0">
@@ -1722,16 +1802,21 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
                 </div>
               </div>
             </div>
+            
             {/* Right: Quantity Selector, Remove */}
             <div className="flex flex-row items-center gap-2 flex-shrink-0 justify-end">
               <Label htmlFor={`quantity-${transfer.id}`} className="text-xs font-semibold text-[var(--color-muted-foreground)] mr-2">
-                Vehicles
+                {transferDirection === 'both' ? 'Total Transfers' : 'Vehicles'}
               </Label>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleQuantityChange((selected.quantity || 1) - 1, index)}
-                disabled={(selected.quantity || 1) <= 1}
+                onClick={() => {
+                  const newTotalTransfers = Math.max(1, totalTransfers - directionMultiplier);
+                  const newQuantity = Math.ceil(newTotalTransfers / directionMultiplier);
+                  handleQuantityChange(newQuantity, index);
+                }}
+                disabled={totalTransfers <= directionMultiplier}
                 className="w-8 h-8 p-0"
                 tabIndex={-1}
               >
@@ -1740,27 +1825,33 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
               <Input
                 id={`quantity-${transfer.id}`}
                 type="number"
-                value={selected.quantity || 1}
+                value={totalTransfers}
                 onChange={(e) => {
                   const val = parseInt(e.target.value, 10);
-                  handleQuantityChange(Number.isFinite(val) && val > 0 ? val : 1, index);
+                  const newTotalTransfers = Number.isFinite(val) && val > 0 ? val : 1;
+                  const newQuantity = Math.ceil(newTotalTransfers / directionMultiplier);
+                  handleQuantityChange(newQuantity, index);
                 }}
                 min={1}
-                max={10} // Reasonable max for vehicles
+                max={10 * directionMultiplier} // Reasonable max for total transfers
                 className="w-12 text-center font-bold text-base bg-transparent border-none focus:ring-2 focus:ring-[var(--color-primary)]"
               />
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleQuantityChange((selected.quantity || 1) + 1, index)}
-                disabled={(selected.quantity || 1) >= 10}
+                onClick={() => {
+                  const newTotalTransfers = Math.min(10 * directionMultiplier, totalTransfers + directionMultiplier);
+                  const newQuantity = Math.ceil(newTotalTransfers / directionMultiplier);
+                  handleQuantityChange(newQuantity, index);
+                }}
+                disabled={totalTransfers >= 10 * directionMultiplier}
                 className="w-8 h-8 p-0"
                 tabIndex={-1}
               >
                 +
               </Button>
               <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
-                Max: 10
+                Max: {10 * directionMultiplier}
               </span>
               {selectedTransfers.length > 1 && (
                 <Button
@@ -1786,14 +1877,14 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue }: 
               <span className="text-[var(--color-muted-foreground)]">Price Breakdown:</span>
               <div className="text-right">
                 <div className="font-medium">
-                  {selected.quantity || 1} vehicle{(selected.quantity || 1) !== 1 ? 's' : ''} × £{pricePerVehicle.toFixed(2)}
+                  {selected.quantity || 1} vehicle{(selected.quantity || 1) !== 1 ? 's' : ''} × {directionMultiplier} direction{directionMultiplier > 1 ? 's' : ''} × £{pricePerVehicle.toFixed(2)}
                 </div>
                 <div className="text-xs text-[var(--color-muted-foreground)]">
                   Total capacity: {totalCapacityForThisTransfer} passengers
                 </div>
-                {totalCapacityForThisTransfer < adults && (
-                  <div className="text-xs text-orange-600 font-medium">
-                    ⚠️ Need more vehicles for {adults} passengers
+                {transferDirection === 'both' && (
+                  <div className="text-xs text-[var(--color-muted-foreground)]">
+                    (Covers both outbound and return)
                   </div>
                 )}
               </div>

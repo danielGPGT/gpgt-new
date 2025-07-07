@@ -1,784 +1,739 @@
 import { supabase } from './supabase';
-import { getCurrentUserTeamId, ensureUserHasTeam } from './teamUtils';
-import { gemini, type TripPreferences } from './gemini';
-import { QuoteInput } from '@/utils/createQuotePayload';
-import { CRMService } from './crmService';
-import { getGeminiService } from './gemini';
-
-export interface QuoteResponse {
-  id: string;
-  status: 'draft' | 'confirmed' | 'cancelled';
-  totalPrice: number;
-  currency: string;
-  generatedItinerary: any;
-  createdAt: string;
-  clientId?: string;
-  clientEmail?: string;
-  clientPhone?: string;
-  clientAddress?: {
-    street: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    country: string;
-  };
-  destination?: string;
-  startDate?: string;
-  endDate?: string;
-  clientName?: string;
-  selectedEvent?: {
-    id: string;
-    name: string;
-    dateOfEvent: string;
-    venue: {
-      name: string;
-      city: string;
-      country: string;
-    };
-  };
-  selectedTicket?: {
-    id: string;
-    categoryName: string;
-    price: number;
-    currency: string;
-    available: boolean;
-  };
-  selectedFlights?: Array<{
-    originAirport: string;
-    destinationAirport: string;
-    cabinClass: string;
-    airline?: string;
-    flightNumber?: string;
-    departureTime?: string;
-    arrivalTime?: string;
-    total: number;
-    currency: string;
-  }>;
-  selectedHotels?: Array<{
-    hotelName: string;
-    destinationCity: string;
-    numberOfRooms: number;
-    roomTypes: string[];
-    starRating?: number;
-    pricePerNight: number;
-    currency: string;
-    checkIn?: string;
-    checkOut?: string;
-  }>;
-}
-
-export interface QuoteError {
-  message: string;
-  code: string;
-}
+import { getCurrentUserTeamId } from './teamUtils';
+import { 
+  Quote, 
+  QuoteResponse, 
+  QuoteError, 
+  CreateQuoteData, 
+  QuoteDetails, 
+  QuoteActivity, 
+  QuoteEmail, 
+  QuoteAttachment 
+} from '@/types';
 
 export class QuoteService {
-  /**
-   * Create a new quote with AI-generated itinerary
-   */
-  static async createQuote(quoteData: QuoteInput): Promise<QuoteResponse> {
+  // Create a new quote from package intake form data
+  static async createQuoteFromIntake(data: CreateQuoteData): Promise<string> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User must be part of a team to create quotes');
       }
 
-      // Extract client ID if provided
-      const clientId = quoteData.tripDetails.clientId;
-
-      // Calculate budget breakdown from selected components
-      const formDataForCalculation = {
-        travelerInfo: {
-          startDate: quoteData.tripDetails.startDate,
-          endDate: quoteData.tripDetails.endDate,
-          travelers: {
-            adults: typeof quoteData.tripDetails.numberOfTravelers === 'number' 
-              ? quoteData.tripDetails.numberOfTravelers 
-              : (quoteData.tripDetails.numberOfTravelers as any)?.adults || 1,
-            children: typeof quoteData.tripDetails.numberOfTravelers === 'number' 
-              ? 0 
-              : (quoteData.tripDetails.numberOfTravelers as any)?.children || 0
-          }
-        },
-        flights: quoteData.selectedFlights ? {
-          enabled: true,
-          groups: quoteData.selectedFlights.map(flight => ({
-            selectedFlight: {
-              convertedTotal: flight.total,
-              convertedCurrency: flight.currency,
-              airline: flight.airline,
-              flightNumber: flight.flightNumber,
-              departureTime: flight.departureTime,
-              arrivalTime: flight.arrivalTime
-            },
-            originAirport: flight.originAirport,
-            destinationAirport: flight.destinationAirport,
-            cabinClass: flight.cabinClass
-          }))
-        } : undefined,
-        hotels: quoteData.selectedHotels ? {
-          enabled: true,
-          groups: quoteData.selectedHotels.map(hotel => ({
-            selectedHotel: {
-              convertedPricePerNight: hotel.pricePerNight,
-              convertedCurrency: hotel.currency,
-              hotelName: hotel.hotelName,
-              destinationCity: hotel.destinationCity,
-              destinationCountry: hotel.destinationCity.split(', ').pop() || '',
-              starRating: hotel.starRating,
-              amenities: []
-            },
-            numberOfRooms: hotel.numberOfRooms,
-            roomTypes: hotel.roomTypes
-          }))
-        } : undefined,
-        events: quoteData.selectedEvent && quoteData.selectedTicket ? {
-          enabled: true,
-          events: [{
-            groups: [{
-              selectedTicket: {
-                convertedPrice: quoteData.selectedTicket.price,
-                convertedCurrency: quoteData.selectedTicket.currency
-              }
-            }]
-          }]
-        } : undefined
-      } as any;
-
-      // Use the already-calculated prices from the form instead of recalculating
-      const breakdown = {
-        accommodation: {
-          total: 0,
-          perNight: 0,
-          hotelRecommendations: [] as any[]
-        },
-        transportation: {
-          total: 0,
-          breakdown: [] as any[]
-        },
-        activities: {
-          total: 0,
-          breakdown: [] as any[]
-        },
-        dining: {
-          total: 0,
-          perDay: 0,
-          recommendations: [] as any[]
-        },
-        miscellaneous: {
-          total: 0,
-          description: 'Contingency and tips.'
-        }
+      // Helper functions for date parsing
+      const parseDate = (dateString: string | undefined): string => {
+        if (!dateString) return new Date().toISOString().split('T')[0];
+        return new Date(dateString).toISOString().split('T')[0];
       };
 
-      // Calculate accommodation costs from selected hotels
-      if (quoteData.selectedHotels) {
-        const tripDuration = Math.ceil((new Date(quoteData.tripDetails.endDate).getTime() - new Date(quoteData.tripDetails.startDate).getTime()) / (1000 * 60 * 60 * 24));
-        
-        quoteData.selectedHotels.forEach(hotel => {
-          const hotelTotal = hotel.pricePerNight * hotel.numberOfRooms * tripDuration;
-          breakdown.accommodation.total += hotelTotal;
-          breakdown.accommodation.perNight += hotel.pricePerNight;
-          
-          breakdown.accommodation.hotelRecommendations.push({
-            name: hotel.hotelName,
-            location: hotel.destinationCity,
-            pricePerNight: hotel.pricePerNight,
-            rating: `${hotel.starRating}★`,
-            amenities: []
-          });
+      const parseOptionalDate = (dateString: string | undefined): string | null => {
+        if (!dateString) return null;
+        return new Date(dateString).toISOString().split('T')[0];
+      };
+
+      // Prepare components data for JSONB storage
+      const componentsArray = [
+        ...data.componentsData.tickets.map((ticket: any, index: number) => ({
+          type: 'ticket',
+          id: ticket.id,
+          name: ticket.category || 'Event Ticket',
+          description: `Event ticket - ${ticket.category || 'General'}`,
+          unitPrice: ticket.price || 0,
+          quantity: ticket.quantity || 1,
+          totalPrice: (ticket.price || 0) * (ticket.quantity || 1),
+          sortOrder: index,
+          data: ticket
+        })),
+        ...data.componentsData.hotels.map((hotel: any, index: number) => ({
+          type: 'hotel_room',
+          id: hotel.roomId,
+          name: `Hotel Room - ${hotel.hotelName || 'Unknown Hotel'}`,
+          description: `Hotel accommodation`,
+          unitPrice: hotel.pricePerNight || 0,
+          quantity: hotel.quantity || 1,
+          totalPrice: (hotel.pricePerNight || 0) * (hotel.quantity || 1),
+          sortOrder: data.componentsData.tickets.length + index,
+          data: hotel
+        })),
+        ...data.componentsData.circuitTransfers.map((transfer: any, index: number) => ({
+          type: 'circuit_transfer',
+          id: transfer.id,
+          name: `Circuit Transfer - ${transfer.transferType || 'Standard'}`,
+          description: `Transportation between venues`,
+          unitPrice: transfer.price || 0,
+          quantity: transfer.quantity || 1,
+          totalPrice: (transfer.price || 0) * (transfer.quantity || 1),
+          sortOrder: data.componentsData.tickets.length + data.componentsData.hotels.length + index,
+          data: transfer
+        })),
+        ...data.componentsData.airportTransfers.map((transfer: any, index: number) => ({
+          type: 'airport_transfer',
+          id: transfer.id,
+          name: `Airport Transfer - ${transfer.transferType || 'Standard'}`,
+          description: `Transportation to/from airport`,
+          unitPrice: transfer.price || 0,
+          quantity: transfer.quantity || 1,
+          totalPrice: (transfer.price || 0) * (transfer.quantity || 1),
+          sortOrder: data.componentsData.tickets.length + data.componentsData.hotels.length + data.componentsData.circuitTransfers.length + index,
+          data: transfer
+        })),
+        ...data.componentsData.flights.map((flight: any, index: number) => ({
+          type: 'flight',
+          id: flight.id,
+          name: `Flight - ${flight.originAirport} to ${flight.destinationAirport}`,
+          description: `Flight from ${flight.originAirport} to ${flight.destinationAirport}`,
+          unitPrice: flight.total || 0,
+          quantity: 1,
+          totalPrice: flight.total || 0,
+          sortOrder: data.componentsData.tickets.length + data.componentsData.hotels.length + data.componentsData.circuitTransfers.length + data.componentsData.airportTransfers.length + index,
+          data: flight
+        }))
+      ];
+
+      // Add lounge pass if selected
+      if (data.componentsData.loungePass && data.componentsData.loungePass.id) {
+        componentsArray.push({
+          type: 'lounge_pass',
+          id: data.componentsData.loungePass.id,
+          name: `Lounge Pass - ${data.componentsData.loungePass.variant || 'Standard'}`,
+          description: 'Airport lounge access',
+          unitPrice: data.componentsData.loungePass.price || 0,
+          quantity: data.componentsData.loungePass.quantity || 1,
+          totalPrice: (data.componentsData.loungePass.price || 0) * (data.componentsData.loungePass.quantity || 1),
+          sortOrder: componentsArray.length,
+          data: data.componentsData.loungePass
         });
       }
 
-      // Calculate transportation costs from selected flights
-      if (quoteData.selectedFlights) {
-        const totalTravelers = typeof quoteData.tripDetails.numberOfTravelers === 'number' 
-          ? quoteData.tripDetails.numberOfTravelers 
-          : (quoteData.tripDetails.numberOfTravelers as any)?.adults || 1;
-        
-        quoteData.selectedFlights.forEach(flight => {
-          const flightTotal = flight.total * totalTravelers;
-          breakdown.transportation.total += flightTotal;
-          breakdown.transportation.breakdown.push({
-            type: 'Flight',
-            description: `${flight.originAirport} to ${flight.destinationAirport} (${flight.airline}, ${flight.flightNumber})`,
-            cost: flightTotal
-          });
-        });
-      }
-
-      // Calculate activities costs from selected events
-      if (quoteData.selectedEvent && quoteData.selectedTicket) {
-        const totalTravelers = typeof quoteData.tripDetails.numberOfTravelers === 'number' 
-          ? quoteData.tripDetails.numberOfTravelers 
-          : (quoteData.tripDetails.numberOfTravelers as any)?.adults || 1;
-        
-        const eventTotal = quoteData.selectedTicket.price * totalTravelers;
-        breakdown.activities.total += eventTotal;
-        breakdown.activities.breakdown.push({
-          name: quoteData.selectedEvent.name,
-          cost: eventTotal,
-          type: 'Event Ticket'
-        });
-      }
-
-      // Calculate dining costs (estimated)
-      const tripDuration = Math.ceil((new Date(quoteData.tripDetails.endDate).getTime() - new Date(quoteData.tripDetails.startDate).getTime()) / (1000 * 60 * 60 * 24));
-      const totalTravelers = typeof quoteData.tripDetails.numberOfTravelers === 'number' 
-        ? quoteData.tripDetails.numberOfTravelers 
-        : (quoteData.tripDetails.numberOfTravelers as any)?.adults || 1;
-      const dailyDiningBudget = 100; // £100 per day per person
-      breakdown.dining.total = dailyDiningBudget * tripDuration * totalTravelers;
-      breakdown.dining.perDay = dailyDiningBudget * totalTravelers;
-
-      // Calculate total budget
-      const calculatedTotal = breakdown.accommodation.total + 
-                             breakdown.transportation.total + 
-                             breakdown.activities.total + 
-                             breakdown.dining.total + 
-                             breakdown.miscellaneous.total;
-      
-      console.log('💰 QuoteService - Calculated budget breakdown:', {
-        breakdown,
-        calculatedTotal,
-        selectedFlights: quoteData.selectedFlights,
-        selectedHotels: quoteData.selectedHotels,
-        selectedEvent: quoteData.selectedEvent,
-        selectedTicket: quoteData.selectedTicket
-      });
-
-      // Use calculated total instead of AI-generated pricing
-      const baseCost = calculatedTotal;
-      const margin = baseCost * 0.15; // 15% margin
-      const totalPrice = baseCost + margin;
-
-      // Create trip preferences for Gemini (without pricing)
-      const tripPreferences = {
-        clientName: quoteData.tripDetails.clientName,
-        destination: quoteData.tripDetails.destination,
-        startDate: quoteData.tripDetails.startDate,
-        endDate: quoteData.tripDetails.endDate,
-        numberOfTravelers: typeof quoteData.tripDetails.numberOfTravelers === 'number' 
-          ? quoteData.tripDetails.numberOfTravelers 
-          : (quoteData.tripDetails.numberOfTravelers as any)?.adults || 1,
-        budget: {
-          min: quoteData.budget.amount * 0.8,
-          max: quoteData.budget.amount,
-          currency: quoteData.budget.currency,
-        },
-        preferences: {
-          tone: quoteData.preferences.tone,
-          pace: quoteData.preferences.pace as 'relaxed' | 'moderate' | 'active',
-          interests: quoteData.preferences.interests,
-          accommodationType: quoteData.preferences.accommodationType,
-          diningPreferences: quoteData.preferences.diningPreferences,
-        },
-        specialRequests: quoteData.preferences.specialRequests,
-        transportType: quoteData.tripDetails.transportType,
-        fromLocation: quoteData.tripDetails.fromLocation,
-        travelType: quoteData.tripDetails.travelType,
-        selectedFlights: quoteData.selectedFlights,
-        selectedHotels: quoteData.selectedHotels,
-        selectedEvent: quoteData.selectedEvent,
-        selectedTicket: quoteData.selectedTicket,
-      };
-
-      console.log('🎯 QuoteService - Generating itinerary with Gemini:', {
-        clientName: tripPreferences.clientName,
-        destination: tripPreferences.destination,
-        hasSelectedFlights: !!tripPreferences.selectedFlights,
-        selectedFlightsCount: tripPreferences.selectedFlights?.length || 0,
-        selectedFlightsData: tripPreferences.selectedFlights,
-        hasSelectedHotels: !!tripPreferences.selectedHotels,
-        selectedHotelsCount: tripPreferences.selectedHotels?.length || 0,
-        selectedHotelsData: tripPreferences.selectedHotels,
-        hasSelectedEvent: !!tripPreferences.selectedEvent,
-        hasSelectedTicket: !!tripPreferences.selectedTicket,
-        specialRequests: tripPreferences.specialRequests
-      });
-      
-      const gemini = getGeminiService();
-      const generatedItinerary = await gemini.generateItinerary(tripPreferences);
-      
-      // Replace the AI-generated budget breakdown with our calculated one
-      generatedItinerary.budgetBreakdown = breakdown;
-      generatedItinerary.totalBudget = {
-        amount: calculatedTotal,
-        currency: quoteData.budget.currency
-      };
-      
-      console.log('✅ QuoteService - Itinerary generated successfully with calculated pricing:', {
-        generatedItinerary: generatedItinerary,
-        breakdown: breakdown,
-        calculatedTotal: calculatedTotal
-      });
-
-      // Get or create team for the user
-      const teamId = await ensureUserHasTeam();
-
-      // Save to Supabase
-      const { data: quote, error } = await supabase
+      // Create the quote record
+      const { data: quoteData, error: quoteError } = await supabase
         .from('quotes')
         .insert({
-          user_id: user.id,
+          user_id: data.consultantId || (await supabase.auth.getUser()).data.user?.id,
           team_id: teamId,
-          client_id: clientId,
-          client_name: quoteData.tripDetails.clientName,
-          client_email: quoteData.tripDetails.clientEmail,
-          client_phone: quoteData.tripDetails.clientPhone,
-          client_address: quoteData.tripDetails.clientAddress,
-          destination: quoteData.tripDetails.destination,
-          start_date: quoteData.tripDetails.startDate,
-          end_date: quoteData.tripDetails.endDate,
-          travelers: { 
-            adults: typeof quoteData.tripDetails.numberOfTravelers === 'number' 
-              ? quoteData.tripDetails.numberOfTravelers 
-              : (quoteData.tripDetails.numberOfTravelers as any)?.adults || 1,
-            children: typeof quoteData.tripDetails.numberOfTravelers === 'number' 
-              ? 0 
-              : (quoteData.tripDetails.numberOfTravelers as any)?.children || 0
-          },
-          trip_details: quoteData.tripDetails,
-          preferences: quoteData.preferences,
-          budget: quoteData.budget,
-          include_inventory: quoteData.includeInventory,
-          filters: quoteData.filters,
-          agent_context: quoteData.agentContext,
-          selected_event: quoteData.selectedEvent,
-          selected_ticket: quoteData.selectedTicket,
-          selected_flights: quoteData.selectedFlights,
-          selected_hotels: quoteData.selectedHotels,
-          base_cost: baseCost,
-          margin: margin,
-          total_price: totalPrice,
-          currency: quoteData.budget.currency,
-          generated_itinerary: generatedItinerary,
+          consultant_id: data.consultantId,
+          
+          // Client Information
+          client_name: `${data.clientData.firstName} ${data.clientData.lastName}`,
+          client_email: data.clientData.email,
+          client_phone: data.clientData.phone,
+          client_address: data.clientData.address,
+          
+          // Event Information
+          event_id: data.eventData.id,
+          event_name: data.eventData.name,
+          event_location: data.eventData.location,
+          event_start_date: parseDate(data.eventData.startDate),
+          event_end_date: parseDate(data.eventData.endDate),
+          
+          // Package Information
+          package_id: data.packageData.id,
+          package_name: data.packageData.name,
+          package_base_type: data.packageData.baseType,
+          tier_id: data.packageData.tierId,
+          tier_name: data.packageData.tierName,
+          tier_description: data.packageData.tierDescription,
+          tier_price_override: data.packageData.tierPriceOverride,
+          
+          // Travel Information
+          travelers: data.travelersData,
+          travelers_adults: data.travelersData.adults,
+          travelers_children: data.travelersData.children,
+          travelers_total: data.travelersData.total,
+          
+          // Pricing Information
+          total_price: data.paymentsData.total,
+          currency: data.paymentsData.currency || 'GBP',
+          
+          // Payment Schedule
+          payment_deposit: data.paymentsData.deposit,
+          payment_second_payment: data.paymentsData.secondPayment,
+          payment_final_payment: data.paymentsData.finalPayment,
+          payment_deposit_date: parseOptionalDate(data.paymentsData.depositDate),
+          payment_second_payment_date: parseOptionalDate(data.paymentsData.secondPaymentDate),
+          payment_final_payment_date: parseOptionalDate(data.paymentsData.finalPaymentDate),
+          
+          // Quote Details
           status: 'draft',
+          internal_notes: data.internalNotes,
+          
+          // Component Data (JSONB)
+          selected_components: componentsArray,
+          selected_package: data.packageData,
+          selected_tier: {
+            id: data.packageData.tierId,
+            name: data.packageData.tierName,
+            description: data.packageData.tierDescription,
+            priceOverride: data.packageData.tierPriceOverride
+          },
+          price_breakdown: data.paymentsData,
+          
+          // Timestamps
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
         })
         .select()
         .single();
 
-      if (error) {
-        throw new Error(`Failed to save quote: ${error.message}`);
+      if (quoteError) {
+        console.error('Error creating quote:', quoteError);
+        throw new Error(`Failed to create quote: ${quoteError.message}`);
       }
 
-      // Create interaction record for the client
-      if (clientId) {
-        await CRMService.createInteraction({
-          clientId,
-          interactionType: 'quote_sent',
-          subject: `Quote for ${quoteData.tripDetails.destination}`,
-          content: `Generated quote for ${quoteData.tripDetails.destination} trip`,
-          outcome: 'Quote created and sent to client',
-        });
-      }
-
-      return {
-        id: quote.id,
-        status: quote.status,
-        totalPrice: quote.total_price,
-        currency: quote.currency,
-        generatedItinerary: quote.generated_itinerary,
-        createdAt: quote.created_at,
-        clientId: quote.client_id,
-        clientEmail: quote.client_email,
-        clientPhone: quote.client_phone,
-        clientAddress: quote.client_address,
-        destination: quote.destination,
-        startDate: quote.start_date,
-        endDate: quote.end_date,
-        clientName: quote.client_name,
-        selectedEvent: quote.selected_event,
-        selectedTicket: quote.selected_ticket,
-        selectedFlights: quote.selected_flights,
-        selectedHotels: quote.selected_hotels,
-      };
-
+      return quoteData.id;
     } catch (error) {
-      console.error('Quote creation error:', error);
+      console.error('Error in createQuoteFromIntake:', error);
       throw error;
     }
   }
 
-  /**
-   * Get all quotes for the current user's team
-   */
-  static async getQuotes(): Promise<QuoteResponse[]> {
+  // Get all quotes for the current team
+  static async getTeamQuotes(
+    status?: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<{ quotes: Quote[]; total: number }> {
     try {
       const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User must be part of a team to view quotes');
+      }
 
-      const { data: quotes, error } = await supabase
+      let query = supabase
         .from('quotes')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('team_id', teamId)
         .order('created_at', { ascending: false });
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data, error, count } = await query
+        .range(offset, offset + limit - 1);
 
       if (error) {
         throw new Error(`Failed to fetch quotes: ${error.message}`);
       }
 
-      return quotes.map(quote => ({
-        id: quote.id,
-        status: quote.status,
-        totalPrice: quote.total_price,
-        currency: quote.currency,
-        generatedItinerary: quote.generated_itinerary,
-        createdAt: quote.created_at,
-        clientId: quote.client_id,
-        clientEmail: quote.client_email,
-        clientPhone: quote.client_phone,
-        clientAddress: quote.client_address,
-        destination: quote.destination,
-        startDate: quote.start_date,
-        endDate: quote.end_date,
-        clientName: quote.client_name,
-        selectedEvent: quote.selected_event,
-        selectedTicket: quote.selected_ticket,
-        selectedFlights: quote.selected_flights,
-        selectedHotels: quote.selected_hotels,
-      }));
-
+      const quotes = data?.map(this.mapQuoteFromJson) || [];
+      return { quotes, total: count || 0 };
     } catch (error) {
-      console.error('Fetch quotes error:', error);
+      console.error('Error in getTeamQuotes:', error);
       throw error;
     }
   }
 
-  /**
-   * Get quotes for a specific client
-   */
-  static async getQuotesByClient(clientId: string): Promise<QuoteResponse[]> {
+  // Get a single quote by ID
+  static async getQuoteById(quoteId: string): Promise<Quote> {
     try {
-      const teamId = await getCurrentUserTeamId();
-
-      const { data: quotes, error } = await supabase
-        .from('quotes')
-        .select('*')
-        .eq('team_id', teamId)
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        throw new Error(`Failed to fetch client quotes: ${error.message}`);
-      }
-
-      return quotes.map(quote => ({
-        id: quote.id,
-        status: quote.status,
-        totalPrice: quote.total_price,
-        currency: quote.currency,
-        generatedItinerary: quote.generated_itinerary,
-        createdAt: quote.created_at,
-        clientId: quote.client_id,
-        clientEmail: quote.client_email,
-        clientPhone: quote.client_phone,
-        clientAddress: quote.client_address,
-        destination: quote.destination,
-        startDate: quote.start_date,
-        endDate: quote.end_date,
-        clientName: quote.client_name,
-        selectedEvent: quote.selected_event,
-        selectedTicket: quote.selected_ticket,
-        selectedFlights: quote.selected_flights,
-        selectedHotels: quote.selected_hotels,
-      }));
-
-    } catch (error) {
-      console.error('Fetch client quotes error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get a quote by ID (team-based)
-   */
-  static async getQuoteById(quoteId: string): Promise<QuoteResponse> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Ensure user has a team
-      await ensureUserHasTeam();
-
-      // Get user's team ID
-      const teamId = await getCurrentUserTeamId();
-
-      const { data: quote, error } = await supabase
+      const { data, error } = await supabase
         .from('quotes')
         .select('*')
         .eq('id', quoteId)
-        .eq('team_id', teamId)
         .single();
 
       if (error) {
         throw new Error(`Failed to fetch quote: ${error.message}`);
       }
 
-      if (!quote) {
-        throw new Error('Quote not found');
-      }
+      return this.mapQuoteFromJson(data);
+    } catch (error) {
+      console.error('Error in getQuoteById:', error);
+      throw error;
+    }
+  }
+
+  // Get quote details with activities, emails, and attachments
+  static async getQuoteDetails(quoteId: string): Promise<QuoteDetails> {
+    try {
+      const quote = await this.getQuoteById(quoteId);
+      
+      // For now, return empty arrays for activities, emails, and attachments
+      // These would be populated from separate tables if they existed
+      const activities: QuoteActivity[] = [];
+      const emails: QuoteEmail[] = [];
+      const attachments: QuoteAttachment[] = [];
 
       return {
-        id: quote.id,
-        status: quote.status,
-        totalPrice: quote.total_price,
-        currency: quote.currency,
-        generatedItinerary: quote.generated_itinerary,
-        createdAt: quote.created_at,
-        clientId: quote.client_id,
-        clientEmail: quote.client_email,
-        clientPhone: quote.client_phone,
-        clientAddress: quote.client_address,
-        destination: quote.destination,
-        startDate: quote.start_date,
-        endDate: quote.end_date,
-        clientName: quote.client_name,
-        selectedEvent: quote.selected_event,
-        selectedTicket: quote.selected_ticket,
-        selectedFlights: quote.selected_flights,
-        selectedHotels: quote.selected_hotels,
+        quote,
+        activities,
+        emails,
+        attachments
       };
-
     } catch (error) {
-      console.error('Fetch quote error:', error);
+      console.error('Error in getQuoteDetails:', error);
       throw error;
     }
   }
 
-  /**
-   * Update quote status (team-based)
-   */
-  static async updateQuoteStatus(quoteId: string, status: 'draft' | 'confirmed' | 'cancelled'): Promise<void> {
+  // Send quote email
+  static async sendQuoteEmail(
+    quoteId: string,
+    recipientEmail: string,
+    emailType: string = 'quote_sent',
+    subject?: string,
+    message?: string
+  ): Promise<string> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Ensure user has a team
-      await ensureUserHasTeam();
-
-      // Get user's team ID
-      const teamId = await getCurrentUserTeamId();
-
-      const { error } = await supabase
-        .from('quotes')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', quoteId)
-        .eq('team_id', teamId);
-
-      if (error) {
-        throw new Error(`Failed to update quote: ${error.message}`);
-      }
-
-    } catch (error) {
-      console.error('Update quote error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Confirm a quote and create a booking (team-based)
-   */
-  static async confirmQuote(quoteId: string): Promise<string> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Ensure user has a team
-      await ensureUserHasTeam();
-
-      // Get the quote first
-      const quote = await this.getQuoteById(quoteId);
-
-      if (quote.status !== 'draft') {
-        throw new Error('Only draft quotes can be confirmed');
-      }
-
-      // Create booking data from quote
-      const bookingData = {
-        quoteId: quoteId,
-        clientName: quote.generatedItinerary?.clientName || 'Unknown',
-        destination: quote.generatedItinerary?.destination || 'Unknown',
-        startDate: quote.generatedItinerary?.days?.[0]?.date || new Date().toISOString(),
-        endDate: quote.generatedItinerary?.days?.[quote.generatedItinerary?.days?.length - 1]?.date || new Date().toISOString(),
-        totalCost: quote.totalPrice,
-        currency: quote.currency,
-        itinerary: quote.generatedItinerary,
-        confirmedAt: new Date().toISOString(),
-        supplierRef: null, // Will be filled when actual bookings are made
-      };
-
-      // Create the booking
-      const bookingId = await this.createBooking(quoteId, bookingData);
-
-      console.log('✅ Quote confirmed and booking created:', {
+      // For now, just log the email sending
+      // In a real implementation, this would integrate with an email service
+      console.log('Sending quote email:', {
         quoteId,
-        bookingId,
-        clientName: bookingData.clientName,
-        totalCost: bookingData.totalCost,
-        currency: bookingData.currency
+        recipientEmail,
+        emailType,
+        subject,
+        message
       });
 
-      return bookingId;
+      // Update quote status to 'sent' if this is the first email
+      await this.updateQuoteStatus(quoteId, 'sent');
 
+      return 'email_sent_' + Date.now(); // Return a mock email ID
     } catch (error) {
-      console.error('Confirm quote error:', error);
+      console.error('Error in sendQuoteEmail:', error);
       throw error;
     }
   }
 
-  /**
-   * Create a booking from a quote (team-based)
-   */
-  static async createBooking(quoteId: string, bookingData: any): Promise<string> {
+  // Create quote revision
+  static async createQuoteRevision(
+    originalQuoteId: string,
+    revisionNotes?: string
+  ): Promise<string> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Ensure user has a team
-      await ensureUserHasTeam();
-
-      // Get user's team ID
-      const teamId = await getCurrentUserTeamId();
-
-      // Get the quote first
-      const quote = await this.getQuoteById(quoteId);
-
-      const bookingPayload = {
-        quote_id: quoteId,
-        user_id: user.id,
-        team_id: teamId,
-        client_name: quote.generatedItinerary?.clientName || 'Unknown',
-        booking_data: bookingData,
-        total_cost: quote.totalPrice,
-        currency: quote.currency,
-        status: 'confirmed',
-        supplier_ref: bookingData.supplierRef || null,
-      };
-
-      const { data: booking, error } = await supabase
-        .from('bookings')
-        .insert(bookingPayload)
+      const originalQuote = await this.getQuoteById(originalQuoteId);
+      
+      // Create a new quote based on the original
+      const { data: newQuote, error } = await supabase
+        .from('quotes')
+        .insert({
+          user_id: originalQuote.userId,
+          team_id: originalQuote.teamId,
+          consultant_id: originalQuote.consultantId,
+          
+          // Client Information
+          client_name: originalQuote.clientName,
+          client_email: originalQuote.clientEmail,
+          client_phone: originalQuote.clientPhone,
+          client_address: originalQuote.clientAddress,
+          
+          // Event Information
+          event_id: originalQuote.eventId,
+          event_name: originalQuote.eventName,
+          event_location: originalQuote.eventLocation,
+          event_start_date: originalQuote.eventStartDate,
+          event_end_date: originalQuote.eventEndDate,
+          
+          // Package Information
+          package_id: originalQuote.packageId,
+          package_name: originalQuote.packageName,
+          package_base_type: originalQuote.packageBaseType,
+          tier_id: originalQuote.tierId,
+          tier_name: originalQuote.tierName,
+          tier_description: originalQuote.tierDescription,
+          tier_price_override: originalQuote.tierPriceOverride,
+          
+          // Travel Information
+          travelers: originalQuote.travelers,
+          travelers_adults: originalQuote.travelersAdults,
+          travelers_children: originalQuote.travelersChildren,
+          travelers_total: originalQuote.travelersTotal,
+          
+          // Pricing Information
+          total_price: originalQuote.totalPrice,
+          currency: originalQuote.currency,
+          base_cost: originalQuote.baseCost,
+          
+          // Payment Schedule
+          payment_deposit: originalQuote.paymentDeposit,
+          payment_second_payment: originalQuote.paymentSecondPayment,
+          payment_final_payment: originalQuote.paymentFinalPayment,
+          payment_deposit_date: originalQuote.paymentDepositDate,
+          payment_second_payment_date: originalQuote.paymentSecondPaymentDate,
+          payment_final_payment_date: originalQuote.paymentFinalPaymentDate,
+          
+          // Quote Details
+          status: 'draft',
+          version: (originalQuote.version || 1) + 1,
+          is_revision: true,
+          parent_quote_id: originalQuoteId,
+          internal_notes: revisionNotes || `Revision of quote ${originalQuote.quoteNumber}`,
+          
+          // Component Data (JSONB)
+          selected_components: originalQuote.selectedComponents,
+          selected_package: originalQuote.selectedPackage,
+          selected_tier: originalQuote.selectedTier,
+          price_breakdown: originalQuote.priceBreakdown,
+          
+          // Timestamps
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
+        })
         .select()
         .single();
 
       if (error) {
-        throw new Error(`Failed to create booking: ${error.message}`);
+        throw new Error(`Failed to create quote revision: ${error.message}`);
       }
 
-      // Update quote status to confirmed
-      await this.updateQuoteStatus(quoteId, 'confirmed');
-
-      return booking.id;
-
+      return newQuote.id;
     } catch (error) {
-      console.error('Create booking error:', error);
+      console.error('Error in createQuoteRevision:', error);
       throw error;
     }
   }
 
-  /**
-   * Delete a quote by ID (team-based)
-   */
-  static async deleteQuote(quoteId: string): Promise<void> {
+  // Add quote attachment
+  static async addQuoteAttachment(
+    quoteId: string,
+    fileName: string,
+    filePath: string,
+    fileSize: number,
+    mimeType: string,
+    attachmentType: string = 'quote_pdf'
+  ): Promise<string> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
+      // For now, just log the attachment
+      // In a real implementation, this would store file metadata
+      console.log('Adding quote attachment:', {
+        quoteId,
+        fileName,
+        filePath,
+        fileSize,
+        mimeType,
+        attachmentType
+      });
+
+      return 'attachment_' + Date.now(); // Return a mock attachment ID
+    } catch (error) {
+      console.error('Error in addQuoteAttachment:', error);
+      throw error;
+    }
+  }
+
+  // Update quote status
+  static async updateQuoteStatus(
+    quoteId: string,
+    status: Quote['status'],
+    notes?: string
+  ): Promise<void> {
+    try {
+      const updateData: any = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+
+      // Set specific timestamps based on status
+      switch (status) {
+        case 'sent':
+          updateData.sent_at = new Date().toISOString();
+          break;
+        case 'accepted':
+          updateData.accepted_at = new Date().toISOString();
+          break;
+        case 'declined':
+          updateData.declined_at = new Date().toISOString();
+          break;
+        case 'expired':
+          updateData.expired_at = new Date().toISOString();
+          break;
       }
 
-      // Ensure user has a team
-      await ensureUserHasTeam();
-
-      // Get user's team ID
-      const teamId = await getCurrentUserTeamId();
+      if (notes) {
+        updateData.internal_notes = notes;
+      }
 
       const { error } = await supabase
         .from('quotes')
+        .update(updateData)
+        .eq('id', quoteId);
+
+      if (error) {
+        throw new Error(`Failed to update quote status: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error in updateQuoteStatus:', error);
+      throw error;
+    }
+  }
+
+  // Update quote details
+  static async updateQuote(
+    quoteId: string,
+    updateData: Partial<Quote>
+  ): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('quotes')
+        .update({
+          ...updateData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', quoteId);
+
+      if (error) {
+        throw new Error(`Failed to update quote: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error in updateQuote:', error);
+      throw error;
+    }
+  }
+
+  // Delete a quote
+  static async deleteQuote(quoteId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('quotes')
         .delete()
-        .eq('id', quoteId)
-        .eq('team_id', teamId);
+        .eq('id', quoteId);
 
       if (error) {
         throw new Error(`Failed to delete quote: ${error.message}`);
       }
-
     } catch (error) {
-      console.error('Delete quote error:', error);
+      console.error('Error in deleteQuote:', error);
       throw error;
     }
   }
 
-  // Private helper methods
+  // Get quote statistics
+  static async getQuoteStats(): Promise<{
+    total: number;
+    draft: number;
+    sent: number;
+    accepted: number;
+    declined: number;
+    expired: number;
+    totalValue: number;
+  }> {
+    try {
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User must be part of a team to view quote stats');
+      }
 
-  private static async calculateBaseCosts(quoteData: QuoteInput): Promise<number> {
-    let baseCost = 0;
+      const { data, error } = await supabase
+        .from('quotes')
+        .select('status, total_price, currency')
+        .eq('team_id', teamId);
 
-    // If we have selected components with actual prices, use those
-    if (quoteData.packageComponents?.selectedItems?.length > 0) {
-      console.log('💰 Using selected component prices from intake form');
-      
-      // Use the budget amount which now contains the calculated total from selected components
-      baseCost = quoteData.budget.amount;
-      
-      console.log('📊 Base cost from selected components:', {
-        totalCost: baseCost,
-        currency: quoteData.budget.currency,
-        selectedItems: quoteData.packageComponents.selectedItems,
-        aiAnalysis: quoteData.packageComponents.aiAnalysis
+      if (error) {
+        throw new Error(`Failed to fetch quote stats: ${error.message}`);
+      }
+
+      const stats = {
+        total: 0,
+        draft: 0,
+        sent: 0,
+        accepted: 0,
+        declined: 0,
+        expired: 0,
+        totalValue: 0
+      };
+
+      data?.forEach(quote => {
+        stats.total++;
+        stats[quote.status as keyof typeof stats]++;
+        if (quote.total_price) {
+          stats.totalValue += quote.total_price;
+        }
       });
-      
-      return baseCost;
-    }
 
-    // Fallback to mock calculation if no selected components
-    console.log('💰 Using fallback mock calculations');
-    
-    // Base trip cost
-    baseCost += quoteData.budget.amount * 0.7; // Assume 70% of budget is base cost
-
-    // Add inventory costs if requested
-    if (quoteData.includeInventory.flights) {
-      baseCost += 800; // Mock flight cost
+      return stats;
+    } catch (error) {
+      console.error('Error in getQuoteStats:', error);
+      throw error;
     }
-    if (quoteData.includeInventory.hotels) {
-      baseCost += 1200; // Mock hotel cost
-    }
-    if (quoteData.includeInventory.events) {
-      baseCost += 300; // Mock event cost
-    }
-
-    // Add selected event ticket costs per traveler
-    if (quoteData.selectedEvent && quoteData.selectedTicket) {
-      const ticketCostPerPerson = quoteData.selectedTicket.price;
-      const numberOfTravelers = quoteData.tripDetails.numberOfTravelers;
-      const totalTicketCost = ticketCostPerPerson * numberOfTravelers;
-      
-      console.log('🎫 Adding event ticket costs:', {
-        eventName: quoteData.selectedEvent.name,
-        ticketType: quoteData.selectedTicket.categoryName,
-        ticketPrice: ticketCostPerPerson,
-        currency: quoteData.selectedTicket.currency,
-        numberOfTravelers,
-        totalTicketCost
-      });
-      
-      baseCost += totalTicketCost;
-    }
-
-    return baseCost;
   }
 
-  private static calculateDuration(startDate: string, endDate: string): number {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  // Search quotes
+  static async searchQuotes(
+    searchTerm: string,
+    status?: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<{ quotes: Quote[]; total: number }> {
+    try {
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User must be part of a team to search quotes');
+      }
+
+      let query = supabase
+        .from('quotes')
+        .select('*', { count: 'exact' })
+        .eq('team_id', teamId)
+        .or(`client_name.ilike.%${searchTerm}%,client_email.ilike.%${searchTerm}%,event_name.ilike.%${searchTerm}%,package_name.ilike.%${searchTerm}%`)
+        .order('created_at', { ascending: false });
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data, error, count } = await query
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        throw new Error(`Failed to search quotes: ${error.message}`);
+      }
+
+      const quotes = data?.map(this.mapQuoteFromJson) || [];
+      return { quotes, total: count || 0 };
+    } catch (error) {
+      console.error('Error in searchQuotes:', error);
+      throw error;
+    }
+  }
+
+  // Map database record to Quote interface
+  private static mapQuoteFromJson(data: any): Quote {
+    return {
+      id: data.id,
+      userId: data.user_id,
+      clientId: data.client_id,
+      teamId: data.team_id,
+      consultantId: data.consultant_id,
+      
+      // Client Information
+      clientName: data.client_name,
+      clientEmail: data.client_email,
+      clientPhone: data.client_phone,
+      clientAddress: data.client_address,
+      
+      // Event Information
+      eventId: data.event_id,
+      eventName: data.event_name,
+      eventLocation: data.event_location,
+      eventStartDate: data.event_start_date,
+      eventEndDate: data.event_end_date,
+      
+      // Package Information
+      packageId: data.package_id,
+      packageName: data.package_name,
+      packageBaseType: data.package_base_type,
+      tierId: data.tier_id,
+      tierName: data.tier_name,
+      tierDescription: data.tier_description,
+      tierPriceOverride: data.tier_price_override,
+      
+      // Travel Information
+      travelers: data.travelers,
+      travelersAdults: data.travelers_adults,
+      travelersChildren: data.travelers_children,
+      travelersTotal: data.travelers_total,
+      
+      // Pricing Information
+      totalPrice: data.total_price,
+      currency: data.currency,
+      baseCost: data.base_cost,
+      
+      // Payment Schedule
+      paymentDeposit: data.payment_deposit,
+      paymentSecondPayment: data.payment_second_payment,
+      paymentFinalPayment: data.payment_final_payment,
+      paymentDepositDate: data.payment_deposit_date,
+      paymentSecondPaymentDate: data.payment_second_payment_date,
+      paymentFinalPaymentDate: data.payment_final_payment_date,
+      
+      // Quote Details
+      quoteNumber: data.quote_number,
+      quoteReference: data.quote_reference,
+      status: data.status,
+      version: data.version,
+      isRevision: data.is_revision,
+      parentQuoteId: data.parent_quote_id,
+      
+      // Component Data (JSONB)
+      selectedComponents: data.selected_components,
+      selectedPackage: data.selected_package,
+      selectedTier: data.selected_tier,
+      priceBreakdown: data.price_breakdown,
+      
+      // Additional Data
+      internalNotes: data.internal_notes,
+      
+      // Timestamps
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      expiresAt: data.expires_at,
+      sentAt: data.sent_at,
+      acceptedAt: data.accepted_at,
+      declinedAt: data.declined_at,
+      expiredAt: data.expired_at
+    };
+  }
+
+  // Legacy methods for backward compatibility
+  static async getQuotes(): Promise<QuoteResponse[]> {
+    const { quotes } = await this.getTeamQuotes();
+    return quotes.map(quote => ({
+      id: quote.id,
+      status: quote.status,
+      totalPrice: quote.totalPrice || 0,
+      currency: quote.currency,
+      clientName: quote.clientName,
+      clientEmail: quote.clientEmail,
+      clientPhone: quote.clientPhone,
+      eventName: quote.eventName,
+      eventLocation: quote.eventLocation,
+      packageName: quote.packageName,
+      tierName: quote.tierName,
+      travelersAdults: quote.travelersAdults,
+      travelersChildren: quote.travelersChildren,
+      travelersTotal: quote.travelersTotal,
+      paymentDeposit: quote.paymentDeposit,
+      paymentSecondPayment: quote.paymentSecondPayment,
+      paymentFinalPayment: quote.paymentFinalPayment,
+      quoteNumber: quote.quoteNumber,
+      createdAt: quote.createdAt,
+      updatedAt: quote.updatedAt,
+      selectedComponents: quote.selectedComponents,
+      selectedPackage: quote.selectedPackage,
+      selectedTier: quote.selectedTier,
+      priceBreakdown: quote.priceBreakdown
+    }));
+  }
+
+  static async getQuotesByClient(clientId: string): Promise<QuoteResponse[]> {
+    const { quotes } = await this.getTeamQuotes();
+    return quotes
+      .filter(quote => quote.clientId === clientId)
+      .map(quote => ({
+        id: quote.id,
+        status: quote.status,
+        totalPrice: quote.totalPrice || 0,
+        currency: quote.currency,
+        clientName: quote.clientName,
+        clientEmail: quote.clientEmail,
+        clientPhone: quote.clientPhone,
+        eventName: quote.eventName,
+        eventLocation: quote.eventLocation,
+        packageName: quote.packageName,
+        tierName: quote.tierName,
+        travelersAdults: quote.travelersAdults,
+        travelersChildren: quote.travelersChildren,
+        travelersTotal: quote.travelersTotal,
+        paymentDeposit: quote.paymentDeposit,
+        paymentSecondPayment: quote.paymentSecondPayment,
+        paymentFinalPayment: quote.paymentFinalPayment,
+        quoteNumber: quote.quoteNumber,
+        createdAt: quote.createdAt,
+        updatedAt: quote.updatedAt,
+        selectedComponents: quote.selectedComponents,
+        selectedPackage: quote.selectedPackage,
+        selectedTier: quote.selectedTier,
+        priceBreakdown: quote.priceBreakdown
+      }));
+  }
+
+  static async confirmQuote(quoteId: string): Promise<string> {
+    await this.updateQuoteStatus(quoteId, 'confirmed');
+    return quoteId;
+  }
+
+  static async createBooking(quoteId: string, bookingData: any): Promise<string> {
+    // This would create a booking from a quote
+    // Implementation depends on your booking system
+    throw new Error('Booking creation not implemented yet');
   }
 } 

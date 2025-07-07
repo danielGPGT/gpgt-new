@@ -174,7 +174,15 @@ export function StepEventSelection({ setCurrentStep, currentStep }: StepEventSel
               event={event}
               selected={selectedEventId === event.id}
               onSelect={() => {
-                setValue('selectedEvent', event);
+                // Map database fields to form schema fields
+                const mappedEvent = {
+                  id: event.id,
+                  name: event.name,
+                  location: event.venue?.name || event.location || '',
+                  startDate: event.start_date || '',
+                  endDate: event.end_date || event.start_date || ''
+                };
+                setValue('selectedEvent', mappedEvent);
                 setCurrentStep(currentStep + 1);
               }}
             />

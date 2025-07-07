@@ -24,9 +24,11 @@ import ViewItinerary from "./pages/ViewItinerary";
 import EditItinerary from "./pages/EditItinerary";
 import { Dashboard } from "./pages/Dashboard";
 import QuoteTest from "./pages/QuoteTest";
-import Quotes from "./pages/Quotes";
+import { Quotes } from "./pages/Quotes";
 import Bookings from "./pages/Bookings";
-import ViewQuote from "./pages/ViewQuote";
+import { ViewQuote } from "./pages/ViewQuote";
+import { EditQuote } from "./pages/EditQuote";
+import { CreateBooking } from "./pages/CreateBooking";
 import MediaLibrary from "./pages/MediaLibrary";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import Settings from "./pages/Settings";
@@ -182,7 +184,9 @@ function AppContent() {
                   <Route path="/quotes" element={<Quotes />} />
                   <Route path="/bookings" element={<Bookings />} />
                   <Route path="/media-library" element={<MediaLibrary />} />
-                  <Route path="/quote/:quoteId" element={<ViewQuote />} />
+                  <Route path="/quotes/:quoteId" element={<ViewQuote />} />
+                  <Route path="/quotes/:quoteId/edit" element={<EditQuote />} />
+                  <Route path="/quotes/:quoteId/create-booking" element={<CreateBooking />} />
                   <Route path="/order/success" element={<OrderConfirmation />} />
                   
                   {/* CRM Routes */}

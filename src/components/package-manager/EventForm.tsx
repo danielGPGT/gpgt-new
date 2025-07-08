@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -49,6 +50,18 @@ export function EventForm({ open, onOpenChange, event, sports, venues }: EventFo
     sport_id: event?.sport_id || '',
     venue_id: event?.venue_id || '',
   });
+
+  // Update formData when event or open changes
+  useEffect(() => {
+    setFormData({
+      name: event?.name || '',
+      location: event?.location || '',
+      start_date: event?.start_date || '',
+      end_date: event?.end_date || '',
+      sport_id: event?.sport_id || '',
+      venue_id: event?.venue_id || '',
+    });
+  }, [event, open]);
 
   // Convert string dates to Date objects for the calendar
   const startDate = formData.start_date ? new Date(formData.start_date) : undefined;

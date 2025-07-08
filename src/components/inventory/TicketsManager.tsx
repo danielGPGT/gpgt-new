@@ -56,7 +56,10 @@ const getCurrencySymbol = (currency: string): string => {
     'CHF': 'CHF',
     'SEK': 'kr',
     'NOK': 'kr',
-    'DKK': 'kr'
+    'DKK': 'kr',
+    'BHD': 'BD',
+    'SAR': '﷼',
+    'QAR': '﷼'
   };
   return symbols[currency] || currency;
 };
@@ -304,7 +307,7 @@ export function TicketsManager() {
 
   // Pagination state
   const [page, setPage] = useState(1);
-  const [rowsPerPage] = useState(25); // You can make this user-configurable if desired
+  const [rowsPerPage] = useState(10); // Changed to 10 per page
 
   // Fetch data
   const { data: sports = [] } = useQuery({
@@ -1741,6 +1744,16 @@ function TicketFormDrawer({
                         <SelectItem value="EUR">EUR</SelectItem>
                         <SelectItem value="GBP">GBP</SelectItem>
                         <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="CAD">CAD</SelectItem>
+                        <SelectItem value="AUD">AUD</SelectItem>
+                        <SelectItem value="JPY">JPY</SelectItem>
+                        <SelectItem value="CHF">CHF</SelectItem>
+                        <SelectItem value="SEK">SEK</SelectItem>
+                        <SelectItem value="NOK">NOK</SelectItem>
+                        <SelectItem value="DKK">DKK</SelectItem>
+                        <SelectItem value="BHD">BHD</SelectItem>
+                        <SelectItem value="SAR">SAR</SelectItem>
+                        <SelectItem value="QAR">QAR</SelectItem>
                       </SelectContent>
                     </Select>
                   )}
@@ -1785,6 +1798,16 @@ function TicketFormDrawer({
                         <SelectItem value="EUR">EUR</SelectItem>
                         <SelectItem value="GBP">GBP</SelectItem>
                         <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="CAD">CAD</SelectItem>
+                        <SelectItem value="AUD">AUD</SelectItem>
+                        <SelectItem value="JPY">JPY</SelectItem>
+                        <SelectItem value="CHF">CHF</SelectItem>
+                        <SelectItem value="SEK">SEK</SelectItem>
+                        <SelectItem value="NOK">NOK</SelectItem>
+                        <SelectItem value="DKK">DKK</SelectItem>
+                        <SelectItem value="BHD">BHD</SelectItem>
+                        <SelectItem value="SAR">SAR</SelectItem>
+                        <SelectItem value="QAR">QAR</SelectItem>
                       </SelectContent>
                     </Select>
                   )}

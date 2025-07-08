@@ -964,3 +964,108 @@ export class BookingService {
     }
   }
 } 
+
+/**
+ * Extracts all booking-relevant data from a quote row.
+ * @param quote The quote object as returned from the DB
+ * @returns An object with all fields needed for booking creation
+ */
+export function extractBookingDataFromQuote(quote: any) {
+  // 1. Lead traveler info
+  const [firstName, ...lastNameParts] = (quote.client_name || '').split(' ');
+  const leadTraveler = {
+    firstName: firstName || '',
+    lastName: lastNameParts.join(' ') || '',
+    email: quote.client_email || '',
+    phone: quote.client_phone || '',
+    address: quote.client_address || {},
+  };
+
+  // 2. Guest count (prompt for guest names later)
+  let guestCount = 0;
+  if (quote.travelers && typeof quote.travelers === 'object') {
+    guestCount = (quote.travelers.adults || 1) - 1 + (quote.travelers.children || 0);
+  } else if (quote.travelers_adults) {
+    guestCount = (parseInt(quote.travelers_adults) || 1) - 1 + (parseInt(quote.travelers_children) || 0);
+  }
+
+  // 3. Components
+  let components = [];
+  try {
+    components = typeof quote.selected_components === 'string'
+      ? JSON.parse(quote.selected_components)
+      : (quote.selected_components || []);
+  } catch (e) {
+    components = [];
+  }
+
+  // 4. Payments
+  const payments = [
+    {
+      paymentType: 'deposit',
+      amount: Number(quote.payment_deposit) || 0,
+      dueDate: quote.payment_deposit_date || null,
+    },
+    {
+      paymentType: 'second_payment',
+      amount: Number(quote.payment_second_payment) || 0,
+      dueDate: quote.payment_second_payment_date || null,
+    },
+    {
+      paymentType: 'final_payment',
+      amount: Number(quote.payment_final_payment) || 0,
+      dueDate: quote.payment_final_payment_date || null,
+    },
+  ];
+
+  // 5. Package/tier/price breakdown
+  let packageSnapshot = null;
+  try {
+    packageSnapshot = typeof quote.selected_package === 'string'
+      ? JSON.parse(quote.selected_package)
+      : quote.selected_package;
+  } catch (e) {
+    packageSnapshot = quote.selected_package || null;
+  }
+  let tierSnapshot = null;
+  try {
+    tierSnapshot = typeof quote.selected_tier === 'string'
+      ? JSON.parse(quote.selected_tier)
+      : quote.selected_tier;
+  } catch (e) {
+    tierSnapshot = quote.selected_tier || null;
+  }
+  let priceBreakdown = null;
+  try {
+    priceBreakdown = typeof quote.price_breakdown === 'string'
+      ? JSON.parse(quote.price_breakdown)
+      : quote.price_breakdown;
+  } catch (e) {
+    priceBreakdown = quote.price_breakdown || null;
+  }
+
+  // 6. Other fields
+  return {
+    leadTraveler,
+    guestCount,
+    components,
+    payments,
+    packageSnapshot,
+    tierSnapshot,
+    priceBreakdown,
+    eventId: quote.event_id,
+    clientId: quote.client_id,
+    teamId: quote.team_id,
+    consultantId: quote.consultant_id,
+    userId: quote.user_id,
+    totalPrice: Number(quote.total_price) || 0,
+    currency: quote.currency || 'GBP',
+    internalNotes: quote.internal_notes || '',
+    quoteId: quote.id,
+    quoteNumber: quote.quote_number,
+    status: quote.status,
+    version: quote.version,
+    parentQuoteId: quote.parent_quote_id,
+    // Add more fields as needed
+  };
+} 

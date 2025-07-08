@@ -88,7 +88,7 @@ import { SportForm } from '@/components/forms/SportForm';
 import { VenueForm } from '@/components/forms/VenueForm';
 import { cleanEventUpdate } from '@/components/inventory/SportsEventsManager';
 import { PackageForm } from '@/components/package-manager/PackageForm';
-import { EventForm } from '@/components/package-manager/EventForm';
+import { EventFormDrawer } from '@/components/forms/EventFormDrawer';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PackageTierForm } from '@/components/package-manager/PackageTierForm';
@@ -106,6 +106,8 @@ interface Filters {
   date_from?: Date;
   date_to?: Date;
   countries?: string[];
+  venueSearch?: string;
+  countrySearch?: string;
 }
 
 export default function PackageManager() {
@@ -220,6 +222,25 @@ export default function PackageManager() {
     return true;
   }) || [];
 
+  // Sorting
+  const [sortOption, setSortOption] = useState<'date-asc' | 'date-desc' | 'name-asc' | 'name-desc'>('date-asc');
+  const sortedEvents = [...filteredEvents].sort((a, b) => {
+    if (sortOption === 'date-asc') {
+      const aTime = a.start_date ? new Date(a.start_date).getTime() : 0;
+      const bTime = b.start_date ? new Date(b.start_date).getTime() : 0;
+      return aTime - bTime;
+    } else if (sortOption === 'date-desc') {
+      const aTime = a.start_date ? new Date(a.start_date).getTime() : 0;
+      const bTime = b.start_date ? new Date(b.start_date).getTime() : 0;
+      return bTime - aTime;
+    } else if (sortOption === 'name-asc') {
+      return a.name.localeCompare(b.name);
+    } else if (sortOption === 'name-desc') {
+      return b.name.localeCompare(a.name);
+    }
+    return 0;
+  });
+
   const getSportIcon = (sportName: string) => {
     const icons: { [key: string]: React.ReactNode } = {
       'Formula 1': <img src={f1Icon} alt="Formula 1" className="h-10 w-10 brightness-0 invert" />,
@@ -296,7 +317,7 @@ export default function PackageManager() {
               {/* Search */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Search className="h-4 w-4 text-[var(--muted-foreground)]" />
+                  <Search className="h-4 w-4 text-primary" />
                   <Label className="text-sm font-medium text-[var(--foreground)]">Search Events</Label>
                 </div>
                 <div className="relative">
@@ -360,7 +381,7 @@ export default function PackageManager() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-[var(--secondary)]" />
+                    <MapPin className="h-4 w-4 text-primary" />
                     <Label className="text-sm font-medium text-[var(--foreground)]">Venues</Label>
                   </div>
                   <Button
@@ -372,31 +393,58 @@ export default function PackageManager() {
                     <Plus className="h-3 w-3" />
                   </Button>
                 </div>
-                <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                  {venues?.map((venue) => (
-                    <div key={venue.id} className="flex items-center space-x-2 hover:bg-[var(--muted)]/50 rounded-md p-1 transition-colors">
-                      <Checkbox
-                        id={`venue-${venue.id}`}
-                        checked={filters.venue_ids?.includes(venue.id) || false}
-                        onCheckedChange={(checked) => {
-                          setFilters(prev => ({
-                            ...prev,
-                            venue_ids: checked 
-                              ? [...(prev.venue_ids || []), venue.id]
-                              : (prev.venue_ids || []).filter(id => id !== venue.id)
-                          }));
-                        }}
-                        className="data-[state=checked]:bg-[var(--secondary)] data-[state=checked]:border-[var(--secondary)]"
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between bg-[var(--background)] border-[var(--border)] hover:bg-[var(--muted)] text-[var(--foreground)]"
+                    >
+                      {filters.venue_ids?.length
+                        ? `${filters.venue_ids.length} selected`
+                        : "Select venues"}
+                      <ChevronRight className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-0">
+                    <div className="p-2">
+                      <Input
+                        placeholder="Search venues..."
+                        onChange={e => setFilters(prev => ({ ...prev, venueSearch: e.target.value }))}
+                        value={filters.venueSearch || ''}
+                        className="mb-2"
                       />
-                      <Label 
-                        htmlFor={`venue-${venue.id}`}
-                        className="text-sm cursor-pointer text-[var(--foreground)] hover:text-[var(--secondary)] transition-colors"
-                      >
-                        {venue.name}
-                      </Label>
+                      <div className="max-h-48 overflow-y-auto">
+                        {venues?.filter(v => !filters.venueSearch || v.name.toLowerCase().includes(filters.venueSearch.toLowerCase())).map((venue) => (
+                          <div key={venue.id} className="flex items-center space-x-2 hover:bg-[var(--muted)]/50 rounded-md p-1 transition-colors">
+                            <Checkbox
+                              id={`venue-${venue.id}`}
+                              checked={filters.venue_ids?.includes(venue.id) || false}
+                              onCheckedChange={(checked) => {
+                                setFilters(prev => ({
+                                  ...prev,
+                                  venue_ids: checked
+                                    ? [...(prev.venue_ids || []), venue.id]
+                                    : (prev.venue_ids || []).filter(id => id !== venue.id)
+                                }));
+                              }}
+                              className="data-[state=checked]:bg-[var(--secondary)] data-[state=checked]:border-[var(--secondary)]"
+                            />
+                            <Label
+                              htmlFor={`venue-${venue.id}`}
+                              className="text-sm cursor-pointer text-[var(--foreground)] hover:text-[var(--secondary)] transition-colors"
+                            >
+                              {venue.name}
+                            </Label>
+                          </div>
+                        ))}
+                        {venues && venues.length === 0 && (
+                          <div className="text-sm text-[var(--muted-foreground)] p-2">No venues found</div>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <Separator className="bg-[var(--border)]" />
@@ -404,7 +452,7 @@ export default function PackageManager() {
               {/* Date Range */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-[var(--chart-4)]" />
+                  <Calendar className="h-4 w-4 text-[var(--chart-4)] text-primary" />
                   <Label className="text-sm font-medium text-[var(--foreground)]">Date Range</Label>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -435,7 +483,7 @@ export default function PackageManager() {
                         size="sm"
                         className="bg-[var(--background)] border-[var(--border)] hover:bg-[var(--muted)] text-[var(--foreground)]"
                       >
-                        <Calendar className="h-3 w-3 mr-1" />
+                        <Calendar className="h-3 w-3 mr-1"/>
                         To
                       </Button>
                     </PopoverTrigger>
@@ -456,39 +504,66 @@ export default function PackageManager() {
               {/* Country Filter */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-[var(--chart-2)]" />
+                  <Globe className="h-4 w-4 text-[var(--chart-2)] text-primary" />
                   <Label className="text-sm font-medium text-[var(--foreground)]">Countries</Label>
                 </div>
-                <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                  {venues?.reduce((countries: string[], venue) => {
-                    if (venue.country && !countries.includes(venue.country)) {
-                      countries.push(venue.country);
-                    }
-                    return countries;
-                  }, []).map((country) => (
-                    <div key={country} className="flex items-center space-x-2 hover:bg-[var(--muted)]/50 rounded-md p-1 transition-colors">
-                      <Checkbox
-                        id={`country-${country}`}
-                        checked={filters.countries?.includes(country) || false}
-                        onCheckedChange={(checked) => {
-                          setFilters(prev => ({
-                            ...prev,
-                            countries: checked 
-                              ? [...(prev.countries || []), country]
-                              : (prev.countries || []).filter(c => c !== country)
-                          }));
-                        }}
-                        className="data-[state=checked]:bg-[var(--chart-2)] data-[state=checked]:border-[var(--chart-2)]"
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between bg-[var(--background)] border-[var(--border)] hover:bg-[var(--muted)] text-[var(--foreground)]"
+                    >
+                      {filters.countries?.length
+                        ? `${filters.countries.length} selected`
+                        : "Select countries"}
+                      <ChevronRight className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-0">
+                    <div className="p-2">
+                      <Input
+                        placeholder="Search countries..."
+                        onChange={e => setFilters(prev => ({ ...prev, countrySearch: e.target.value }))}
+                        value={filters.countrySearch || ''}
+                        className="mb-2"
                       />
-                      <Label 
-                        htmlFor={`country-${country}`}
-                        className="text-sm cursor-pointer text-[var(--foreground)] hover:text-[var(--chart-2)] transition-colors"
-                      >
-                        {country}
-                      </Label>
+                      <div className="max-h-48 overflow-y-auto">
+                        {venues && venues.reduce((countries: string[], venue) => {
+                          if (venue.country && !countries.includes(venue.country)) {
+                            countries.push(venue.country);
+                          }
+                          return countries;
+                        }, []).filter(country => !filters.countrySearch || country.toLowerCase().includes(filters.countrySearch.toLowerCase())).map((country) => (
+                          <div key={country} className="flex items-center space-x-2 hover:bg-[var(--muted)]/50 rounded-md p-1 transition-colors">
+                            <Checkbox
+                              id={`country-${country}`}
+                              checked={filters.countries?.includes(country) || false}
+                              onCheckedChange={(checked) => {
+                                setFilters(prev => ({
+                                  ...prev,
+                                  countries: checked
+                                    ? [...(prev.countries || []), country]
+                                    : (prev.countries || []).filter(c => c !== country)
+                                }));
+                              }}
+                              className="data-[state=checked]:bg-[var(--chart-2)] data-[state=checked]:border-[var(--chart-2)]"
+                            />
+                            <Label
+                              htmlFor={`country-${country}`}
+                              className="text-sm cursor-pointer text-[var(--foreground)] hover:text-[var(--chart-2)] transition-colors"
+                            >
+                              {country}
+                            </Label>
+                          </div>
+                        ))}
+                        {venues && venues.length === 0 && (
+                          <div className="text-sm text-[var(--muted-foreground)] p-2">No countries found</div>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </CardContent>
           </Card>
@@ -497,10 +572,29 @@ export default function PackageManager() {
         {/* Right Column - Events Grid */}
         <div className="flex-1">
           <div className="space-y-6">
+            {/* Sorting Dropdown */}
+            <div className="flex justify-end mb-2">
+              <Select value={sortOption} onValueChange={v => setSortOption(v as any)}>
+                <SelectTrigger className="w-56">
+                  <SelectValue>
+                    {sortOption === 'date-asc' && 'Date: Earliest to Latest'}
+                    {sortOption === 'date-desc' && 'Date: Latest to Earliest'}
+                    {sortOption === 'name-asc' && 'Name: A-Z'}
+                    {sortOption === 'name-desc' && 'Name: Z-A'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date-asc">Date: Earliest to Latest</SelectItem>
+                  <SelectItem value="date-desc">Date: Latest to Earliest</SelectItem>
+                  <SelectItem value="name-asc">Name: A-Z</SelectItem>
+                  <SelectItem value="name-desc">Name: Z-A</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {isLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[...Array(6)].map((_, i) => (
-                  <Card key={i} className="animate-pulse bg-gradient-to-br from-[var(--card)] to-[var(--card)]/80 border-[var(--border)]">
+                  <Card key={i} className="h-full animate-pulse bg-gradient-to-br from-[var(--card)] to-[var(--card)]/80 border-[var(--border)]">
                     <CardHeader>
                       <div className="h-4 bg-[var(--muted)] rounded w-3/4"></div>
                       <div className="h-3 bg-[var(--muted)] rounded w-1/2"></div>
@@ -511,9 +605,9 @@ export default function PackageManager() {
                   </Card>
                 ))}
               </div>
-            ) : filteredEvents.length === 0 ? (
-              <Card className="bg-gradient-to-b from-[var(--card)]/95 to-[var(--card)]/20 border-[var(--border)] shadow-sm">
-                <CardContent className="text-center py-16">
+            ) : sortedEvents.length === 0 ? (
+              <Card className="bg-gradient-to-b h-full from-[var(--card)]/95 to-[var(--card)]/20 border-[var(--border)] shadow-sm">
+                <CardContent className="text-center py-16 h-full">
                   <div className="h-16 w-16 rounded-full bg-[var(--muted)]/20 flex items-center justify-center mx-auto mb-4">
                     <Package className="h-8 w-8 text-[var(--muted-foreground)]" />
                   </div>
@@ -536,7 +630,7 @@ export default function PackageManager() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 lg:gap-6">
                 <AnimatePresence>
-                  {filteredEvents.map((event) => (
+                  {sortedEvents.map((event) => (
                     <motion.div
                       key={event.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -547,7 +641,7 @@ export default function PackageManager() {
                       className="group"
                     >
                       <Card 
-                        className={`relative overflow-hidden transition-all duration-300 cursor-pointer border-[var(--border)] hover:border-[var(--primary)]/40 hover:shadow-xl hover:shadow-[var(--primary)]/5 ${
+                        className={`h-full relative overflow-hidden transition-all duration-300 cursor-pointer border-[var(--border)] hover:border-[var(--primary)]/40 hover:shadow-xl hover:shadow-[var(--primary)]/5 ${
                           event.event_image 
                             ? 'bg-cover bg-center bg-no-repeat min-h-[280px] sm:min-h-[320px]' 
                             : 'bg-gradient-to-br from-[var(--card)] via-[var(--card)]/95 to-[var(--card)]/90 min-h-[280px] sm:min-h-[320px]'
@@ -750,16 +844,43 @@ export default function PackageManager() {
         onOpenChange={setIsSportFormOpen} 
       />
       {/* Event Form */}
-      <EventForm
-        open={isEventFormOpen}
-        onOpenChange={(open) => {
-          setIsEventFormOpen(open);
-          if (!open) setEditingEvent(null);
-        }}
-        event={editingEvent || undefined}
-        sports={sports || []}
-        venues={venues || []}
-      />
+      <Drawer open={isEventFormOpen} onOpenChange={(open) => {
+        setIsEventFormOpen(open);
+        if (!open) setEditingEvent(null);
+      }} direction="right">
+        <DrawerContent className="!max-w-4xl">
+          <EventFormDrawer
+            event={editingEvent || undefined}
+            sports={sports || []}
+            venues={(venues || []).map(v => ({
+              ...v,
+              slug: v.slug ?? null,
+              country: v.country ?? null,
+              city: v.city ?? null,
+              timezone: v.timezone ?? null,
+              latitude: v.latitude ?? null,
+              longitude: v.longitude ?? null,
+              description: v.description ?? null,
+              images: v.images ?? [],
+              map_url: v.map_url ?? null,
+              website: v.website ?? null,
+            }))}
+            onSubmit={(data) => {
+              if (editingEvent) {
+                updateEventMutation.mutate({ id: editingEvent.id, data });
+              } else {
+                createEventMutation.mutate(data);
+              }
+            }}
+            onCancel={() => {
+              setIsEventFormOpen(false);
+              setEditingEvent(null);
+            }}
+            isLoading={createEventMutation.isPending || updateEventMutation.isPending}
+            queryClient={queryClient}
+          />
+        </DrawerContent>
+      </Drawer>
       <VenueForm 
         open={isVenueFormOpen} 
         onOpenChange={setIsVenueFormOpen} 

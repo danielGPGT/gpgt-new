@@ -272,6 +272,11 @@ const proTips = [
   }
 ];
 
+// Utility function: round up to nearest 100, then subtract 2
+function roundUpHundredMinusTwo(n: number) {
+  return Math.ceil(n / 100) * 100 - 2;
+}
+
 // --- PRICE SUMMARY CARD COMPONENT ---
   function PriceSummaryCardContent() {
     const { watch, setValue } = useFormContext();
@@ -333,40 +338,44 @@ const proTips = [
   // --- Lounge Pass ---
   const loungePass = components.loungePass;
   const loungePassTotal = loungePass && loungePass.id ? (loungePass.price || 0) * (loungePass.quantity || 1) : 0;
-  const total = ticketsTotal + hotelsTotal + circuitTransfersTotal + airportTransfersTotal + flightsTotal + loungePassTotal;
+  const originalTotal = ticketsTotal + hotelsTotal + circuitTransfersTotal + airportTransfersTotal + flightsTotal + loungePassTotal;
+  const roundedTotal = roundUpHundredMinusTwo(originalTotal);
 
     // Currency conversion effect
     useEffect(() => {
       const convertCurrency = async () => {
         if (selectedCurrency === 'GBP') {
-          setConvertedTotal(total);
+          setConvertedTotal(roundedTotal);
           setExchangeRate(1);
-          setValue('summary.convertedPrice', total);
+          setValue('summary.convertedPrice', roundedTotal);
           setValue('summary.exchangeRate', 1);
+          setValue('summary.totalPrice', roundedTotal); // Ensure form value is updated
           return;
         }
 
         setIsConverting(true);
         try {
-          const conversion = await CurrencyService.convertCurrency(total, 'GBP', selectedCurrency);
+          const conversion = await CurrencyService.convertCurrency(roundedTotal, 'GBP', selectedCurrency);
           setConvertedTotal(conversion.convertedAmount);
           setExchangeRate(conversion.adjustedRate);
           setValue('summary.convertedPrice', conversion.convertedAmount);
           setValue('summary.exchangeRate', conversion.adjustedRate);
+          setValue('summary.totalPrice', roundedTotal); // Store original rounded GBP value
         } catch (error) {
           console.error('Currency conversion failed:', error);
           toast.error('Failed to convert currency. Using GBP rates.');
-          setConvertedTotal(total);
+          setConvertedTotal(roundedTotal);
           setExchangeRate(1);
-          setValue('summary.convertedPrice', total);
+          setValue('summary.convertedPrice', roundedTotal);
           setValue('summary.exchangeRate', 1);
+          setValue('summary.totalPrice', roundedTotal);
         } finally {
           setIsConverting(false);
         }
       };
 
       convertCurrency();
-    }, [total, selectedCurrency, setValue]);
+    }, [roundedTotal, selectedCurrency, setValue]);
 
     const handleCurrencyChange = (newCurrency: string) => {
       setValue('summary.currency', newCurrency);
@@ -411,7 +420,7 @@ const proTips = [
               </span>
               <span>
                 {selectedCurrency === 'GBP' 
-                  ? `£${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  ? `£${roundedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : CurrencyService.formatCurrency(convertedTotal, selectedCurrency)
                 }
               </span>
@@ -510,6 +519,12 @@ export function PackageIntakeTest() {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
 
+  // Move these to the main component scope:
+  const [hotels, setHotels] = useState<any[]>([]);
+  const [hotelRooms, setHotelRooms] = useState<any[]>([]);
+  const [circuitTransfers, setCircuitTransfers] = useState<any[]>([]);
+  const [airportTransfers, setAirportTransfers] = useState<any[]>([]);
+
   const totalSteps = 6;
 
   // Create form instance for validation
@@ -568,6 +583,18 @@ export function PackageIntakeTest() {
       },
     },
   });
+
+  // Add this useEffect after the useState declarations in the main component:
+  useEffect(() => {
+    const hotelIds = form.getValues('components.hotels').map((h: any) => h.hotelId).filter(Boolean);
+    const roomIds = form.getValues('components.hotels').map((h: any) => h.roomId).filter(Boolean);
+    if (hotelIds.length > 0) {
+      supabase.from('gpgt_hotels').select('*').in('id', hotelIds).then(({ data }) => setHotels(data || []));
+    }
+    if (roomIds.length > 0) {
+      supabase.from('hotel_rooms').select('*').in('id', roomIds).then(({ data }) => setHotelRooms(data || []));
+    }
+  }, [JSON.stringify(form.getValues('components.hotels'))]);
 
   // Calculate progress percentage
   const progressPercentage = ((currentStep + 1) / totalSteps) * 100;
@@ -640,12 +667,19 @@ export function PackageIntakeTest() {
 
       // Prepare data for quote creation
       const quoteData = {
+        clientId: data.client.id || undefined,
         clientData: {
           firstName: data.client.firstName,
           lastName: data.client.lastName,
           email: data.client.email,
           phone: data.client.phone,
-          address: data.client.address
+          address: data.client.address ? {
+            street: data.client.address.street || '',
+            city: data.client.address.city || '',
+            state: data.client.address.state || '',
+            zipCode: data.client.address.zipCode || '',
+            country: data.client.address.country || ''
+          } : undefined
         },
         travelersData: {
           adults: data.travelers.adults,
@@ -670,7 +704,38 @@ export function PackageIntakeTest() {
         },
         componentsData: {
           tickets: data.components.tickets || [],
-          hotels: data.components.hotels || [],
+          hotels: (data.components.hotels || []).map(h => {
+            const hotel = hotels.find((ht: any) => ht.id === h.hotelId) || {};
+            const room = hotelRooms.find((rm: any) => rm.id === h.roomId) || {};
+            // Calculate price logic as in StepComponents
+            const checkIn = h.checkIn || room.check_in;
+            const checkOut = h.checkOut || room.check_out;
+            const nights = (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24);
+            const baseNights = (new Date(room.check_out).getTime() - new Date(room.check_in).getTime()) / (1000 * 60 * 60 * 24);
+            const extraNights = Math.max(0, nights - baseNights);
+            const basePrice = (room.total_price_per_stay_gbp_with_markup || room.total_price_per_stay_gbp || 0) * (h.quantity || 1);
+            const extraNightPrice = (room.extra_night_price_gbp || 0) * (h.quantity || 1);
+            const totalPrice = basePrice + extraNights * extraNightPrice;
+            return {
+              ...h,
+              hotelName: hotel.name || '',
+              hotelBrand: hotel.brand || '',
+              hotelCity: hotel.city || '',
+              hotelCountry: hotel.country || '',
+              hotelStarRating: hotel.star_rating || 0,
+              roomType: room.room_type_id || '',
+              pricePerNight: room.price_per_night_gbp || 0,
+              totalPricePerStay: room.total_price_per_stay_gbp_with_markup || room.total_price_per_stay_gbp || 0,
+              maxPeople: room.max_people || 0,
+              images: room.images || hotel.images || [],
+              amenities: [...(hotel.amenities || []), ...(room.amenities || [])],
+              basePrice,
+              extraNightPrice,
+              extraNights,
+              totalPrice,
+              price: totalPrice, // for compatibility with frontend display
+            };
+          }),
           circuitTransfers: data.components.circuitTransfers || [],
           airportTransfers: data.components.airportTransfers || [],
           flights: data.components.flights || [],
@@ -1013,26 +1078,27 @@ function SummaryStep({ form, isGenerating }: { form: any, isGenerating: boolean 
   
   const loungePass = components.loungePass;
   const loungePassTotal = loungePass && loungePass.id ? (loungePass.price || 0) * (loungePass.quantity || 1) : 0;
-  const total = ticketsTotal + hotelsTotal + circuitTransfersTotal + airportTransfersTotal + flightsTotal + loungePassTotal;
+  const originalTotal = ticketsTotal + hotelsTotal + circuitTransfersTotal + airportTransfersTotal + flightsTotal + loungePassTotal;
+  const roundedTotal = roundUpHundredMinusTwo(originalTotal);
   
   // Calculate payment breakdown - ensure they add up exactly to total
-  const deposit = Math.round((total / 3) * 100) / 100;
-  const secondPayment = Math.round((total / 3) * 100) / 100;
-  let finalPayment = Math.round((total - deposit - secondPayment) * 100) / 100;
+  const deposit = Math.round((roundedTotal / 3) * 100) / 100;
+  const secondPayment = Math.round((roundedTotal / 3) * 100) / 100;
+  let finalPayment = Math.round((roundedTotal - deposit - secondPayment) * 100) / 100;
   // Fix any floating point error by adjusting finalPayment
   const sum = Math.round((deposit + secondPayment + finalPayment) * 100) / 100;
-  if (sum !== Math.round(total * 100) / 100) {
-    finalPayment = Math.round((total - deposit - secondPayment) * 100) / 100 + (Math.round(total * 100) / 100 - sum);
+  if (sum !== Math.round(roundedTotal * 100) / 100) {
+    finalPayment = Math.round((roundedTotal - deposit - secondPayment) * 100) / 100 + (Math.round(roundedTotal * 100) / 100 - sum);
     finalPayment = Math.round(finalPayment * 100) / 100;
   }
   
   // Get the converted total if currency is not GBP
   const currentCurrency = form.getValues('summary.currency');
-  const convertedTotal = form.getValues('summary.convertedPrice') || total;
+  const convertedTotal = form.getValues('summary.convertedPrice') || roundedTotal;
   const exchangeRate = form.getValues('summary.exchangeRate') || 1;
   
   // Use converted amounts for payments if currency is not GBP
-  const paymentTotal = currentCurrency === 'GBP' ? total : convertedTotal;
+  const paymentTotal = currentCurrency === 'GBP' ? roundedTotal : convertedTotal;
   const paymentDeposit = currentCurrency === 'GBP' ? deposit : Math.round((convertedTotal / 3) * 100) / 100;
   const paymentSecondPayment = currentCurrency === 'GBP' ? secondPayment : Math.round((convertedTotal / 3) * 100) / 100;
   let paymentFinalPayment = currentCurrency === 'GBP' ? finalPayment : Math.round((convertedTotal - paymentDeposit - paymentSecondPayment) * 100) / 100;
@@ -1120,7 +1186,7 @@ function SummaryStep({ form, isGenerating }: { form: any, isGenerating: boolean 
   }
   
   // Also update the summary total price
-  form.setValue('summary.totalPrice', total);
+  form.setValue('summary.totalPrice', roundedTotal);
   
   // Update the converted price if currency is not GBP
   const selectedCurrency = form.getValues('summary.currency');

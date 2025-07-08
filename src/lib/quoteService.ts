@@ -11,6 +11,42 @@ import {
   QuoteAttachment 
 } from '@/types';
 
+// Helper to group flat array into expected object
+function groupComponents(componentsArray: any[]) {
+  const grouped = {
+    tickets: [],
+    hotels: [],
+    circuitTransfers: [],
+    airportTransfers: [],
+    flights: [],
+    loungePass: null
+  };
+  if (!Array.isArray(componentsArray)) return grouped;
+  for (const comp of componentsArray) {
+    switch (comp.type) {
+      case 'ticket':
+        grouped.tickets.push(comp.data);
+        break;
+      case 'hotel_room':
+        grouped.hotels.push(comp.data);
+        break;
+      case 'circuit_transfer':
+        grouped.circuitTransfers.push(comp.data);
+        break;
+      case 'airport_transfer':
+        grouped.airportTransfers.push(comp.data);
+        break;
+      case 'flight':
+        grouped.flights.push(comp.data);
+        break;
+      case 'lounge_pass':
+        grouped.loungePass = comp.data;
+        break;
+    }
+  }
+  return grouped;
+}
+
 export class QuoteService {
   // Create a new quote from package intake form data
   static async createQuoteFromIntake(data: CreateQuoteData): Promise<string> {
@@ -644,7 +680,7 @@ export class QuoteService {
       parentQuoteId: data.parent_quote_id,
       
       // Component Data (JSONB)
-      selectedComponents: data.selected_components,
+      selectedComponents: groupComponents(data.selected_components),
       selectedPackage: data.selected_package,
       selectedTier: data.selected_tier,
       priceBreakdown: data.price_breakdown,

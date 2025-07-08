@@ -1,0 +1,139 @@
+[
+  {
+    "id": "0cb09c5b-afea-4643-97af-9e4802510bb5",
+    "data": {
+      "id": "0cb09c5b-afea-4643-97af-9e4802510bb5",
+      "price": 531.34,
+      "category": "Main Grandstand",
+      "quantity": 2,
+      "packageComponentId": "e9f894d3-102e-4b26-8e18-18345c004600"
+    },
+    "name": "Main Grandstand",
+    "type": "ticket",
+    "quantity": 2,
+    "sortOrder": 0,
+    "unitPrice": 531.34,
+    "totalPrice": 1062.68,
+    "description": "Event ticket - Main Grandstand"
+  },
+  {
+    "id": "08bad19f-4e41-41f6-9fdf-76e9ca9a9724",
+    "data": {
+      "price": 1861.86,
+      "images": [
+        "https://uesuuvzjirdudiwtalwv.supabase.co/storage/v1/object/public/media-library/20d847af-1979-406a-8d79-19268a4363a9/1751412081175-5e5l4cdtrzw.webp",
+        "https://uesuuvzjirdudiwtalwv.supabase.co/storage/v1/object/public/media-library/20d847af-1979-406a-8d79-19268a4363a9/1751412095306-qxtcesjc5ln.webp",
+        "https://uesuuvzjirdudiwtalwv.supabase.co/storage/v1/object/public/media-library/20d847af-1979-406a-8d79-19268a4363a9/1751412092914-q7a4zpokzkr.webp",
+        "https://uesuuvzjirdudiwtalwv.supabase.co/storage/v1/object/public/media-library/20d847af-1979-406a-8d79-19268a4363a9/1751412090785-00oo4j5ixlazm.webp",
+        "https://uesuuvzjirdudiwtalwv.supabase.co/storage/v1/object/public/media-library/20d847af-1979-406a-8d79-19268a4363a9/1751412088393-djitwchzvwo.webp"
+      ],
+      "roomId": "08bad19f-4e41-41f6-9fdf-76e9ca9a9724",
+      "checkIn": "2026-07-23",
+      "hotelId": "046ee577-b0f0-449f-a655-8206ab9acea1",
+      "checkOut": "2026-07-27",
+      "quantity": 1,
+      "roomType": "Standard",
+      "amenities": [
+        "WiFi",
+        "Pool",
+        "Gym",
+        "Restaurant",
+        "Bar",
+        "Room Service",
+        "Concierge",
+        "Parking",
+        "Spa"
+      ],
+      "basePrice": 1861.86,
+      "hotelCity": "Barcelona",
+      "hotelName": "H10 Marina Barcelona",
+      "maxPeople": 2,
+      "hotelBrand": "H10 Hotels",
+      "totalPrice": 1861.86,
+      "extraNights": 0,
+      "hotelCountry": "Spain",
+      "pricePerNight": 0,
+      "extraNightPrice": 384.38,
+      "hotelStarRating": 4,
+      "totalPricePerStay": 1861.86,
+      "packageComponentId": "ae1a44fc-1949-4a79-ab27-e980ebc06bab"
+    },
+    "name": "Hotel Room - H10 Marina Barcelona",
+    "type": "hotel_room",
+    "quantity": 1,
+    "sortOrder": 1,
+    "unitPrice": 0,
+    "totalPrice": 0,
+    "description": "Hotel accommodation"
+  },
+  {
+    "id": "7d171518-eb9b-4fde-936c-e417182a6ae8",
+    "data": {
+      "id": "7d171518-eb9b-4fde-936c-e417182a6ae8",
+      "price": 147.12,
+      "quantity": 2,
+      "packageComponentId": "e7fc3425-68e7-491f-b2cd-955aa0958924"
+    },
+    "name": "Circuit Transfer - Standard",
+    "type": "circuit_transfer",
+    "quantity": 2,
+    "sortOrder": 2,
+    "unitPrice": 147.12,
+    "totalPrice": 294.24,
+    "description": "Transportation between venues"
+  },
+  {
+    "id": "586f9cfb-8a4b-4df5-b2f2-053dfc21e24e",
+    "data": {
+      "id": "586f9cfb-8a4b-4df5-b2f2-053dfc21e24e",
+      "price": 82.848,
+      "quantity": 1,
+      "transferDirection": "both",
+      "packageComponentId": "2e723224-b3c2-4d9b-9e41-dab769cfe3d7"
+    },
+    "name": "Airport Transfer - Standard",
+    "type": "airport_transfer",
+    "quantity": 1,
+    "sortOrder": 3,
+    "unitPrice": 82.848,
+    "totalPrice": 82.848,
+    "description": "Transportation to/from airport"
+  },
+  {
+    "id": "fefa6fe8-798c-475d-bb08-bee8fa692ffd",
+    "data": {
+      "id": "fefa6fe8-798c-475d-bb08-bee8fa692ffd",
+      "price": 385.00000000000006,
+      "origin": "LGW",
+      "source": "database",
+      "passengers": 2,
+      "returnDate": "2026-05-18T13:15:00",
+      "destination": "MAD",
+      "departureDate": "2026-05-14T09:30:00"
+    },
+    "name": "Flight - undefined to undefined",
+    "type": "flight",
+    "quantity": 1,
+    "sortOrder": 4,
+    "unitPrice": 0,
+    "totalPrice": 0,
+    "description": "Flight from undefined to undefined"
+  },
+  {
+    "id": "c98abef2-478e-4511-9b19-db2b4073dd32",
+    "data": {
+      "id": "c98abef2-478e-4511-9b19-db2b4073dd32",
+      "price": 85,
+      "variant": "Airport Lounge Pass included (Departure only)",
+      "currency": "GBP",
+      "quantity": 2
+    },
+    "name": "Lounge Pass - Airport Lounge Pass included (Departure only)",
+    "type": "lounge_pass",
+    "quantity": 2,
+    "sortOrder": 5,
+    "unitPrice": 85,
+    "totalPrice": 170,
+    "description": "Airport lounge access"
+  }
+]

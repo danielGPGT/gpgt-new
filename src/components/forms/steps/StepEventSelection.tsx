@@ -236,7 +236,7 @@ function EventCard({ event, selected, onSelect }: { event: EventType; selected: 
           </Button>
         </div>
         <div className="flex items-center gap-3 mb-2">
-          {event.sport && <span className="text-lg font-bold">{event.sport.name}</span>}
+          {event.sport && <span className="text-lg font-bold text-white/70">{event.sport.name}</span>}
         </div>
         <h3 className="text-xl font-bold text-white drop-shadow mb-1">{event.name}</h3>
         <div className="flex items-center gap-2 text-white/90 mb-1">

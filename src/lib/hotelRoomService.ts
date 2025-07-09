@@ -9,7 +9,6 @@ export interface HotelRoom {
   check_out: string; // date
   quantity_total: number;
   quantity_reserved?: number | null;
-  quantity_provisional?: number | null;
   quantity_available?: number | null; // GENERATED
   supplier_price_per_night?: number | null;
   supplier_currency?: string | null;
@@ -33,6 +32,10 @@ export interface HotelRoom {
   created_at?: string | null;
   updated_at?: string | null;
   max_people?: number | null;
+  is_provisional: boolean;
+  bed_type: string;
+  commission_percent?: number | null;
+  flexibility: string; // 'Flex' or 'Non Flex'
   // The following are generated columns, keep as read-only for display only
   total_supplier_price_per_night?: number | null; // GENERATED
   total_price_per_night_gbp?: number | null; // GENERATED
@@ -50,7 +53,6 @@ export interface HotelRoomInsert {
   check_out: string;
   quantity_total: number;
   quantity_reserved?: number | null;
-  quantity_provisional?: number | null;
   supplier_price_per_night?: number | null;
   supplier_currency?: string | null;
   markup_percent?: number | null;
@@ -71,6 +73,10 @@ export interface HotelRoomInsert {
   active?: boolean | null;
   max_people?: number | null;
   breakfast_price_per_person_per_night?: number | null;
+  is_provisional?: boolean;
+  bed_type: string;
+  commission_percent?: number | null;
+  flexibility?: string; // 'Flex' or 'Non Flex', default 'Flex'
 }
 
 export interface HotelRoomUpdate extends Partial<HotelRoomInsert> {
@@ -105,6 +111,14 @@ export class HotelRoomService {
         .order('check_in', { ascending: true });
 
       if (error) throw error;
+      
+      // Debug: Log the first room to see what fields are returned
+      console.log('DEBUG - Service: First room from DB:', data?.[0]);
+      console.log('DEBUG - Service: is_provisional field exists:', data?.[0]?.hasOwnProperty('is_provisional'));
+      console.log('DEBUG - Service: is_provisional value:', data?.[0]?.is_provisional);
+      console.log('DEBUG - Service: is_provisional type:', typeof data?.[0]?.is_provisional);
+      console.log('DEBUG - Service: All fields:', Object.keys(data?.[0] || {}));
+      
       return data || [];
     } catch (error) {
       console.error('Error fetching hotel rooms:', error);

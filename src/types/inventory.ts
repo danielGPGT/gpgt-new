@@ -283,7 +283,7 @@ export interface TicketFormData {
   // Required fields
   event_id: string;
   ticket_category_id: string;
-  quantity_total: number;
+  quantity_total: number; // If is_provisional is true, this must be 0 and not editable
   supplier_currency: string;
   supplier_price: number;
   currency: string;
@@ -291,10 +291,10 @@ export interface TicketFormData {
   markup_percent: number;
   refundable: boolean;
   resellable: boolean;
+  is_provisional: boolean; // If true, quantity_total is always 0
   
   // Optional fields
   ticket_days?: string | null;
-  quantity_provisional?: number | null;
   ticket_type?: string | null;
   supplier?: string | null;
   supplier_ref?: string | null;

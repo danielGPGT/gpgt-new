@@ -38,6 +38,133 @@ export interface ApiFlight {
   refundable: boolean;
   baggageAllowance: any;
   currency: string;
+  
+  // Enhanced detailed flight information
+  // Outbound flight details
+  outboundFlightId?: string;
+  outboundMarketingAirlineId?: string;
+  outboundOperatingAirlineId?: string;
+  outboundMarketingAirlineName?: string;
+  outboundOperatingAirlineName?: string;
+  outboundDepartureAirportId?: string;
+  outboundDepartureAirportName?: string;
+  outboundArrivalAirportId?: string;
+  outboundArrivalAirportName?: string;
+  outboundDepartureDateTime?: string;
+  outboundDepartureDateTimeUtc?: string;
+  outboundArrivalDateTime?: string;
+  outboundArrivalDateTimeUtc?: string;
+  outboundFlightDuration?: string;
+  outboundAircraftType?: string;
+  outboundDepartureTerminal?: string;
+  outboundArrivalTerminal?: string;
+  outboundCabinId?: string;
+  outboundCabinName?: string;
+  outboundFareBasisCode?: string;
+  outboundFareTypeId?: string;
+  outboundFareTypeName?: string;
+  outboundFareSubTypeId?: string;
+  outboundFareSubTypeName?: string;
+  outboundBaggageAllowance?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  outboundCheckedBaggage?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  outboundCarryOnBaggage?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  outboundStops?: any[];
+  outboundLayoverInfo?: any[];
+  
+  // Inbound flight details (for return flights)
+  inboundFlightId?: string;
+  inboundMarketingAirlineId?: string;
+  inboundOperatingAirlineId?: string;
+  inboundMarketingAirlineName?: string;
+  inboundOperatingAirlineName?: string;
+  inboundDepartureAirportId?: string;
+  inboundDepartureAirportName?: string;
+  inboundArrivalAirportId?: string;
+  inboundArrivalAirportName?: string;
+  inboundDepartureDateTime?: string;
+  inboundDepartureDateTimeUtc?: string;
+  inboundArrivalDateTime?: string;
+  inboundArrivalDateTimeUtc?: string;
+  inboundFlightDuration?: string;
+  inboundAircraftType?: string;
+  inboundDepartureTerminal?: string;
+  inboundArrivalTerminal?: string;
+  inboundCabinId?: string;
+  inboundCabinName?: string;
+  inboundFareBasisCode?: string;
+  inboundFareTypeId?: string;
+  inboundFareTypeName?: string;
+  inboundFareSubTypeId?: string;
+  inboundFareSubTypeName?: string;
+  inboundBaggageAllowance?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  inboundCheckedBaggage?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  inboundCarryOnBaggage?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  inboundStops?: any[];
+  inboundLayoverInfo?: any[];
+  
+  // Fare and pricing details
+  fareTypeId?: string;
+  fareTypeName?: string;
+  fareSubTypeId?: string;
+  fareSubTypeName?: string;
+  revenueStreamId?: string;
+  revenueStreamName?: string;
+  passengerTypeId?: string;
+  passengerTypeName?: string;
+  baseFare?: number;
+  taxes?: number;
+  fees?: number;
+  totalFare?: number;
+  currencyId?: string;
+  currencyCode?: string;
+  currencyName?: string;
+  currencySymbol?: string;
+  decimalPlaces?: number;
+  
+  // Additional metadata
+  recommendationId?: string;
+  validatingAirlineId?: string;
+  validatingAirlineName?: string;
+  skytraxRating?: number;
+  isPremium?: boolean;
+  isCorporate?: boolean;
+  isInstantTicketing?: boolean;
+  isSemiDeferred?: boolean;
+  isBaggageOnly?: boolean;
+  isAlternateRoute?: boolean;
+  
+  // Original API response data for reference
+  originalApiData?: any;
 }
 
 export interface FlightSearchResponse {

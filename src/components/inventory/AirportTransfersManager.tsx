@@ -669,11 +669,10 @@ export default function AirportTransfersManager() {
           <AirportTransferForm
             transfer={editingTransfer || undefined}
             onSubmit={data => {
-              const formattedType = data.transport_type === 'hotel_chauffeur' ? 'Hotel Chauffeur' : data.transport_type === 'private_car' ? 'Private Car' : data.transport_type;
               if (editingTransfer) {
-                updateMutation.mutate({ id: editingTransfer.id, data: { ...data, transport_type: formattedType } as any });
+                updateMutation.mutate({ id: editingTransfer.id, data: data as any });
               } else {
-                createMutation.mutate({ ...data, transport_type: formattedType } as any);
+                createMutation.mutate(data as any);
               }
             }}
             onCancel={handleDrawerClose}
@@ -880,6 +879,10 @@ function AirportTransferForm({ transfer, onSubmit, onCancel, isLoading }: {
                   <SelectItem value="SEK">SEK</SelectItem>
                   <SelectItem value="NOK">NOK</SelectItem>
                   <SelectItem value="DKK">DKK</SelectItem>
+                  <SelectItem value="AED">AED</SelectItem>
+                  <SelectItem value="BHD">BHD</SelectItem>
+                  <SelectItem value="SAR">SAR</SelectItem>
+                  <SelectItem value="QAR">QAR</SelectItem>
                 </SelectContent>
               </Select>
             </div>

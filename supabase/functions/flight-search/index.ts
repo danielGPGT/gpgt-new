@@ -214,41 +214,185 @@ function formatFlightResults(apiResponse: any): any[] {
       apiResponse.LowFareResult.Flights?.find((f: any) => f.FlightId === flightId)
     ).filter(Boolean) || [];
     
+    // Get passenger and fare details
+    const passenger = recommendation.Passengers?.[0];
+    const fare = passenger?.Fares?.[0];
+    
     // Calculate total price
     const totalPrice = recommendation.Passengers?.reduce((sum: number, passenger: any) => 
       sum + (passenger.Total || 0), 0) || 0;
     
-    // Create flight object
+    // Get outbound flight details
+    const outboundFlight = outboundFlights[0];
+    const outboundCabin = outboundFlight?.Cabins?.[0];
+    const outboundMarketingAirline = apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === outboundFlight?.MarketingAirlineId);
+    const outboundOperatingAirline = apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === outboundFlight?.OperatingAirlineId);
+    const outboundDepartureLocation = apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === outboundFlight?.DepartureAirportId);
+    const outboundArrivalLocation = apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === outboundFlight?.ArrivalAirportId);
+    
+    // Get inbound flight details (for return flights)
+    const inboundFlight = returnFlights[0];
+    const inboundCabin = inboundFlight?.Cabins?.[0];
+    const inboundMarketingAirline = inboundFlight ? apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === inboundFlight?.MarketingAirlineId) : null;
+    const inboundOperatingAirline = inboundFlight ? apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === inboundFlight?.OperatingAirlineId) : null;
+    const inboundDepartureLocation = inboundFlight ? apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === inboundFlight?.DepartureAirportId) : null;
+    const inboundArrivalLocation = inboundFlight ? apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === inboundFlight?.ArrivalAirportId) : null;
+    
+    // Get fare type details
+    const fareType = apiResponse.LowFareResult.FareTypes?.find((f: any) => f.FareTypeId === recommendation.FareTypeId);
+    const fareSubType = apiResponse.LowFareResult.FareSubTypes?.find((f: any) => f.FareSubTypeId === fare?.FareSubTypeId);
+    const revenueStream = apiResponse.LowFareResult.RevenueStreams?.find((r: any) => r.RevenueStreamId === fare?.RevenueStreamId);
+    const passengerType = apiResponse.LowFareResult.PassengerTypes?.find((p: any) => p.PassengerTypeId === passenger?.PassengerTypeId);
+    
+    // Create flight object with all detailed information
     const flight = {
       id: recommendation.RecommendationId,
       source: 'api' as const,
-      origin: outboundFlights[0]?.DepartureAirportId || '',
-      destination: outboundFlights[0]?.ArrivalAirportId || '',
-      departureDate: outboundFlights[0]?.DepartureDateTime || '',
-      returnDate: returnFlights[0]?.DepartureDateTime || undefined,
+      origin: outboundFlight?.DepartureAirportId || '',
+      destination: outboundFlight?.ArrivalAirportId || '',
+      departureDate: outboundFlight?.DepartureDateTime || '',
+      returnDate: inboundFlight?.DepartureDateTime || undefined,
       price: totalPrice,
-      passengers: recommendation.Passengers?.[0]?.TypeCount || 1,
+      passengers: passenger?.TypeCount || 1,
       airline: airline?.AirlineName || recommendation.ValidatingAirlineId,
-      flightNumber: outboundFlights[0]?.FlightNumber || '',
-      returnFlightNumber: returnFlights[0]?.FlightNumber || '',
-      duration: outboundFlights[0]?.FlightDuration || '',
-      returnDuration: returnFlights[0]?.FlightDuration || '',
-      cabin: outboundFlights[0]?.Cabins?.[0]?.GenericCabinId || 'ECO',
-      stops: outboundFlights[0]?.Stops?.length || 0,
-      returnStops: returnFlights[0]?.Stops?.length || 0,
-      departureTerminal: outboundFlights[0]?.DepartureTerminal || '',
-      arrivalTerminal: outboundFlights[0]?.ArrivalTerminal || '',
-      returnDepartureTerminal: returnFlights[0]?.DepartureTerminal || '',
-      returnArrivalTerminal: returnFlights[0]?.ArrivalTerminal || '',
-      aircraft: outboundFlights[0]?.AircraftType || '',
-      returnAircraft: returnFlights[0]?.AircraftType || '',
+      flightNumber: outboundFlight?.FlightNumber || '',
+      returnFlightNumber: inboundFlight?.FlightNumber || '',
+      duration: outboundFlight?.FlightDuration || '',
+      returnDuration: inboundFlight?.FlightDuration || '',
+      cabin: outboundCabin?.GenericCabinId || 'ECO',
+      stops: outboundFlight?.Stops?.length || 0,
+      returnStops: inboundFlight?.Stops?.length || 0,
+      departureTerminal: outboundFlight?.DepartureTerminal || '',
+      arrivalTerminal: outboundFlight?.ArrivalTerminal || '',
+      returnDepartureTerminal: inboundFlight?.DepartureTerminal || '',
+      returnArrivalTerminal: inboundFlight?.ArrivalTerminal || '',
+      aircraft: outboundFlight?.AircraftType || '',
+      returnAircraft: inboundFlight?.AircraftType || '',
       ticketingDeadline: recommendation.TicketingDeadline || '',
       fareType: recommendation.FareTypeId || '',
-      refundable: recommendation.Passengers?.[0]?.Fares?.some((f: any) => f.FareBasisCode?.includes('REF')) || false,
-      baggageAllowance: recommendation.Passengers?.[0]?.Fares?.[0]?.BaggageAllowance || null,
+      refundable: fare?.FareBasisCode?.includes('REF') || false,
+      baggageAllowance: fare?.BaggageAllowance || null,
       currency: apiResponse.LowFareResult.Currency?.CurrencyId || 'GBP',
       layoverInfo: extractLayoverInfo(outboundFlights, apiResponse.LowFareResult.Locations),
-      returnLayoverInfo: extractLayoverInfo(returnFlights, apiResponse.LowFareResult.Locations)
+      returnLayoverInfo: extractLayoverInfo(returnFlights, apiResponse.LowFareResult.Locations),
+      
+      // Enhanced detailed flight information
+      // Outbound flight details
+      outboundFlightId: outboundFlight?.FlightId,
+      outboundMarketingAirlineId: outboundFlight?.MarketingAirlineId,
+      outboundOperatingAirlineId: outboundFlight?.OperatingAirlineId,
+      outboundMarketingAirlineName: outboundMarketingAirline?.AirlineName,
+      outboundOperatingAirlineName: outboundOperatingAirline?.AirlineName,
+      outboundDepartureAirportId: outboundFlight?.DepartureAirportId,
+      outboundDepartureAirportName: outboundDepartureLocation?.AirportName,
+      outboundArrivalAirportId: outboundFlight?.ArrivalAirportId,
+      outboundArrivalAirportName: outboundArrivalLocation?.AirportName,
+      outboundDepartureDateTime: outboundFlight?.DepartureDateTime || outboundFlight?.DepartureDateTimeUtc,
+      outboundDepartureDateTimeUtc: outboundFlight?.DepartureDateTimeUtc,
+      outboundArrivalDateTime: outboundFlight?.ArrivalDateTime || outboundFlight?.ArrivalDateTimeUtc,
+      outboundArrivalDateTimeUtc: outboundFlight?.ArrivalDateTimeUtc,
+      outboundFlightDuration: outboundFlight?.FlightDuration,
+      outboundAircraftType: outboundFlight?.AircraftType,
+      outboundDepartureTerminal: outboundFlight?.DepartureTerminal,
+      outboundArrivalTerminal: outboundFlight?.ArrivalTerminal,
+      outboundCabinId: outboundCabin?.CabinId,
+      outboundCabinName: outboundCabin?.CabinName,
+      outboundFareBasisCode: fare?.FareBasisCode,
+      outboundFareTypeId: fare?.FareTypeId,
+      outboundFareTypeName: fare?.FareTypeName,
+      outboundFareSubTypeId: fare?.FareSubTypeId,
+      outboundFareSubTypeName: fare?.FareSubTypeName,
+      outboundBaggageAllowance: fare?.BaggageAllowance,
+      outboundCheckedBaggage: fare?.CheckedBaggage,
+      outboundCarryOnBaggage: fare?.CarryOnBaggage,
+      outboundStops: outboundFlight?.Stops || [],
+      outboundLayoverInfo: extractLayoverInfo(outboundFlights, apiResponse.LowFareResult.Locations),
+      
+      // Inbound flight details (for return flights)
+      inboundFlightId: inboundFlight?.FlightId,
+      inboundMarketingAirlineId: inboundFlight?.MarketingAirlineId,
+      inboundOperatingAirlineId: inboundFlight?.OperatingAirlineId,
+      inboundMarketingAirlineName: inboundMarketingAirline?.AirlineName,
+      inboundOperatingAirlineName: inboundOperatingAirline?.AirlineName,
+      inboundDepartureAirportId: inboundFlight?.DepartureAirportId,
+      inboundDepartureAirportName: inboundDepartureLocation?.AirportName,
+      inboundArrivalAirportId: inboundFlight?.ArrivalAirportId,
+      inboundArrivalAirportName: inboundArrivalLocation?.AirportName,
+      inboundDepartureDateTime: inboundFlight?.DepartureDateTime || inboundFlight?.DepartureDateTimeUtc,
+      inboundDepartureDateTimeUtc: inboundFlight?.DepartureDateTimeUtc,
+      inboundArrivalDateTime: inboundFlight?.ArrivalDateTime || inboundFlight?.ArrivalDateTimeUtc,
+      inboundArrivalDateTimeUtc: inboundFlight?.ArrivalDateTimeUtc,
+      inboundFlightDuration: inboundFlight?.FlightDuration,
+      inboundAircraftType: inboundFlight?.AircraftType,
+      inboundDepartureTerminal: inboundFlight?.DepartureTerminal,
+      inboundArrivalTerminal: inboundFlight?.ArrivalTerminal,
+      inboundCabinId: inboundCabin?.CabinId,
+      inboundCabinName: inboundCabin?.CabinName,
+      inboundFareBasisCode: fare?.FareBasisCode,
+      inboundFareTypeId: fare?.FareTypeId,
+      inboundFareTypeName: fare?.FareTypeName,
+      inboundFareSubTypeId: fare?.FareSubTypeId,
+      inboundFareSubTypeName: fare?.FareSubTypeName,
+      inboundBaggageAllowance: fare?.BaggageAllowance,
+      inboundCheckedBaggage: fare?.CheckedBaggage,
+      inboundCarryOnBaggage: fare?.CarryOnBaggage,
+      inboundStops: inboundFlight?.Stops || [],
+      inboundLayoverInfo: extractLayoverInfo(returnFlights, apiResponse.LowFareResult.Locations),
+      
+      // Fare and pricing details
+      fareTypeId: recommendation.FareTypeId,
+      fareTypeName: fareType?.FareTypeName,
+      fareSubTypeId: fare?.FareSubTypeId,
+      fareSubTypeName: fareSubType?.FareSubTypeName,
+      revenueStreamId: fare?.RevenueStreamId,
+      revenueStreamName: revenueStream?.RevenueStreamName,
+      passengerTypeId: passenger?.PassengerTypeId,
+      passengerTypeName: passengerType?.PassengerTypeName,
+      baseFare: fare?.BaseFare || 0,
+      taxes: fare?.Taxes || 0,
+      fees: fare?.Fees || 0,
+      totalFare: fare?.Total || 0,
+      currencyId: apiResponse.LowFareResult.Currency?.CurrencyId,
+      currencyCode: apiResponse.LowFareResult.Currency?.CurrencyCode,
+      currencyName: apiResponse.LowFareResult.Currency?.CurrencyName,
+      currencySymbol: apiResponse.LowFareResult.Currency?.CurrencySymbol,
+      decimalPlaces: apiResponse.LowFareResult.Currency?.DecimalPlaces,
+      
+      // Additional metadata
+      recommendationId: recommendation.RecommendationId,
+      validatingAirlineId: recommendation.ValidatingAirlineId,
+      validatingAirlineName: airline?.AirlineName,
+      skytraxRating: airline?.SkytraxRating,
+      isPremium: outboundCabin?.IsPremium || false,
+      isCorporate: fare?.IsCorporate || false,
+      isInstantTicketing: fare?.IsInstantTicketing || false,
+      isSemiDeferred: fare?.IsSemiDeferred || false,
+      isBaggageOnly: fare?.IsBaggageOnly || false,
+      isAlternateRoute: recommendation.IsAlternateRoute || false,
+      
+      // Original API response data for reference
+      originalApiData: {
+        recommendation,
+        outboundFlight,
+        inboundFlight,
+        passenger,
+        fare,
+        airline,
+        outboundMarketingAirline,
+        outboundOperatingAirline,
+        inboundMarketingAirline,
+        inboundOperatingAirline,
+        outboundDepartureLocation,
+        outboundArrivalLocation,
+        inboundDepartureLocation,
+        inboundArrivalLocation,
+        fareType,
+        fareSubType,
+        revenueStream,
+        passengerType,
+        outboundCabin,
+        inboundCabin
+      }
     };
     
     flights.push(flight);

@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { SportForm } from '@/components/forms/SportForm';
 import { EventConsultantSelector } from '@/components/EventConsultantSelector';
+import { EventFormDrawer } from '@/components/forms/EventFormDrawer';
 
 // Utility to clean event form data for update
 export function cleanEventUpdate(data: any) {

@@ -41,7 +41,11 @@ import {
   HelpCircle,
   Eye,
   Car,
-  Ticket
+  Ticket,
+  PlaneTakeoff,
+  PlaneLanding,
+  BaggageClaim,
+  CreditCard
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -143,6 +147,20 @@ const packageIntakeSchema = z.object({
       returnDate: z.string().optional(),
       price: z.number(),
       passengers: z.number(),
+      outboundFlightNumber: z.string().optional(),
+      outboundDepartureAirportCode: z.string().optional(),
+      outboundArrivalAirportCode: z.string().optional(),
+      outboundDepartureDatetime: z.string().optional(),
+      outboundArrivalDatetime: z.string().optional(),
+      inboundFlightNumber: z.string().optional(),
+      inboundDepartureAirportCode: z.string().optional(),
+      inboundArrivalAirportCode: z.string().optional(),
+      inboundDepartureDatetime: z.string().optional(),
+      inboundArrivalDatetime: z.string().optional(),
+      airline: z.string().optional(),
+      cabin: z.string().optional(),
+      baggageAllowance: z.string().optional(),
+      refundable: z.boolean().optional(),
     })).default([]),
     flightsSource: z.enum(['none', 'database', 'api']).default('none'),
     loungePass: z.object({
@@ -998,6 +1016,8 @@ export function PackageIntakeTest() {
 // --- SUMMARY STEP COMPONENT ---
 function SummaryStep({ form, isGenerating }: { form: any, isGenerating: boolean }) {
   const data = form.getValues();
+  console.log('[SUMMARY_STEP] Form data:', data);
+  console.log('[SUMMARY_STEP] Components data:', data.components);
   const { client, travelers, selectedEvent, selectedPackage, selectedTier, components } = data;
   // --- Fetch hotel, room, and transfer details for display ---
   const [hotels, setHotels] = useState<any[]>([]);
@@ -1347,21 +1367,418 @@ function SummaryStep({ form, isGenerating }: { form: any, isGenerating: boolean 
           </div>
           {/* Flights */}
           <div>
-            <h4 className="font-semibold mb-1 flex items-center gap-2">
+            <h4 className="font-semibold mb-3 flex items-center gap-2">
               <Plane className="h-4 w-4 text-[var(--color-primary-700)]" /> Flights
             </h4>
             {components.flights.length > 0 ? (
-              <ul className="ml-4 space-y-1">
+              <div className="space-y-4">
                 {components.flights.map((f: any, i: number) => (
-                  <li key={i} className="text-sm">
-                    <span className="font-medium">{f.origin} → {f.destination}</span>
-                    <span className="ml-2">Depart: {f.departureDate}</span>
-                    {f.returnDate && <span className="ml-2">Return: {f.returnDate}</span>}
-                    <span className="ml-2">× {f.passengers}</span>
-                    <span className="ml-2">@ £{Number(f.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per passenger</span>
-                  </li>
+                  <div key={i} className="border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-muted)]/20">
+                    {/* Flight Route Header */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-[var(--color-primary-600)]" />
+                        <span className="font-semibold text-base">
+                          {f.origin} → {f.destination}
+                        </span>
+                        {f.returnDate && (
+                          <span className="text-sm text-[var(--color-muted-foreground)]">
+                            (Round Trip)
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-[var(--color-primary)]">
+                          £{Number(f.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div className="text-xs text-[var(--color-muted-foreground)]">
+                          per passenger × {f.passengers}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Outbound Flight Details */}
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <PlaneTakeoff className="h-4 w-4 text-green-600" />
+                        <span className="font-medium text-sm">Outbound Flight</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Flight Number:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundFlightNumber || f.flightNumber || f.airline || 'TBD'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Route:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundDepartureAirportId || f.outboundDepartureAirportCode || f.origin} → {f.outboundArrivalAirportId || f.outboundArrivalAirportCode || f.destination}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Airports:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundDepartureAirportName || f.outboundDepartureAirportCode || f.origin} → {f.outboundArrivalAirportName || f.outboundArrivalAirportCode || f.destination}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Departure:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundDepartureDateTime || f.departureDate ? new Date(f.outboundDepartureDateTime || f.departureDate).toLocaleString('en-GB', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            }) : 'TBD'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Arrival:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundArrivalDateTime ? new Date(f.outboundArrivalDateTime).toLocaleString('en-GB', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            }) : 'TBD'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Duration:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundFlightDuration || f.duration || 'TBD'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Airline:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundMarketingAirlineName || f.outboundOperatingAirlineName || f.airline || 'TBD'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Aircraft:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundAircraftType || f.aircraft || 'TBD'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Class:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundCabinName || f.outboundCabinId || f.cabin || 'TBD'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Terminals:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundDepartureTerminal && f.outboundArrivalTerminal ? 
+                              `${f.outboundDepartureTerminal} → ${f.outboundArrivalTerminal}` : 
+                              f.departureTerminal && f.arrivalTerminal ? 
+                              `${f.departureTerminal} → ${f.arrivalTerminal}` : 'TBD'
+                            }
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-muted-foreground)]">Stops:</span>
+                          <span className="ml-2 font-medium">
+                            {f.outboundStops?.length || f.stops || 0} {f.outboundStops?.length === 1 || f.stops === 1 ? 'stop' : 'stops'}
+                          </span>
+                        </div>
+                        {/* Baggage Information */}
+                        {(f.outboundCheckedBaggage || f.outboundCarryOnBaggage || f.outboundBaggageAllowance || f.baggageAllowance) && (
+                          <div className="md:col-span-2">
+                            <span className="text-[var(--color-muted-foreground)]">Baggage:</span>
+                            <div className="ml-2 mt-1 space-y-1">
+                              {f.outboundCheckedBaggage && (
+                                <div className="flex items-center gap-1 text-xs">
+                                  <BaggageClaim className="h-3 w-3" />
+                                  <span className="font-medium">Checked:</span>
+                                  {f.outboundCheckedBaggage.pieces && <span>{f.outboundCheckedBaggage.pieces} piece{f.outboundCheckedBaggage.pieces !== 1 ? 's' : ''}</span>}
+                                  {f.outboundCheckedBaggage.weight && <span>{f.outboundCheckedBaggage.weight} {f.outboundCheckedBaggage.weightUnit}</span>}
+                                  {f.outboundCheckedBaggage.dimensions && <span>({f.outboundCheckedBaggage.dimensions})</span>}
+                                </div>
+                              )}
+                              {f.outboundCarryOnBaggage && (
+                                <div className="flex items-center gap-1 text-xs">
+                                  <BaggageClaim className="h-3 w-3" />
+                                  <span className="font-medium">Carry-on:</span>
+                                  {f.outboundCarryOnBaggage.pieces && <span>{f.outboundCarryOnBaggage.pieces} piece{f.outboundCarryOnBaggage.pieces !== 1 ? 's' : ''}</span>}
+                                  {f.outboundCarryOnBaggage.weight && <span>{f.outboundCarryOnBaggage.weight} {f.outboundCarryOnBaggage.weightUnit}</span>}
+                                  {f.outboundCarryOnBaggage.dimensions && <span>({f.outboundCarryOnBaggage.dimensions})</span>}
+                                </div>
+                              )}
+                              {f.outboundBaggageAllowance && !f.outboundCheckedBaggage && !f.outboundCarryOnBaggage && (
+                                <div className="flex items-center gap-1 text-xs">
+                                  <BaggageClaim className="h-3 w-3" />
+                                  <span>
+                                    {typeof f.outboundBaggageAllowance === 'string'
+                                      ? f.outboundBaggageAllowance
+                                      : f.outboundBaggageAllowance.pieces
+                                        ? `${f.outboundBaggageAllowance.pieces} pieces`
+                                        : f.outboundBaggageAllowance.weight
+                                          ? `${f.outboundBaggageAllowance.weight}${f.outboundBaggageAllowance.weightUnit || 'kg'}`
+                                          : 'Baggage included'
+                                    }
+                                  </span>
+                                </div>
+                              )}
+                              {f.baggageAllowance && !f.outboundCheckedBaggage && !f.outboundCarryOnBaggage && !f.outboundBaggageAllowance && (
+                                <div className="flex items-center gap-1 text-xs">
+                                  <BaggageClaim className="h-3 w-3" />
+                                  <span>
+                                    {typeof f.baggageAllowance === 'string'
+                                      ? f.baggageAllowance
+                                      : f.baggageAllowance.NumberOfPieces
+                                        ? `${f.baggageAllowance.NumberOfPieces} pieces`
+                                        : f.baggageAllowance.WeightInKilograms
+                                          ? `${f.baggageAllowance.WeightInKilograms}kg`
+                                          : 'Baggage included'
+                                    }
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Inbound Flight Details (if return flight) */}
+                    {f.returnDate && (f.inboundFlightNumber || f.returnFlightNumber) && (
+                      <div className="border-t border-[var(--color-border)] pt-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <PlaneLanding className="h-4 w-4 text-blue-600" />
+                          <span className="font-medium text-sm">Return Flight</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Flight Number:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundFlightNumber || f.returnFlightNumber || 'TBD'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Route:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundDepartureAirportId || f.inboundDepartureAirportCode} → {f.inboundArrivalAirportId || f.inboundArrivalAirportCode}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Airports:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundDepartureAirportName || f.inboundDepartureAirportCode} → {f.inboundArrivalAirportName || f.inboundArrivalAirportCode}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Departure:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundDepartureDateTime ? new Date(f.inboundDepartureDateTime).toLocaleString('en-GB', {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : 'TBD'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Arrival:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundArrivalDateTime ? new Date(f.inboundArrivalDateTime).toLocaleString('en-GB', {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : 'TBD'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Duration:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundFlightDuration || f.returnDuration || 'TBD'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Airline:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundMarketingAirlineName || f.inboundOperatingAirlineName || 'TBD'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Aircraft:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundAircraftType || f.returnAircraft || 'TBD'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Class:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundCabinName || f.inboundCabinId || 'TBD'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Terminals:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundDepartureTerminal && f.inboundArrivalTerminal ? 
+                                `${f.inboundDepartureTerminal} → ${f.inboundArrivalTerminal}` : 
+                                f.returnDepartureTerminal && f.returnArrivalTerminal ? 
+                                `${f.returnDepartureTerminal} → ${f.returnArrivalTerminal}` : 'TBD'
+                              }
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--color-muted-foreground)]">Stops:</span>
+                            <span className="ml-2 font-medium">
+                              {f.inboundStops?.length || f.returnStops || 0} {f.inboundStops?.length === 1 || f.returnStops === 1 ? 'stop' : 'stops'}
+                            </span>
+                          </div>
+                          {/* Baggage Information for Return Flight */}
+                          {(f.inboundCheckedBaggage || f.inboundCarryOnBaggage || f.inboundBaggageAllowance) && (
+                            <div className="md:col-span-2">
+                              <span className="text-[var(--color-muted-foreground)]">Baggage:</span>
+                              <div className="ml-2 mt-1 space-y-1">
+                                {f.inboundCheckedBaggage && (
+                                  <div className="flex items-center gap-1 text-xs">
+                                    <BaggageClaim className="h-3 w-3" />
+                                    <span className="font-medium">Checked:</span>
+                                    {f.inboundCheckedBaggage.pieces && <span>{f.inboundCheckedBaggage.pieces} piece{f.inboundCheckedBaggage.pieces !== 1 ? 's' : ''}</span>}
+                                    {f.inboundCheckedBaggage.weight && <span>{f.inboundCheckedBaggage.weight} {f.inboundCheckedBaggage.weightUnit}</span>}
+                                    {f.inboundCheckedBaggage.dimensions && <span>({f.inboundCheckedBaggage.dimensions})</span>}
+                                  </div>
+                                )}
+                                {f.inboundCarryOnBaggage && (
+                                  <div className="flex items-center gap-1 text-xs">
+                                    <BaggageClaim className="h-3 w-3" />
+                                    <span className="font-medium">Carry-on:</span>
+                                    {f.inboundCarryOnBaggage.pieces && <span>{f.inboundCarryOnBaggage.pieces} piece{f.inboundCarryOnBaggage.pieces !== 1 ? 's' : ''}</span>}
+                                    {f.inboundCarryOnBaggage.weight && <span>{f.inboundCarryOnBaggage.weight} {f.inboundCarryOnBaggage.weightUnit}</span>}
+                                    {f.inboundCarryOnBaggage.dimensions && <span>({f.inboundCarryOnBaggage.dimensions})</span>}
+                                  </div>
+                                )}
+                                {f.inboundBaggageAllowance && !f.inboundCheckedBaggage && !f.inboundCarryOnBaggage && (
+                                  <div className="flex items-center gap-1 text-xs">
+                                    <BaggageClaim className="h-3 w-3" />
+                                    <span>
+                                      {typeof f.inboundBaggageAllowance === 'string'
+                                        ? f.inboundBaggageAllowance
+                                        : f.inboundBaggageAllowance.pieces
+                                          ? `${f.inboundBaggageAllowance.pieces} pieces`
+                                          : f.inboundBaggageAllowance.weight
+                                            ? `${f.inboundBaggageAllowance.weight}${f.inboundBaggageAllowance.weightUnit || 'kg'}`
+                                            : 'Baggage included'
+                                      }
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Fare and Pricing Details */}
+                    {(f.fareTypeName || f.fareSubTypeName || f.revenueStreamName || f.baseFare || f.taxes || f.fees) && (
+                      <div className="border-t border-[var(--color-border)] pt-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CreditCard className="h-4 w-4 text-purple-600" />
+                          <span className="font-medium text-sm">Fare Details</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                          {f.fareTypeName && (
+                            <div>
+                              <span className="text-[var(--color-muted-foreground)]">Fare Type:</span>
+                              <span className="ml-2 font-medium">{f.fareTypeName}</span>
+                            </div>
+                          )}
+                          {f.fareSubTypeName && (
+                            <div>
+                              <span className="text-[var(--color-muted-foreground)]">Fare Sub-Type:</span>
+                              <span className="ml-2 font-medium">{f.fareSubTypeName}</span>
+                            </div>
+                          )}
+                          {f.revenueStreamName && (
+                            <div>
+                              <span className="text-[var(--color-muted-foreground)]">Revenue Stream:</span>
+                              <span className="ml-2 font-medium">{f.revenueStreamName}</span>
+                            </div>
+                          )}
+                          {f.baseFare && (
+                            <div>
+                              <span className="text-[var(--color-muted-foreground)]">Base Fare:</span>
+                              <span className="ml-2 font-medium">
+                                {f.currencySymbol || f.currencyId || '£'}{f.baseFare.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          )}
+                          {f.taxes && (
+                            <div>
+                              <span className="text-[var(--color-muted-foreground)]">Taxes:</span>
+                              <span className="ml-2 font-medium">
+                                {f.currencySymbol || f.currencyId || '£'}{f.taxes.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          )}
+                          {f.fees && (
+                            <div>
+                              <span className="text-[var(--color-muted-foreground)]">Fees:</span>
+                              <span className="ml-2 font-medium">
+                                {f.currencySymbol || f.currencyId || '£'}{f.fees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          )}
+                          {f.ticketingDeadline && (
+                            <div>
+                              <span className="text-[var(--color-muted-foreground)]">Ticketing Deadline:</span>
+                              <span className="ml-2 font-medium">
+                                {new Date(f.ticketingDeadline).toLocaleDateString('en-GB')}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Flight Summary */}
+                    <div className="border-t border-[var(--color-border)] pt-3 mt-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-4">
+                          <span className="text-[var(--color-muted-foreground)]">
+                            Passengers: <span className="font-medium">{f.passengers}</span>
+                          </span>
+                          {f.refundable !== undefined && (
+                            <span className="text-[var(--color-muted-foreground)]">
+                              Refundable: <span className="font-medium">{f.refundable ? 'Yes' : 'No'}</span>
+                            </span>
+                          )}
+                          {f.validatingAirlineName && (
+                            <span className="text-[var(--color-muted-foreground)]">
+                              Validating: <span className="font-medium">{f.validatingAirlineName}</span>
+                            </span>
+                          )}
+                          {f.skytraxRating && (
+                            <span className="text-[var(--color-muted-foreground)]">
+                              Rating: <span className="font-medium">{f.skytraxRating}/5</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold">
+                            Total: £{(Number(f.price) * f.passengers).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             ) : <span className="text-muted-foreground">None</span>}
           </div>
           {/* Lounge Pass */}

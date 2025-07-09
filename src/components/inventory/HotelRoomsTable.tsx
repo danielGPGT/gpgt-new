@@ -41,6 +41,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 import { HotelRoomForm } from './HotelRoomForm';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface HotelRoomsTableProps {
   hotelId: string;
@@ -140,7 +141,7 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
     const matchesStatus = filterStatus === 'all' || 
       (filterStatus === 'available' && (room.quantity_available ?? 0) > 0) ||
       (filterStatus === 'reserved' && (room.quantity_reserved ?? 0) > 0) ||
-      (filterStatus === 'provisional' && (room.quantity_provisional ?? 0) > 0);
+      (filterStatus === 'provisional' && room.is_provisional);
 
     const matchesEvent = filterEvent === 'all' || room.event_id === filterEvent;
     
@@ -337,6 +338,8 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                   <DropdownMenuSeparator />
                   {[
                     { key: 'room_type_id', label: 'Room Type' },
+                    { key: 'bed_type', label: 'Bed Type' },
+                    { key: 'flexibility', label: 'Flexibility' },
                     { key: 'dates', label: 'Dates' },
                     { key: 'quantity_total', label: 'Total' },
                     { key: 'quantity_reserved', label: 'Reserved' },
@@ -351,6 +354,7 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                     { key: 'vat_percentage', label: 'VAT %' },
                     { key: 'city_tax', label: 'City Tax' },
                     { key: 'resort_fee', label: 'Resort Fee' },
+                    { key: 'commission_percent', label: 'Commission %' },
                     { key: 'breakfast_price_per_person_per_night', label: 'Breakfast Price' },
                     { key: 'supplier', label: 'Supplier' },
                     { key: 'status', label: 'Status' },
@@ -403,7 +407,7 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
               <Button variant="outline">
                 <Upload className="h-5 w-5" /> Import CSV
               </Button>
-              <Button variant="default" onClick={() => setIsFormOpen(true)}>
+              <Button variant="default" onClick={() => { setSelectedRoom(null); setIsFormOpen(true); }}>
                 <Plus className="h-5 w-5" /> Add Room
               </Button>
             </div>
@@ -575,6 +579,8 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                     </span>
                   </TableHead>
                 )}
+                {visibleColumns.has('bed_type') && <TableHead>Bed Type</TableHead>}
+                {visibleColumns.has('flexibility') && <TableHead>Flexibility</TableHead>}
                 {visibleColumns.has('dates') && (
                   <TableHead
                     className="cursor-pointer select-none"
@@ -691,6 +697,7 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                 {visibleColumns.has('vat_percentage') && <TableHead className="text-muted-foreground font-medium">VAT %</TableHead>}
                 {visibleColumns.has('city_tax') && <TableHead className="text-muted-foreground font-medium">City Tax</TableHead>}
                 {visibleColumns.has('resort_fee') && <TableHead className="text-muted-foreground font-medium">Resort Fee</TableHead>}
+                {visibleColumns.has('commission_percent') && <TableHead>Commission %</TableHead>}
                 {visibleColumns.has('breakfast_price_per_person_per_night') && <TableHead className="text-muted-foreground font-medium">Breakfast Price</TableHead>}
                 {visibleColumns.has('supplier') && (
                   <TableHead
@@ -712,6 +719,8 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                 )}
                 {visibleColumns.has('status') && <TableHead className="text-muted-foreground font-medium">Status</TableHead>}
                 {visibleColumns.has('actions') && <TableHead className="text-right font-medium">Actions</TableHead>}
+
+                
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -735,6 +744,8 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                     />
                   </TableCell>
                   {visibleColumns.has('room_type_id') && <TableCell>{room.room_type_id}</TableCell>}
+                  {visibleColumns.has('bed_type') && <TableCell>{room.bed_type}</TableCell>}
+                  {visibleColumns.has('flexibility') && <TableCell>{room.flexibility}</TableCell>}
                   {visibleColumns.has('dates') && <TableCell>{format(new Date(room.check_in), 'MMM dd')} to {format(new Date(room.check_out), 'MMM dd, yyyy')}</TableCell>}
                   {visibleColumns.has('quantity_total') && (
                     <TableCell>
@@ -762,20 +773,31 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                   )}
                   {visibleColumns.has('quantity_available') && (
                     <TableCell>
-                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all ${
-                        (room.quantity_available ?? 0) > 0 ? 'hover:bg-green-50' : 'hover:bg-red-50'
-                      }`}
-                           style={{
-                             backgroundColor: (room.quantity_available ?? 0) > 0 
-                               ? 'var(--color-muted)' 
-                               : 'var(--color-muted)',
-                             color: (room.quantity_available ?? 0) > 0 
-                               ? 'var(--color-muted-foreground)' 
-                               : 'var(--color-muted-foreground)',
-                             border: '1px solid var(--color-border)'
-                           }}>
-                        <span>{room.quantity_available ?? 0}</span>
-                      </div>
+                      {room.is_provisional ? (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="font-semibold text-orange-600">PTO</span>
+                            </TooltipTrigger>
+                            <TooltipContent>Purchased to order</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : (
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all ${
+                          (room.quantity_available ?? 0) > 0 ? 'hover:bg-green-50' : 'hover:bg-red-50'
+                        }`}
+                             style={{
+                               backgroundColor: (room.quantity_available ?? 0) > 0 
+                                 ? 'var(--color-muted)' 
+                                 : 'var(--color-muted)',
+                               color: (room.quantity_available ?? 0) > 0 
+                                 ? 'var(--color-muted-foreground)' 
+                                 : 'var(--color-muted-foreground)',
+                               border: '1px solid var(--color-border)'
+                             }}>
+                          <span>{room.quantity_available ?? 0}</span>
+                        </div>
+                      )}
                     </TableCell>
                   )}
                   {visibleColumns.has('supplier_price_per_night') && <TableCell>{room.supplier_price_per_night != null ? room.supplier_price_per_night.toFixed(2) : '—'} {room.supplier_currency || 'EUR'}</TableCell>}
@@ -789,6 +811,7 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                   {visibleColumns.has('city_tax') && <TableCell>{room.city_tax != null ? `${room.city_tax.toFixed(2)} ${room.supplier_currency || 'EUR'}` : '—'}</TableCell>}
                   {visibleColumns.has('resort_fee') && <TableCell>{room.resort_fee != null ? `${room.resort_fee.toFixed(2)} ${room.supplier_currency || 'EUR'}` : '—'}</TableCell>}
                   {visibleColumns.has('breakfast_price_per_person_per_night') && <TableCell>{room.breakfast_price_per_person_per_night != null ? `${room.breakfast_price_per_person_per_night.toFixed(2)} ${room.supplier_currency || 'EUR'}` : '—'}</TableCell>}
+                  {visibleColumns.has('commission_percent') && <TableCell>{room.commission_percent != null ? `${room.commission_percent.toFixed(2)}%` : '—'}</TableCell>}
                   {visibleColumns.has('supplier') && <TableCell>{room.supplier || 'N/A'}</TableCell>}
                   {visibleColumns.has('status') && <TableCell>{getAvailabilityBadge(room.quantity_available ?? 0, room.quantity_total ?? 0)}</TableCell>}
                   {visibleColumns.has('actions') && (
@@ -803,6 +826,8 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
                       </div>
                     </TableCell>
                   )}
+                  
+                  
                 </TableRow>
               ))}
             </TableBody>

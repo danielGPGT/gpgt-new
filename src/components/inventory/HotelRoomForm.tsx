@@ -100,7 +100,7 @@ interface HotelRoomFormProps {
   onSuccess: () => void;
 }
 
-const CURRENCIES = ['EUR', 'GBP', 'USD', 'CAD', 'AUD'];
+const CURRENCIES = ['EUR', 'GBP', 'USD', 'CAD', 'AUD', 'BHD', 'AED', 'SAR', 'QAR', 'SGD'];
 
 export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFormProps) {
   const [formData, setFormData] = useState<HotelRoomInsert & { contract_file_path?: string }>({
@@ -111,7 +111,6 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     check_out: room?.check_out ? new Date(room.check_out).toISOString().split('T')[0] : '',
     quantity_total: room?.quantity_total ?? 0,
     quantity_reserved: room?.quantity_reserved ?? 0,
-    quantity_provisional: room?.quantity_provisional ?? 0,
     supplier_price_per_night: room?.supplier_price_per_night ?? 0,
     supplier_currency: room?.supplier_currency ?? 'EUR',
     markup_percent: room?.markup_percent ?? 60,
@@ -132,6 +131,10 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     active: room?.active ?? true,
     max_people: room?.max_people ?? 1,
     breakfast_price_per_person_per_night: room?.breakfast_price_per_person_per_night ?? 0,
+    is_provisional: Boolean(room?.is_provisional),
+    bed_type: room?.bed_type || 'Double Room',
+    commission_percent: room?.commission_percent ?? 0,
+    flexibility: room?.flexibility ?? 'Flex',
   });
 
   // Fetch parent hotel to get room types
@@ -163,6 +166,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     cityTaxAmount: 0,
     subtotalGBP: 0,
     markupAmount: 0,
+    commissionAmount: 0,
     finalPriceGBP: 0,
     finalPriceDisplay: 0
   });
@@ -179,6 +183,13 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
       setNights(0);
     }
   }, [formData.check_in, formData.check_out]);
+
+  // Auto-set quantity_total to 0 when is_provisional is true
+  useEffect(() => {
+    if (formData.is_provisional && formData.quantity_total !== 0) {
+      updateField('quantity_total', 0);
+    }
+  }, [formData.is_provisional]);
 
   useEffect(() => {
     const convert = async () => {
@@ -205,6 +216,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
         cityTaxAmount: 0,
         subtotalGBP: 0,
         markupAmount: 0,
+        commissionAmount: 0,
         finalPriceGBP: 0,
         finalPriceDisplay: 0
       });
@@ -227,7 +239,9 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
 
       // Apply markup
       const markupAmount = formData.markup_percent ? (subtotalGBP * formData.markup_percent / 100) : 0;
-      const finalPriceGBP = subtotalGBP + markupAmount;
+      // Apply commission
+      const commissionAmount = formData.commission_percent ? (subtotalGBP * formData.commission_percent / 100) : 0;
+      const finalPriceGBP = subtotalGBP + markupAmount + commissionAmount;
 
       // Convert to display currency if different from GBP
       let finalPriceDisplay = finalPriceGBP;
@@ -243,6 +257,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
         cityTaxAmount,
         subtotalGBP,
         markupAmount,
+        commissionAmount,
         finalPriceGBP,
         finalPriceDisplay
       });
@@ -265,6 +280,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     formData.resort_fee_type,
     formData.city_tax,
     formData.markup_percent,
+    formData.commission_percent,
     nights
   ]);
 
@@ -426,7 +442,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     // Calculate nights first
     const nights = formData.check_in && formData.check_out ? Math.max(1, Math.ceil((new Date(formData.check_out).getTime() - new Date(formData.check_in).getTime()) / (1000 * 60 * 60 * 24))) : 1;
 
-    if (!formData.room_type_id || !formData.event_id || !formData.check_in || !formData.check_out || !formData.quantity_total || !formData.supplier_price_per_night) {
+    if (!formData.room_type_id || !formData.event_id || !formData.check_in || !formData.check_out || (!formData.is_provisional && !formData.quantity_total) || !formData.supplier_price_per_night) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -443,6 +459,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
     const priceFields = calculatePriceFields(formData, supplierPriceGbp, nights, exchangeRate);
     const submissionData = {
       ...formData,
+      attrition_deadline: formData.attrition_deadline === '' ? null : formData.attrition_deadline,
       ...priceFields,
     };
 
@@ -457,6 +474,26 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
 
   // Get room types from parent hotel
   const hotelRoomTypes = parentHotel?.room_types || [];
+
+  // Add a useRef to track if max_people was manually changed
+  const maxPeopleManuallyChanged = React.useRef(false);
+
+  // When user changes max_people, set the flag
+  const handleMaxPeopleChange = (value: number) => {
+    maxPeopleManuallyChanged.current = true;
+    updateField('max_people', value);
+  };
+
+  // Auto-set max_people based on bed_type, unless user has changed it
+  useEffect(() => {
+    if (!maxPeopleManuallyChanged.current) {
+      if (formData.bed_type === 'Double Room' || formData.bed_type === 'Twin Room') {
+        updateField('max_people', 2);
+      } else if (formData.bed_type === 'Triple Room') {
+        updateField('max_people', 3);
+      }
+    }
+  }, [formData.bed_type]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -490,6 +527,46 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
               <CardDescription className="text-muted-foreground">Basic room details and configuration</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="space-y-2 mb-6">
+                <Label htmlFor="event_id" className="text-sm font-medium text-foreground">Event *</Label>
+                <Select
+                  value={formData.event_id || ''}
+                  onValueChange={(value) => handleEventChange(value)}
+                >
+                  <SelectTrigger className="border-border bg-background">
+                    <SelectValue placeholder="Select an event" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {events.filter(event => event.id && event.id.trim() !== '').map(event => (
+                      <SelectItem key={event.id} value={event.id}>
+                        {event.name} - {event.start_date}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formData.event_id && (
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <div className="text-sm font-medium mb-2">Event Details</div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <div className="text-muted-foreground">Start Date</div>
+                        <div className="font-medium">
+                          {events.find(e => e.id === formData.event_id)?.start_date}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">End Date</div>
+                        <div className="font-medium">
+                          {events.find(e => e.id === formData.event_id)?.end_date}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Set check-in/out dates to align with this event
+                    </p>
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="room_type_id" className="text-sm font-medium text-foreground">Room Type *</Label>
@@ -516,46 +593,36 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                     </p>
                   )}
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="event_id" className="text-sm font-medium text-foreground">Event *</Label>
+                  <Label htmlFor="bed_type" className="text-sm font-medium text-foreground">Bed Type *</Label>
                   <Select
-                    value={formData.event_id || ''}
-                    onValueChange={(value) => handleEventChange(value)}
+                    value={formData.bed_type}
+                    onValueChange={value => updateField('bed_type', value)}
                   >
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder="Select an event" />
+                      <SelectValue placeholder="Select bed type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {events.filter(event => event.id && event.id.trim() !== '').map(event => (
-                        <SelectItem key={event.id} value={event.id}>
-                          {event.name} - {event.start_date}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Double Room">Double Room</SelectItem>
+                      <SelectItem value="Twin Room">Twin Room</SelectItem>
+                      <SelectItem value="Triple Room">Triple Room</SelectItem>
                     </SelectContent>
                   </Select>
-                  {formData.event_id && (
-                    <div className="p-3 bg-muted/50 rounded-lg">
-                      <div className="text-sm font-medium mb-2">Event Details</div>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <div className="text-muted-foreground">Start Date</div>
-                          <div className="font-medium">
-                            {events.find(e => e.id === formData.event_id)?.start_date}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-muted-foreground">End Date</div>
-                          <div className="font-medium">
-                            {events.find(e => e.id === formData.event_id)?.end_date}
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Set check-in/out dates to align with this event
-                      </p>
-                    </div>
-                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="flexibility" className="text-sm font-medium text-foreground">Flexibility</Label>
+                  <Select
+                    value={formData.flexibility ?? 'Flex'}
+                    onValueChange={value => updateField('flexibility' as keyof HotelRoomInsert, value)}
+                  >
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder="Select flexibility" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Flex">Flex</SelectItem>
+                      <SelectItem value="Non Flex">Non Flex</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -636,7 +703,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                   type="number"
                   min={1}
                   value={formData.max_people ?? 1}
-                  onChange={e => updateField('max_people', parseInt(e.target.value) || 1)}
+                  onChange={e => handleMaxPeopleChange(parseInt(e.target.value) || 1)}
                   placeholder="Max people in room"
                 />
               </div>
@@ -676,11 +743,9 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="CAD">CAD</SelectItem>
-                      <SelectItem value="AUD">AUD</SelectItem>
+                      {CURRENCIES.map(currency => (
+                        <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -792,6 +857,17 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                     placeholder="0.00"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="commission_percent" className="text-sm font-medium text-foreground">Commission %</Label>
+                  <Input
+                    id="commission_percent"
+                    type="number"
+                    step="0.01"
+                    value={formData.commission_percent ?? 0}
+                    onChange={e => updateField('commission_percent', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -818,6 +894,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                 const breakfastPerPersonPerNight = !breakfastIncluded ? (formData.breakfast_price_per_person_per_night ?? 0) : 0;
                 const vat = formData.vat_percentage ?? 0;
                 const markup = formData.markup_percent ?? 0;
+                const commission = formData.commission_percent ?? 0;
                 const supplierCurrency = formData.supplier_currency ?? 'EUR';
                 const supplierSymbol = getCurrencySymbol(supplierCurrency);
                 // Room price (raw)
@@ -855,9 +932,12 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                 // Markup
                 const markupAmountSupplier = subtotalSupplier * (markup / 100);
                 const markupAmountGbp = subtotalGbp * (markup / 100);
+                // Commission
+                const commissionAmountSupplier = subtotalSupplier * (commission / 100);
+                const commissionAmountGbp = subtotalGbp * (commission / 100);
                 // Total (what you charge the customer)
-                const totalSupplier = subtotalSupplier + markupAmountSupplier;
-                const totalGbp = subtotalGbp + markupAmountGbp;
+                const totalSupplier = subtotalSupplier + markupAmountSupplier + commissionAmountSupplier;
+                const totalGbp = subtotalGbp + markupAmountGbp + commissionAmountGbp;
                 // Per night breakdown
                 const perNight = nights > 0 ? {
                   room: { supplier: (formData.supplier_price_per_night ?? 0), gbp: supplierPriceGbp },
@@ -867,6 +947,7 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                   breakfast: { supplier: breakfastTotalSupplier / nights, gbp: breakfastTotalGbp / nights },
                   subtotal: { supplier: subtotalSupplier / nights, gbp: subtotalGbp / nights },
                   markup: { supplier: markupAmountSupplier / nights, gbp: markupAmountGbp / nights },
+                  commission: { supplier: commissionAmountSupplier / nights, gbp: commissionAmountGbp / nights },
                   total: { supplier: totalSupplier / nights, gbp: totalGbp / nights },
                 } : null;
                 const showBoth = supplierCurrency !== 'GBP';
@@ -910,6 +991,11 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                       <div className="flex justify-between"><span>Markup ({markup}%):</span>
                         <span className="font-semibold">
                           {showBoth ? `${supplierSymbol}${markupAmountSupplier.toFixed(2)} | ` : ''}£{markupAmountGbp.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between"><span>Commission ({commission}%):</span>
+                        <span className="font-semibold">
+                          {showBoth ? `${supplierSymbol}${commissionAmountSupplier.toFixed(2)} | ` : ''}£{commissionAmountGbp.toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between border-t pt-2 mt-2 font-bold text-lg">
@@ -977,6 +1063,14 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                           </div>
                         )}
                         
+                        {/* Commission */}
+                        {commission > 0 && (
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-muted-foreground">Commission ({commission}%)</span>
+                            <span className="font-medium">{showBoth ? `${supplierSymbol}${perNight.commission.supplier.toFixed(2)} | ` : ''}£{perNight.commission.gbp.toFixed(2)}</span>
+                          </div>
+                        )}
+                        
                         {/* Total */}
                         <div className="flex justify-between py-2 border-t border-primary/20 bg-primary/5 rounded px-2 font-bold text-base">
                           <span>Total per Night</span>
@@ -1001,6 +1095,21 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
               <CardDescription className="text-[var(--muted-foreground)] text-sm">Manage room quantities and track availability</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Provisional Checkbox */}
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="is_provisional"
+                    checked={formData.is_provisional}
+                    onCheckedChange={(checked) => updateField('is_provisional', !!checked)}
+                  />
+                  <Label htmlFor="is_provisional" className="text-sm font-medium text-[var(--foreground)]">Provisional Room</Label>
+                </div>
+                <p className="text-xs text-[var(--muted-foreground)] ml-6">
+                  If checked, this room is provisional and quantity will always be 0 (purchased to order).
+                </p>
+              </div>
+
               {/* Quantity Inputs */}
               <div className="space-y-4">
                 <div className="space-y-1.5">
@@ -1008,12 +1117,18 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                   <Input
                     id="quantity_total"
                     type="number"
-                    value={formData.quantity_total}
+                    value={formData.is_provisional ? 0 : formData.quantity_total}
                     onChange={(e) => updateField('quantity_total', parseInt(e.target.value) || 0)}
                     min="0"
+                    disabled={formData.is_provisional}
                     className="border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]"
                   />
-                  <p className="text-xs text-[var(--muted-foreground)]">Total rooms available for this type</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    {formData.is_provisional 
+                      ? 'Provisional rooms always have quantity 0.' 
+                      : 'Total rooms available for this type'
+                    }
+                  </p>
                 </div>
               </div>
 
@@ -1030,9 +1145,11 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                   
                   <div className="text-center p-3 bg-[var(--primary)]/10 rounded-lg border border-[var(--primary)]/20">
                     <div className="text-2xl font-bold text-[var(--primary)]">
-                      {formData.quantity_total}
+                      {formData.is_provisional ? 'PTO' : formData.quantity_total}
                     </div>
-                    <div className="text-xs text-[var(--muted-foreground)]">Available for Booking</div>
+                    <div className="text-xs text-[var(--muted-foreground)]">
+                      {formData.is_provisional ? 'Purchased to order' : 'Available for Booking'}
+                    </div>
                   </div>
                 </div>
 

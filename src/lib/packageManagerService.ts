@@ -677,8 +677,7 @@ export class PackageManagerService {
             ticket_category:ticket_categories(category_name)
           `)
           .eq('event_id', eventId)
-          .eq('active', true)
-          .gt('quantity_available', 0); // Only show tickets with availability
+          .eq('active', true);
         break;
         
       case 'hotel_room':

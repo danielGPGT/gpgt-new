@@ -314,7 +314,7 @@ export default function TeamInvitation() {
           </div>
           <CardTitle className="text-2xl">You're Invited!</CardTitle>
           <CardDescription>
-            Join <strong>{invitation.teamName}</strong> on AItinerary
+            Join <strong>{invitation.teamName}</strong>
           </CardDescription>
         </CardHeader>
         

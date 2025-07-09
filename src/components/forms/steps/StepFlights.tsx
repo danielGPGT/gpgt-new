@@ -36,6 +36,133 @@ export interface SelectedFlight {
   cabin?: string;
   refundable?: boolean;
   baggageAllowance?: string;
+  
+  // Enhanced detailed flight information for API flights
+  // Outbound flight details
+  outboundFlightId?: string;
+  outboundMarketingAirlineId?: string;
+  outboundOperatingAirlineId?: string;
+  outboundMarketingAirlineName?: string;
+  outboundOperatingAirlineName?: string;
+  outboundDepartureAirportId?: string;
+  outboundDepartureAirportName?: string;
+  outboundArrivalAirportId?: string;
+  outboundArrivalAirportName?: string;
+  outboundDepartureDateTime?: string;
+  outboundDepartureDateTimeUtc?: string;
+  outboundArrivalDateTime?: string;
+  outboundArrivalDateTimeUtc?: string;
+  outboundFlightDuration?: string;
+  outboundAircraftType?: string;
+  outboundDepartureTerminal?: string;
+  outboundArrivalTerminal?: string;
+  outboundCabinId?: string;
+  outboundCabinName?: string;
+  outboundFareBasisCode?: string;
+  outboundFareTypeId?: string;
+  outboundFareTypeName?: string;
+  outboundFareSubTypeId?: string;
+  outboundFareSubTypeName?: string;
+  outboundBaggageAllowance?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  outboundCheckedBaggage?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  outboundCarryOnBaggage?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  outboundStops?: any[];
+  outboundLayoverInfo?: any[];
+  
+  // Inbound flight details (for return flights)
+  inboundFlightId?: string;
+  inboundMarketingAirlineId?: string;
+  inboundOperatingAirlineId?: string;
+  inboundMarketingAirlineName?: string;
+  inboundOperatingAirlineName?: string;
+  inboundDepartureAirportId?: string;
+  inboundDepartureAirportName?: string;
+  inboundArrivalAirportId?: string;
+  inboundArrivalAirportName?: string;
+  inboundDepartureDateTime?: string;
+  inboundDepartureDateTimeUtc?: string;
+  inboundArrivalDateTime?: string;
+  inboundArrivalDateTimeUtc?: string;
+  inboundFlightDuration?: string;
+  inboundAircraftType?: string;
+  inboundDepartureTerminal?: string;
+  inboundArrivalTerminal?: string;
+  inboundCabinId?: string;
+  inboundCabinName?: string;
+  inboundFareBasisCode?: string;
+  inboundFareTypeId?: string;
+  inboundFareTypeName?: string;
+  inboundFareSubTypeId?: string;
+  inboundFareSubTypeName?: string;
+  inboundBaggageAllowance?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  inboundCheckedBaggage?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  inboundCarryOnBaggage?: {
+    pieces?: number;
+    weight?: number;
+    weightUnit?: string;
+    dimensions?: string;
+  };
+  inboundStops?: any[];
+  inboundLayoverInfo?: any[];
+  
+  // Fare and pricing details
+  fareTypeId?: string;
+  fareTypeName?: string;
+  fareSubTypeId?: string;
+  fareSubTypeName?: string;
+  revenueStreamId?: string;
+  revenueStreamName?: string;
+  passengerTypeId?: string;
+  passengerTypeName?: string;
+  baseFare?: number;
+  taxes?: number;
+  fees?: number;
+  totalFare?: number;
+  currencyId?: string;
+  currencyCode?: string;
+  currencyName?: string;
+  currencySymbol?: string;
+  decimalPlaces?: number;
+  
+  // Additional metadata
+  recommendationId?: string;
+  validatingAirlineId?: string;
+  validatingAirlineName?: string;
+  skytraxRating?: number;
+  isPremium?: boolean;
+  isCorporate?: boolean;
+  isInstantTicketing?: boolean;
+  isSemiDeferred?: boolean;
+  isBaggageOnly?: boolean;
+  isAlternateRoute?: boolean;
+  
+  // Original API response data for reference
+  originalApiData?: any;
 }
 
 interface DatabaseFlight {
@@ -88,8 +215,7 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
     destination: '',
     departureDate: '',
     returnDate: '',
-    cabinClass: 'ECO',
-    isReturn: false
+    cabinClass: 'ECO'
   });
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -153,6 +279,124 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
           returnDate: flight.returnDate,
           price: flight.price * 1.1, // Add 10% markup
           passengers: flight.passengers,
+          
+          // Map all the detailed flight information
+          // Outbound flight details
+          outboundFlightId: flight.outboundFlightId,
+          outboundMarketingAirlineId: flight.outboundMarketingAirlineId,
+          outboundOperatingAirlineId: flight.outboundOperatingAirlineId,
+          outboundMarketingAirlineName: flight.outboundMarketingAirlineName,
+          outboundOperatingAirlineName: flight.outboundOperatingAirlineName,
+          outboundDepartureAirportId: flight.outboundDepartureAirportId,
+          outboundDepartureAirportName: flight.outboundDepartureAirportName,
+          outboundArrivalAirportId: flight.outboundArrivalAirportId,
+          outboundArrivalAirportName: flight.outboundArrivalAirportName,
+          outboundDepartureDateTime: flight.outboundDepartureDateTime,
+          outboundDepartureDateTimeUtc: flight.outboundDepartureDateTimeUtc,
+          outboundArrivalDateTime: flight.outboundArrivalDateTime,
+          outboundArrivalDateTimeUtc: flight.outboundArrivalDateTimeUtc,
+          outboundFlightDuration: flight.outboundFlightDuration,
+          outboundAircraftType: flight.outboundAircraftType,
+          outboundDepartureTerminal: flight.outboundDepartureTerminal,
+          outboundArrivalTerminal: flight.outboundArrivalTerminal,
+          outboundCabinId: flight.outboundCabinId,
+          outboundCabinName: flight.outboundCabinName,
+          outboundFareBasisCode: flight.outboundFareBasisCode,
+          outboundFareTypeId: flight.outboundFareTypeId,
+          outboundFareTypeName: flight.outboundFareTypeName,
+          outboundFareSubTypeId: flight.outboundFareSubTypeId,
+          outboundFareSubTypeName: flight.outboundFareSubTypeName,
+          outboundBaggageAllowance: flight.outboundBaggageAllowance,
+          outboundCheckedBaggage: flight.outboundCheckedBaggage,
+          outboundCarryOnBaggage: flight.outboundCarryOnBaggage,
+          outboundStops: flight.outboundStops,
+          outboundLayoverInfo: flight.outboundLayoverInfo,
+          
+          // Inbound flight details (for return flights)
+          inboundFlightId: flight.inboundFlightId,
+          inboundMarketingAirlineId: flight.inboundMarketingAirlineId,
+          inboundOperatingAirlineId: flight.inboundOperatingAirlineId,
+          inboundMarketingAirlineName: flight.inboundMarketingAirlineName,
+          inboundOperatingAirlineName: flight.inboundOperatingAirlineName,
+          inboundDepartureAirportId: flight.inboundDepartureAirportId,
+          inboundDepartureAirportName: flight.inboundDepartureAirportName,
+          inboundArrivalAirportId: flight.inboundArrivalAirportId,
+          inboundArrivalAirportName: flight.inboundArrivalAirportName,
+          inboundDepartureDateTime: flight.inboundDepartureDateTime,
+          inboundDepartureDateTimeUtc: flight.inboundDepartureDateTimeUtc,
+          inboundArrivalDateTime: flight.inboundArrivalDateTime,
+          inboundArrivalDateTimeUtc: flight.inboundArrivalDateTimeUtc,
+          inboundFlightDuration: flight.inboundFlightDuration,
+          inboundAircraftType: flight.inboundAircraftType,
+          inboundDepartureTerminal: flight.inboundDepartureTerminal,
+          inboundArrivalTerminal: flight.inboundArrivalTerminal,
+          inboundCabinId: flight.inboundCabinId,
+          inboundCabinName: flight.inboundCabinName,
+          inboundFareBasisCode: flight.inboundFareBasisCode,
+          inboundFareTypeId: flight.inboundFareTypeId,
+          inboundFareTypeName: flight.inboundFareTypeName,
+          inboundFareSubTypeId: flight.inboundFareSubTypeId,
+          inboundFareSubTypeName: flight.inboundFareSubTypeName,
+          inboundBaggageAllowance: flight.inboundBaggageAllowance,
+          inboundCheckedBaggage: flight.inboundCheckedBaggage,
+          inboundCarryOnBaggage: flight.inboundCarryOnBaggage,
+          inboundStops: flight.inboundStops,
+          inboundLayoverInfo: flight.inboundLayoverInfo,
+          
+          // Fare and pricing details
+          fareTypeId: flight.fareTypeId,
+          fareTypeName: flight.fareTypeName,
+          fareSubTypeId: flight.fareSubTypeId,
+          fareSubTypeName: flight.fareSubTypeName,
+          revenueStreamId: flight.revenueStreamId,
+          revenueStreamName: flight.revenueStreamName,
+          passengerTypeId: flight.passengerTypeId,
+          passengerTypeName: flight.passengerTypeName,
+          baseFare: flight.baseFare,
+          taxes: flight.taxes,
+          fees: flight.fees,
+          totalFare: flight.totalFare,
+          currencyId: flight.currencyId,
+          currencyCode: flight.currencyCode,
+          currencyName: flight.currencyName,
+          currencySymbol: flight.currencySymbol,
+          decimalPlaces: flight.decimalPlaces,
+          
+          // Additional metadata
+          recommendationId: flight.recommendationId,
+          validatingAirlineId: flight.validatingAirlineId,
+          validatingAirlineName: flight.validatingAirlineName,
+          skytraxRating: flight.skytraxRating,
+          isPremium: flight.isPremium,
+          isCorporate: flight.isCorporate,
+          isInstantTicketing: flight.isInstantTicketing,
+          isSemiDeferred: flight.isSemiDeferred,
+          isBaggageOnly: flight.isBaggageOnly,
+          isAlternateRoute: flight.isAlternateRoute,
+          
+          // Original API response data for reference
+          originalApiData: flight.originalApiData,
+          
+          // Legacy fields for backward compatibility
+          airline: flight.airline,
+          cabin: flight.cabin,
+          refundable: flight.refundable,
+          baggageAllowance: flight.baggageAllowance,
+          flightNumber: flight.flightNumber,
+          returnFlightNumber: flight.returnFlightNumber,
+          duration: flight.duration,
+          returnDuration: flight.returnDuration,
+          stops: flight.stops,
+          returnStops: flight.returnStops,
+          departureTerminal: flight.departureTerminal,
+          arrivalTerminal: flight.arrivalTerminal,
+          returnDepartureTerminal: flight.returnDepartureTerminal,
+          returnArrivalTerminal: flight.returnArrivalTerminal,
+          aircraft: flight.aircraft,
+          returnAircraft: flight.returnAircraft,
+          ticketingDeadline: flight.ticketingDeadline,
+          fareType: flight.fareType,
+          currency: flight.currency,
         }));
 
       // Only update if the selection actually changed
@@ -219,7 +463,7 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
   };
 
   const handleApiFlightSearch = async () => {
-    if (!searchParams.origin || !searchParams.destination || !searchParams.departureDate) {
+    if (!searchParams.origin || !searchParams.destination || !searchParams.departureDate || !searchParams.returnDate) {
       setSearchError('Please fill in all required fields');
       return;
     }
@@ -240,7 +484,7 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
         origin: searchParams.origin.toUpperCase(),
         destination: searchParams.destination.toUpperCase(),
         departureDate: searchParams.departureDate,
-        returnDate: searchParams.isReturn && searchParams.returnDate ? searchParams.returnDate : undefined,
+        returnDate: searchParams.returnDate,
         adults: adults,
         cabinClass: searchParams.cabinClass,
       };
@@ -649,7 +893,7 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="departureDate">Departure Date</Label>
+                  <Label htmlFor="departureDate">Outbound Date</Label>
                   <Input
                     id="departureDate"
                     type="date"
@@ -660,14 +904,14 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="returnDate">Return Date (Optional)</Label>
+                  <Label htmlFor="returnDate">Return Date</Label>
                   <Input
                     id="returnDate"
                     type="date"
                     value={searchParams.returnDate}
                     onChange={(e) => setSearchParams(prev => ({ ...prev, returnDate: e.target.value }))}
                     min={searchParams.departureDate || new Date().toISOString().split('T')[0]}
-                    disabled={!searchParams.isReturn}
+                    required
                   />
                 </div>
 
@@ -690,25 +934,15 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Return Flight</Label>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="isReturn"
-                      checked={searchParams.isReturn}
-                      onCheckedChange={(checked) => setSearchParams(prev => ({ 
-                        ...prev, 
-                        isReturn: checked as boolean,
-                        returnDate: checked ? prev.returnDate : ''
-                      }))}
-                    />
-                    <Label htmlFor="isReturn" className="text-sm">Include return flight</Label>
-                  </div>
+                  <Label className="text-sm text-muted-foreground">
+                    Return flights only - all packages include round-trip flights
+                  </Label>
                 </div>
               </div>
 
-              <Button 
-                onClick={handleApiFlightSearch}
-                disabled={searching || !searchParams.origin || !searchParams.destination || !searchParams.departureDate}
+                            <Button 
+                onClick={handleApiFlightSearch} 
+                disabled={searching || !searchParams.origin || !searchParams.destination || !searchParams.departureDate || !searchParams.returnDate}
                 className="w-full"
               >
                 {searching ? (
@@ -719,7 +953,7 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                 ) : (
                   <>
                     <Search className="h-4 w-4 mr-2" />
-                    Search Flights
+                    Search Return Flights
                   </>
                 )}
               </Button>
@@ -735,7 +969,7 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
               {apiFlights.length > 0 && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>Found {apiFlights.length} flights</span>
+                    <span>Found {apiFlights.length} return flights</span>
                     <span>{selectedFlightIds.length} of {adults} selected</span>
                   </div>
 
@@ -902,7 +1136,7 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                       {/* Clear Filters Button */}
                       <div className="flex justify-between items-center pt-2 border-t">
                         <span className="text-sm text-muted-foreground">
-                          Showing {getFilteredFlights().length} of {apiFlights.length} flights
+                          Showing {getFilteredFlights().length} of {apiFlights.length} return flights
                         </span>
                         <Button
                           variant="outline"
@@ -946,30 +1180,56 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                             />
                             
                             <div className="flex-1 space-y-3">
+                              {/* Return Flight Badge */}
+                              <div className="flex items-center gap-2">
+                                <Badge variant="default" className="bg-blue-100 text-blue-800">
+                                  Return Flight
+                                </Badge>
+                              </div>
+                              
                               {/* Flight Header */}
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <Badge variant="outline">{flight.airline}</Badge>
-                                  <span className="font-mono text-sm">{flight.flightNumber}</span>
-                                  {flight.returnFlightNumber && (
-                                    <span className="font-mono text-sm">/ {flight.returnFlightNumber}</span>
+                                  <Badge variant="outline">
+                                    {flight.outboundMarketingAirlineName || flight.outboundOperatingAirlineName || flight.airline}
+                                  </Badge>
+                                  <span className="font-mono text-sm">
+                                    {flight.outboundFlightNumber || flight.flightNumber}
+                                  </span>
+                                  {flight.inboundFlightNumber && (
+                                    <span className="font-mono text-sm">/ {flight.inboundFlightNumber}</span>
                                   )}
                                   <Badge variant="secondary">
-                                    {FlightApiService.getCabinDisplayName(flight.cabin)}
+                                    {FlightApiService.getCabinDisplayName(flight.outboundCabinName || flight.outboundCabinId || flight.cabin)}
                                   </Badge>
                                   {flight.refundable && (
                                     <Badge variant="default" className="bg-green-100 text-green-800">
                                       Refundable
                                     </Badge>
                                   )}
+                                  {flight.isPremium && (
+                                    <Badge variant="default" className="bg-purple-100 text-purple-800">
+                                      Premium
+                                    </Badge>
+                                  )}
+                                  {flight.validatingAirlineName && flight.validatingAirlineName !== (flight.outboundMarketingAirlineName || flight.outboundOperatingAirlineName || flight.airline) && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Validated by {flight.validatingAirlineName}
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="text-right">
                                   <div className="text-lg font-semibold">
-                                    {FlightApiService.formatPrice(flight.price * 1.1, flight.currency)}
+                                    {FlightApiService.formatPrice(flight.price * 1.1, flight.currencyId || flight.currency)}
                                   </div>
                                   <div className="text-sm text-muted-foreground">
                                     per passenger (incl. 10% markup)
                                   </div>
+                                  {flight.baseFare && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Base: {flight.currencySymbol || flight.currencyId || '£'}{flight.baseFare.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -981,15 +1241,28 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                                     Outbound
                                   </div>
                                   <div className="text-sm">
-                                    <div className="font-mono">{flight.origin}</div>
+                                    <div className="font-mono">
+                                      {flight.outboundDepartureAirportId || flight.origin}
+                                    </div>
                                     <div className="text-muted-foreground">
-                                      {FlightApiService.formatFlightTime(flight.departureDate)}
+                                      {flight.outboundDepartureDateTime ? 
+                                        FlightApiService.formatFlightTime(flight.outboundDepartureDateTime) :
+                                        FlightApiService.formatFlightTime(flight.departureDate)
+                                      }
                                     </div>
                                   </div>
                                   <div className="text-xs text-muted-foreground">
-                                    {FlightApiService.formatFlightDate(flight.departureDate)}
-                                    {flight.departureTerminal && ` • Terminal ${flight.departureTerminal}`}
+                                    {flight.outboundDepartureDateTime ? 
+                                      FlightApiService.formatFlightDate(flight.outboundDepartureDateTime) :
+                                      FlightApiService.formatFlightDate(flight.departureDate)
+                                    }
+                                    {flight.outboundDepartureTerminal && ` • Terminal ${flight.outboundDepartureTerminal}`}
                                   </div>
+                                  {flight.outboundDepartureAirportName && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {flight.outboundDepartureAirportName}
+                                    </div>
+                                  )}
                                 </div>
                                 
                                 <div className="space-y-1">
@@ -998,15 +1271,28 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                                     Arrival
                                   </div>
                                   <div className="text-sm">
-                                    <div className="font-mono">{flight.destination}</div>
-                                    <div className="text-muted-foreground">
-                                      {FlightApiService.formatFlightTime(flight.departureDate)}
+                                    <div className="font-mono">
+                                      {flight.outboundArrivalAirportId || flight.destination}
                                     </div>
+                                                                      <div className="text-muted-foreground">
+                                    {flight.outboundArrivalDateTime ? 
+                                      FlightApiService.formatFlightTime(flight.outboundArrivalDateTime) :
+                                      'TBD'
+                                    }
                                   </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {FlightApiService.formatFlightDate(flight.departureDate)}
-                                    {flight.arrivalTerminal && ` • Terminal ${flight.arrivalTerminal}`}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {flight.outboundArrivalDateTime ? 
+                                    FlightApiService.formatFlightDate(flight.outboundArrivalDateTime) :
+                                    'TBD'
+                                  }
+                                    {flight.outboundArrivalTerminal && ` • Terminal ${flight.outboundArrivalTerminal}`}
                                   </div>
+                                  {flight.outboundArrivalAirportName && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {flight.outboundArrivalAirportName}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -1014,22 +1300,77 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                               <div className="flex items-center gap-4 text-xs text-muted-foreground">
                                 <div className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
-                                  {FlightApiService.formatDuration(flight.duration)}
+                                  {FlightApiService.formatDuration(flight.outboundFlightDuration || flight.duration)}
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <MapPin className="h-3 w-3" />
-                                  {FlightApiService.getStopsDisplay(flight.stops)}
+                                  {FlightApiService.getStopsDisplay(flight.outboundStops?.length || flight.stops)}
                                 </div>
-                                {flight.aircraft && (
+                                {flight.outboundAircraftType && (
                                   <div className="flex items-center gap-1">
                                     <Plane className="h-3 w-3" />
-                                    {flight.aircraft}
+                                    {flight.outboundAircraftType}
+                                  </div>
+                                )}
+                                {flight.outboundCabinName && (
+                                  <div className="flex items-center gap-1">
+                                    <Building className="h-3 w-3" />
+                                    {flight.outboundCabinName}
                                   </div>
                                 )}
                               </div>
 
+                              {/* Outbound Flight Airline Details */}
+                              {(flight.outboundMarketingAirlineName || flight.outboundOperatingAirlineName) && (
+                                <div className="text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-2">
+                                    {flight.outboundMarketingAirlineName && (
+                                      <span>Marketing: {flight.outboundMarketingAirlineName}</span>
+                                    )}
+                                    {flight.outboundOperatingAirlineName && flight.outboundOperatingAirlineName !== flight.outboundMarketingAirlineName && (
+                                      <span>• Operating: {flight.outboundOperatingAirlineName}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Outbound Baggage Information */}
+                              {(flight.outboundCheckedBaggage || flight.outboundCarryOnBaggage || flight.outboundBaggageAllowance) && (
+                                <div className="text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <BaggageClaim className="h-3 w-3" />
+                                    <span className="font-medium">Baggage:</span>
+                                    {flight.outboundCheckedBaggage && (
+                                      <span>
+                                        {flight.outboundCheckedBaggage.pieces && `${flight.outboundCheckedBaggage.pieces} piece${flight.outboundCheckedBaggage.pieces !== 1 ? 's' : ''}`}
+                                        {flight.outboundCheckedBaggage.weight && ` ${flight.outboundCheckedBaggage.weight}${flight.outboundCheckedBaggage.weightUnit}`}
+                                      </span>
+                                    )}
+                                    {flight.outboundCarryOnBaggage && (
+                                      <span>
+                                        {flight.outboundCheckedBaggage && ' + '}
+                                        Carry-on: {flight.outboundCarryOnBaggage.pieces && `${flight.outboundCarryOnBaggage.pieces} piece${flight.outboundCarryOnBaggage.pieces !== 1 ? 's' : ''}`}
+                                        {flight.outboundCarryOnBaggage.weight && ` ${flight.outboundCarryOnBaggage.weight}${flight.outboundCarryOnBaggage.weightUnit}`}
+                                      </span>
+                                    )}
+                                    {flight.outboundBaggageAllowance && !flight.outboundCheckedBaggage && !flight.outboundCarryOnBaggage && (
+                                      <span>
+                                        {typeof flight.outboundBaggageAllowance === 'string' 
+                                          ? flight.outboundBaggageAllowance 
+                                          : flight.outboundBaggageAllowance.pieces 
+                                            ? `${flight.outboundBaggageAllowance.pieces} pieces`
+                                            : flight.outboundBaggageAllowance.weight 
+                                              ? `${flight.outboundBaggageAllowance.weight}${flight.outboundBaggageAllowance.weightUnit || 'kg'}`
+                                              : 'Baggage included'
+                                        }
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Layover Information */}
-                              {flight.stops > 0 && (
+                              {(flight.outboundStops?.length || flight.stops) > 0 && (
                                 <div className="pt-2 border-t border-dashed">
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                                     <MapPin className="h-3 w-3" />
@@ -1038,11 +1379,11 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                                   <div className="space-y-1 text-xs">
                                     <div className="flex items-center justify-between">
                                       <span>Stops:</span>
-                                      <span className="font-medium">{flight.stops} connection{flight.stops !== 1 ? 's' : ''}</span>
+                                      <span className="font-medium">{flight.outboundStops?.length || flight.stops} connection{(flight.outboundStops?.length || flight.stops) !== 1 ? 's' : ''}</span>
                                     </div>
-                                    {flight.layoverInfo && (
+                                    {(flight.outboundLayoverInfo || flight.layoverInfo) && (
                                       <div className="space-y-1">
-                                        {flight.layoverInfo.map((layover: any, index: number) => (
+                                        {(flight.outboundLayoverInfo || flight.layoverInfo).map((layover: any, index: number) => (
                                           <div key={index} className="bg-muted/50 p-2 rounded text-xs">
                                             <div className="flex items-center justify-between">
                                               <span className="font-medium">{layover.airport}</span>
@@ -1072,15 +1413,28 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                                       Return
                                     </div>
                                     <div className="text-sm">
-                                      <div className="font-mono">{flight.destination}</div>
+                                      <div className="font-mono">
+                                        {flight.inboundDepartureAirportId || flight.destination}
+                                      </div>
                                       <div className="text-muted-foreground">
-                                        {FlightApiService.formatFlightTime(flight.returnDate)}
+                                        {flight.inboundDepartureDateTime ? 
+                                          FlightApiService.formatFlightTime(flight.inboundDepartureDateTime) :
+                                          'TBD'
+                                        }
                                       </div>
                                     </div>
                                     <div className="text-xs text-muted-foreground">
-                                      {FlightApiService.formatFlightDate(flight.returnDate)}
-                                      {flight.returnDepartureTerminal && ` • Terminal ${flight.returnDepartureTerminal}`}
+                                      {flight.inboundDepartureDateTime ? 
+                                        FlightApiService.formatFlightDate(flight.inboundDepartureDateTime) :
+                                        'TBD'
+                                      }
+                                      {flight.inboundDepartureTerminal && ` • Terminal ${flight.inboundDepartureTerminal}`}
                                     </div>
+                                    {flight.inboundDepartureAirportName && (
+                                      <div className="text-xs text-muted-foreground">
+                                        {flight.inboundDepartureAirportName}
+                                      </div>
+                                    )}
                                   </div>
                                   
                                   <div className="space-y-1">
@@ -1089,21 +1443,109 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                                       Arrival
                                     </div>
                                     <div className="text-sm">
-                                      <div className="font-mono">{flight.origin}</div>
+                                      <div className="font-mono">
+                                        {flight.inboundArrivalAirportId || flight.origin}
+                                      </div>
                                       <div className="text-muted-foreground">
-                                        {FlightApiService.formatFlightTime(flight.returnDate)}
+                                        {flight.inboundArrivalDateTime ? 
+                                          FlightApiService.formatFlightTime(flight.inboundArrivalDateTime) :
+                                          'TBD'
+                                        }
                                       </div>
                                     </div>
                                     <div className="text-xs text-muted-foreground">
-                                      {FlightApiService.formatFlightDate(flight.returnDate)}
-                                      {flight.returnArrivalTerminal && ` • Terminal ${flight.returnArrivalTerminal}`}
+                                      {flight.inboundArrivalDateTime ? 
+                                        FlightApiService.formatFlightDate(flight.inboundArrivalDateTime) :
+                                        'TBD'
+                                      }
+                                      {flight.inboundArrivalTerminal && ` • Terminal ${flight.inboundArrivalTerminal}`}
                                     </div>
+                                    {flight.inboundArrivalAirportName && (
+                                      <div className="text-xs text-muted-foreground">
+                                        {flight.inboundArrivalAirportName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Return Flight Details */}
+                              {flight.returnDate && (
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2">
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {FlightApiService.formatDuration(flight.inboundFlightDuration || flight.returnDuration)}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    {FlightApiService.getStopsDisplay(flight.inboundStops?.length || flight.returnStops)}
+                                  </div>
+                                  {flight.inboundAircraftType && (
+                                    <div className="flex items-center gap-1">
+                                      <Plane className="h-3 w-3" />
+                                      {flight.inboundAircraftType}
+                                    </div>
+                                  )}
+                                  {flight.inboundCabinName && (
+                                    <div className="flex items-center gap-1">
+                                      <Building className="h-3 w-3" />
+                                      {flight.inboundCabinName}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Return Flight Airline Details */}
+                              {flight.returnDate && (flight.inboundMarketingAirlineName || flight.inboundOperatingAirlineName) && (
+                                <div className="text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-2">
+                                    {flight.inboundMarketingAirlineName && (
+                                      <span>Marketing: {flight.inboundMarketingAirlineName}</span>
+                                    )}
+                                    {flight.inboundOperatingAirlineName && flight.inboundOperatingAirlineName !== flight.inboundMarketingAirlineName && (
+                                      <span>• Operating: {flight.inboundOperatingAirlineName}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Return Flight Baggage Information */}
+                              {flight.returnDate && (flight.inboundCheckedBaggage || flight.inboundCarryOnBaggage || flight.inboundBaggageAllowance) && (
+                                <div className="text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <BaggageClaim className="h-3 w-3" />
+                                    <span className="font-medium">Return Baggage:</span>
+                                    {flight.inboundCheckedBaggage && (
+                                      <span>
+                                        {flight.inboundCheckedBaggage.pieces && `${flight.inboundCheckedBaggage.pieces} piece${flight.inboundCheckedBaggage.pieces !== 1 ? 's' : ''}`}
+                                        {flight.inboundCheckedBaggage.weight && ` ${flight.inboundCheckedBaggage.weight}${flight.inboundCheckedBaggage.weightUnit}`}
+                                      </span>
+                                    )}
+                                    {flight.inboundCarryOnBaggage && (
+                                      <span>
+                                        {flight.inboundCheckedBaggage && ' + '}
+                                        Carry-on: {flight.inboundCarryOnBaggage.pieces && `${flight.inboundCarryOnBaggage.pieces} piece${flight.inboundCarryOnBaggage.pieces !== 1 ? 's' : ''}`}
+                                        {flight.inboundCarryOnBaggage.weight && ` ${flight.inboundCarryOnBaggage.weight}${flight.inboundCarryOnBaggage.weightUnit}`}
+                                      </span>
+                                    )}
+                                    {flight.inboundBaggageAllowance && !flight.inboundCheckedBaggage && !flight.inboundCarryOnBaggage && (
+                                      <span>
+                                        {typeof flight.inboundBaggageAllowance === 'string' 
+                                          ? flight.inboundBaggageAllowance 
+                                          : flight.inboundBaggageAllowance.pieces 
+                                            ? `${flight.inboundBaggageAllowance.pieces} pieces`
+                                            : flight.inboundBaggageAllowance.weight 
+                                              ? `${flight.inboundBaggageAllowance.weight}${flight.inboundBaggageAllowance.weightUnit || 'kg'}`
+                                              : 'Baggage included'
+                                        }
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               )}
 
                               {/* Return Flight Layover Information */}
-                              {flight.returnDate && flight.returnStops && flight.returnStops > 0 && (
+                              {flight.returnDate && (flight.inboundStops?.length || flight.returnStops) > 0 && (
                                 <div className="pt-2 border-t border-dashed">
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                                     <MapPin className="h-3 w-3" />
@@ -1112,11 +1554,11 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                                   <div className="space-y-1 text-xs">
                                     <div className="flex items-center justify-between">
                                       <span>Stops:</span>
-                                      <span className="font-medium">{flight.returnStops} connection{flight.returnStops !== 1 ? 's' : ''}</span>
+                                      <span className="font-medium">{flight.inboundStops?.length || flight.returnStops} connection{(flight.inboundStops?.length || flight.returnStops) !== 1 ? 's' : ''}</span>
                                     </div>
-                                    {flight.returnLayoverInfo && (
+                                    {flight.inboundLayoverInfo && (
                                       <div className="space-y-1">
-                                        {flight.returnLayoverInfo.map((layover: any, index: number) => (
+                                        {flight.inboundLayoverInfo.map((layover: any, index: number) => (
                                           <div key={index} className="bg-muted/50 p-2 rounded text-xs">
                                             <div className="flex items-center justify-between">
                                               <span className="font-medium">{layover.airport}</span>
@@ -1141,21 +1583,57 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                               <div className="pt-2 border-t">
                                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                                   <div className="flex items-center gap-4">
-                                    {flight.baggageAllowance && (
+                                    {(flight.outboundCheckedBaggage || flight.outboundCarryOnBaggage || flight.outboundBaggageAllowance || flight.baggageAllowance) && (
                                       <div className="flex items-center gap-1">
                                         <BaggageClaim className="h-3 w-3" />
-                                        {flight.baggageAllowance.NumberOfPieces 
-                                          ? `${flight.baggageAllowance.NumberOfPieces} pieces`
-                                          : flight.baggageAllowance.WeightInKilograms 
-                                            ? `${flight.baggageAllowance.WeightInKilograms}kg`
-                                            : 'Baggage included'
-                                        }
+                                        {flight.outboundCheckedBaggage && (
+                                          <span>
+                                            {flight.outboundCheckedBaggage.pieces && `${flight.outboundCheckedBaggage.pieces} pieces`}
+                                            {flight.outboundCheckedBaggage.weight && ` ${flight.outboundCheckedBaggage.weight}${flight.outboundCheckedBaggage.weightUnit}`}
+                                          </span>
+                                        )}
+                                        {flight.outboundCarryOnBaggage && !flight.outboundCheckedBaggage && (
+                                          <span>
+                                            {flight.outboundCarryOnBaggage.pieces && `${flight.outboundCarryOnBaggage.pieces} pieces`}
+                                            {flight.outboundCarryOnBaggage.weight && ` ${flight.outboundCarryOnBaggage.weight}${flight.outboundCarryOnBaggage.weightUnit}`}
+                                          </span>
+                                        )}
+                                        {flight.outboundBaggageAllowance && !flight.outboundCheckedBaggage && !flight.outboundCarryOnBaggage && (
+                                          <span>
+                                            {typeof flight.outboundBaggageAllowance === 'string'
+                                              ? flight.outboundBaggageAllowance
+                                              : flight.outboundBaggageAllowance.pieces
+                                                ? `${flight.outboundBaggageAllowance.pieces} pieces`
+                                                : flight.outboundBaggageAllowance.weight
+                                                  ? `${flight.outboundBaggageAllowance.weight}${flight.outboundBaggageAllowance.weightUnit || 'kg'}`
+                                                  : 'Baggage included'
+                                            }
+                                          </span>
+                                        )}
+                                        {flight.baggageAllowance && !flight.outboundCheckedBaggage && !flight.outboundCarryOnBaggage && !flight.outboundBaggageAllowance && (
+                                          <span>
+                                            {typeof flight.baggageAllowance === 'string' 
+                                              ? flight.baggageAllowance 
+                                              : flight.baggageAllowance.NumberOfPieces 
+                                                ? `${flight.baggageAllowance.NumberOfPieces} pieces`
+                                                : flight.baggageAllowance.WeightInKilograms 
+                                                  ? `${flight.baggageAllowance.WeightInKilograms}kg`
+                                                  : 'Baggage included'
+                                            }
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                     <div className="flex items-center gap-1">
                                       <CreditCard className="h-3 w-3" />
-                                      {flight.fareType}
+                                      {flight.fareTypeName || flight.fareType}
                                     </div>
+                                    {flight.validatingAirlineName && (
+                                      <div className="flex items-center gap-1">
+                                        <Plane className="h-3 w-3" />
+                                        {flight.validatingAirlineName}
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="text-right">
                                     <div>Ticketing deadline:</div>
@@ -1209,18 +1687,18 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                       <div className="text-sm text-muted-foreground">
                         {flight.passengers} passenger{flight.passengers !== 1 ? 's' : ''}
                       </div>
-          </div>
-            </div>
+                    </div>
+                  </div>
                 </div>
               ))}
               
               <div className="flex items-center justify-between pt-3 border-t">
                 <span className="font-semibold">Total Flight Cost:</span>
                 <span className="text-lg font-bold">£{getTotalSelectedPrice().toFixed(2)}</span>
-                </div>
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

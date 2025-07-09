@@ -52,7 +52,8 @@ import {
   Building2,
   Car as CarIcon,
   Download,
-  Mail
+  Mail,
+  Bed
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -1574,6 +1575,19 @@ function ComponentCard({
             <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
               <span>{component.rating}/5</span>
+            </div>
+          )}
+          {/* Show bed_type and flexibility for hotel components */}
+          {component.type === 'hotel' && component.data?.bed_type && (
+            <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+              <Bed className="h-4 w-4" />
+              <span>Bed: {component.data.bed_type}</span>
+            </div>
+          )}
+          {component.type === 'hotel' && component.data?.flexibility && (
+            <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+              <Sparkles className="h-4 w-4" />
+              <span>Flexibility: {component.data.flexibility}</span>
             </div>
           )}
         </div>

@@ -4,19 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MainLayout } from "./components/layout/MainLayout";
 import { PublicLayout } from "./components/layout/PublicLayout";
 import { AuthProvider, useAuth } from "./lib/AuthProvider";
-import { Home } from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-
-import { Features } from "./pages/Features";
-import { About } from "./pages/About";
-import { HowItWorks } from "./pages/HowItWorks";
-import { Blog } from "./pages/Blog";
-import { BlogPost } from "./pages/BlogPost";
-import { BlogCategory } from "./pages/BlogCategory";
-import { BlogAuthor } from "./pages/BlogAuthor";
-import { BlogTag } from "./pages/BlogTag";
-import { BlogArchive } from "./pages/BlogArchive";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import NewProposal from "./pages/NewProposal";
 import { Itineraries } from "./pages/Itineraries";
@@ -32,7 +21,6 @@ import { CreateBooking } from "./pages/CreateBooking";
 import MediaLibrary from "./pages/MediaLibrary";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import Settings from "./pages/Settings";
-import UndrawGallery from "./pages/UndrawGallery";
 import TeamInvitation from './pages/TeamInvitation';
 import TeamInvitationSignup from './pages/TeamInvitationSignup';
 import HubSpotCallback from './pages/HubSpotCallback';
@@ -77,10 +65,10 @@ function AppContent() {
   return (
     <>
       <Routes>
-        {/* Public routes - with header, no sidebar */}
+        {/* Public routes - Login as home page */}
         <Route path="/" element={
           <PublicLayout>
-            <Home />
+            <Login />
           </PublicLayout>
         } />
         <Route path="/login" element={
@@ -93,62 +81,8 @@ function AppContent() {
             <Signup />
           </PublicLayout>
         } />
-
-        <Route path="/features" element={
-          <PublicLayout>
-            <Features />
-          </PublicLayout>
-        } />
-        <Route path="/about" element={
-          <PublicLayout>
-            <About />
-          </PublicLayout>
-        } />
-        <Route path="/how-it-works" element={
-          <PublicLayout>
-            <HowItWorks />
-          </PublicLayout>
-        } />          
-        <Route path="/blog" element={
-          <PublicLayout>
-            <Blog />
-          </PublicLayout>
-        } />
-        <Route path="/blog/:slug" element={
-          <PublicLayout>
-            <BlogPost />
-          </PublicLayout>
-        } />
-        <Route path="/blog/category/:category" element={
-          <PublicLayout>
-            <BlogCategory />
-          </PublicLayout>
-        } />
-        <Route path="/blog/author/:authorSlug" element={
-          <PublicLayout>
-            <BlogAuthor />
-          </PublicLayout>
-        } />
-        <Route path="/blog/tag/:tag" element={
-          <PublicLayout>
-            <BlogTag />
-          </PublicLayout>
-        } />
-        <Route path="/blog/archive/:year" element={
-          <PublicLayout>
-            <BlogArchive />
-          </PublicLayout>
-        } />
-        <Route path="/blog/archive/:year/:month" element={
-          <PublicLayout>
-            <BlogArchive />
-          </PublicLayout>
-        } />
-        <Route path="/undraw-gallery" element={
-          <PublicLayout>
-            <UndrawGallery />
-          </PublicLayout>
-        } />
+        
+        {/* Team invitation routes - must be public and accessible */}
         <Route path="/team-invite" element={
           <PublicLayout>
             <TeamInvitation />

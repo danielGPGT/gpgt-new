@@ -128,6 +128,18 @@ function getTicketCellContent(
     case 'quantity_reserved':
       return ticket.quantity_reserved ?? 0;
     case 'quantity_available':
+      if (ticket.is_provisional) {
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="font-semibold text-primary">PTO</span>
+              </TooltipTrigger>
+              <TooltipContent>Purchased to order</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      }
       return ticket.quantity_available ?? (ticket.quantity_total - (ticket.quantity_reserved ?? 0));
     case 'supplier_price':
       const supplierSymbol = getCurrencySymbol(ticket.supplier_currency);
@@ -212,7 +224,7 @@ const ticketFormSchema = z.object({
   // Required fields
   event_id: z.string().uuid('Event is required'),
   ticket_category_id: z.string().uuid('Ticket category is required'),
-  quantity_total: z.number().min(0, 'Quantity must be at least 0'),
+  quantity_total: z.number(), // Custom logic below
   supplier_currency: z.string().min(1, 'Supplier currency is required'),
   supplier_price: z.number().min(0, 'Supplier price must be at least 0'),
   currency: z.string().min(1, 'Selling currency is required'),
@@ -220,7 +232,7 @@ const ticketFormSchema = z.object({
   markup_percent: z.number().min(0).max(100, 'Markup must be between 0-100%'),
   refundable: z.boolean(),
   resellable: z.boolean(),
-  
+  is_provisional: z.boolean(),
   // Optional fields
   ticket_type: z.string().nullable().optional(),
   supplier: z.string().nullable().optional(),
@@ -234,6 +246,14 @@ const ticketFormSchema = z.object({
   metadata: z.record(z.any()).optional(),
   ticket_days: z.string().nullable().optional(),
 }).refine((data) => {
+  // If is_provisional is true, quantity_total must be 0
+  if (data.is_provisional && data.quantity_total !== 0) {
+    return false;
+  }
+  // If is_provisional is false, quantity_total must be >= 0
+  if (!data.is_provisional && data.quantity_total < 0) {
+    return false;
+  }
   if (data.ordered && !data.ordered_at) {
     return false;
   }
@@ -245,8 +265,8 @@ const ticketFormSchema = z.object({
   }
   return true;
 }, {
-  message: "Timestamps are required when status is checked",
-  path: ["ordered_at", "paid_at", "tickets_received_at"]
+  message: "If provisional, quantity must be 0. If not, quantity must be >= 0. Timestamps are required when status is checked.",
+  path: ["quantity_total", "ordered_at", "paid_at", "tickets_received_at"]
 });
 
 type TicketFormData = z.infer<typeof ticketFormSchema>;
@@ -706,7 +726,8 @@ export function TicketsManager() {
             paid: row['Paid']?.toLowerCase() === 'true',
             tickets_received: row['Tickets Received']?.toLowerCase() === 'true',
             ticket_days: row['Ticket Days'] || null,
-            metadata: null
+            metadata: null,
+            is_provisional: row['Is Provisional']?.toLowerCase() === 'true' || false
           };
 
           await createTicketMutation.mutateAsync(ticketData);
@@ -1534,7 +1555,7 @@ function TicketFormDrawer({
       markup_percent: typeof ticket?.markup_percent === 'number' ? ticket.markup_percent : 60,
       refundable: !!ticket?.refundable,
       resellable: !!ticket?.resellable,
-      
+      is_provisional: Boolean(ticket?.is_provisional),
       // Optional fields
       
       ticket_type: typeof ticket?.ticket_type === 'string' ? ticket.ticket_type : 'e-ticket',
@@ -1618,6 +1639,14 @@ function TicketFormDrawer({
     }
   }, [watchedValues.tickets_received]);
 
+  // Watch is_provisional and quantity_total
+  const watchedIsProvisional = form.watch('is_provisional');
+  useEffect(() => {
+    if (watchedIsProvisional && form.getValues('quantity_total') !== 0) {
+      form.setValue('quantity_total', 0);
+    }
+  }, [watchedIsProvisional, form]);
+
   const handleSubmit = (data: TicketFormData) => {
     // Clean up the data before submission
     const submitData = {
@@ -1660,6 +1689,27 @@ function TicketFormDrawer({
               <h3 className="text-base font-semibold text-card-foreground">Required Fields</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Provisional Checkbox */}
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="is_provisional" className="text-sm font-medium text-muted-foreground">Provisional Ticket</Label>
+                <Controller
+                  name="is_provisional"
+                  control={form.control}
+                  render={({ field }) => (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="is_provisional"
+                        checked={field.value}
+                        onChange={e => field.onChange(e.target.checked)}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        If checked, this ticket is provisional and quantity will always be 0.
+                      </span>
+                    </div>
+                  )}
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="event_id" className="text-sm font-medium text-muted-foreground">Event *</Label>
                 <Controller
@@ -1722,11 +1772,16 @@ function TicketFormDrawer({
                       className="h-9"
                       {...field}
                       onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      disabled={watchedIsProvisional}
+                      value={watchedIsProvisional ? 0 : field.value}
                     />
                   )}
                 />
                 {form.formState.errors.quantity_total && (
                   <p className="text-xs text-destructive mt-1">{form.formState.errors.quantity_total.message}</p>
+                )}
+                {watchedIsProvisional && (
+                  <p className="text-xs text-muted-foreground mt-1">Provisional tickets always have quantity 0.</p>
                 )}
               </div>
 

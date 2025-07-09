@@ -1110,6 +1110,10 @@ export default function CircuitTransfersManager() {
                         <SelectItem value="SEK">SEK (kr)</SelectItem>
                         <SelectItem value="NOK">NOK (kr)</SelectItem>
                         <SelectItem value="DKK">DKK (kr)</SelectItem>
+                        <SelectItem value="AED">AED (د.إ)</SelectItem>
+                        <SelectItem value="BHD">BHD (BD)</SelectItem>
+                        <SelectItem value="SAR">SAR (ر.س)</SelectItem>
+                        <SelectItem value="QAR">QAR (ر.ق)</SelectItem>
                       </SelectContent>
                     </Select>
                     {errors.supplier_currency && <div className="text-destructive text-xs mt-1">{errors.supplier_currency}</div>}

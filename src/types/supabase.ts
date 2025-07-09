@@ -278,6 +278,7 @@ export interface Database {
           created_at: string
           updated_at: string
           metadata: Json | null
+          is_provisional: boolean
         }
         Insert: {
           id?: string
@@ -313,6 +314,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           metadata?: Json | null
+          is_provisional: boolean
         }
         Update: {
           id?: string
@@ -348,6 +350,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           metadata?: Json | null
+          is_provisional?: boolean
         }
       }
       hotel_rooms: {
@@ -358,29 +361,40 @@ export interface Database {
           event_id: string | null
           check_in: string
           check_out: string
-          nights: number
           quantity_total: number
           quantity_reserved: number
-          quantity_provisional: number
-          quantity_available: number
-          base_price: number
-          markup_percent: number
-          price_with_markup: number
-          currency: string
-          vat_percent: number | null
+          supplier_price_per_night: number | null
+          supplier_currency: string | null
+          markup_percent: number | null
+          vat_percentage: number | null
           resort_fee: number | null
-          resort_fee_type: string
-          city_tax_per_person_per_night: number | null
-          contracted: boolean
+          resort_fee_type: string | null
+          city_tax: number | null
+          city_tax_type: string | null
+          breakfast_included: boolean | null
+          extra_night_markup_percent: number | null
+          contracted: boolean | null
           attrition_deadline: string | null
           release_allowed_percent: number | null
           penalty_terms: string | null
           supplier: string | null
           supplier_ref: string | null
           contract_file_path: string | null
-          active: boolean
-          created_at: string
-          updated_at: string
+          active: boolean | null
+          created_at: string | null
+          updated_at: string | null
+          max_people: number | null
+          breakfast_price_per_person_per_night: number | null
+          total_supplier_price_per_night: number | null
+          total_price_per_night_gbp: number | null
+          total_price_per_stay_gbp: number | null
+          total_price_per_night_gbp_with_markup: number | null
+          total_price_per_stay_gbp_with_markup: number | null
+          extra_night_price_gbp: number | null
+          is_provisional: boolean
+          quantity_available: number | null
+          bed_type: string;
+          commission_percent: number | null;
         }
         Insert: {
           id?: string
@@ -391,24 +405,34 @@ export interface Database {
           check_out: string
           quantity_total: number
           quantity_reserved?: number
-          quantity_provisional?: number
-          base_price: number
-          markup_percent?: number
-          currency?: string
-          vat_percent?: number | null
+          supplier_price_per_night?: number | null
+          supplier_currency?: string | null
+          markup_percent?: number | null
+          vat_percentage?: number | null
           resort_fee?: number | null
-          resort_fee_type?: string
-          city_tax_per_person_per_night?: number | null
-          contracted?: boolean
+          resort_fee_type?: string | null
+          city_tax?: number | null
+          city_tax_type?: string | null
+          breakfast_included?: boolean | null
+          extra_night_markup_percent?: number | null
+          contracted?: boolean | null
           attrition_deadline?: string | null
           release_allowed_percent?: number | null
           penalty_terms?: string | null
           supplier?: string | null
           supplier_ref?: string | null
           contract_file_path?: string | null
-          active?: boolean
-          created_at?: string
-          updated_at?: string
+          active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+          max_people?: number | null
+          breakfast_price_per_person_per_night?: number | null
+          total_supplier_price_per_night?: number | null
+          total_price_per_night_gbp?: number | null
+          total_price_per_stay_gbp?: number | null
+          is_provisional: boolean
+          bed_type: string;
+          commission_percent?: number | null;
         }
         Update: {
           id?: string
@@ -419,24 +443,34 @@ export interface Database {
           check_out?: string
           quantity_total?: number
           quantity_reserved?: number
-          quantity_provisional?: number
-          base_price?: number
-          markup_percent?: number
-          currency?: string
-          vat_percent?: number | null
+          supplier_price_per_night?: number | null
+          supplier_currency?: string | null
+          markup_percent?: number | null
+          vat_percentage?: number | null
           resort_fee?: number | null
-          resort_fee_type?: string
-          city_tax_per_person_per_night?: number | null
-          contracted?: boolean
+          resort_fee_type?: string | null
+          city_tax?: number | null
+          city_tax_type?: string | null
+          breakfast_included?: boolean | null
+          extra_night_markup_percent?: number | null
+          contracted?: boolean | null
           attrition_deadline?: string | null
           release_allowed_percent?: number | null
           penalty_terms?: string | null
           supplier?: string | null
           supplier_ref?: string | null
           contract_file_path?: string | null
-          active?: boolean
-          created_at?: string
-          updated_at?: string
+          active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+          max_people?: number | null
+          breakfast_price_per_person_per_night?: number | null
+          total_supplier_price_per_night?: number | null
+          total_price_per_night_gbp?: number | null
+          total_price_per_stay_gbp?: number | null
+          is_provisional?: boolean
+          bed_type?: string;
+          commission_percent?: number | null;
         }
       }
       circuit_transfers: {

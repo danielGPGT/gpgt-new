@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Ticket, Hotel, Car, Plane, Users, ArrowRight, CheckCircle, AlertCircle, Package, Star, Info, Calendar, Clock, Tag, Building, BedDouble, Plus, Minus } from 'lucide-react';
+import { Loader2, Ticket, Hotel, Car, Plane, Users, ArrowRight, CheckCircle, AlertCircle, Package, Star, Info, Calendar, Clock, Tag, Building, BedDouble, Plus, Minus, HelpCircle } from 'lucide-react';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { StepFlights, FlightSource, SelectedFlight } from './StepFlights';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 interface PackageComponent {
   id: string;
@@ -63,6 +64,7 @@ interface TicketType {
   supplier_ref: string | null;
   ticket_days: string | null;
   active: boolean;
+  is_provisional: boolean;
   ticket_category?: TicketCategory;
 }
 
@@ -143,6 +145,20 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
   const [loungePasses, setLoungePasses] = useState<any[]>([]);
   const [loungeLoading, setLoungeLoading] = useState(false);
 
+  // Clear components when tier changes
+  useEffect(() => {
+    if (selectedTier?.id) {
+      // Clear all existing components when tier changes
+      setValue('components.tickets', []);
+      setValue('components.hotels', []);
+      setValue('components.circuitTransfers', []);
+      setValue('components.airportTransfers', []);
+      setValue('components.flights', []);
+      setValue('components.loungePass', { id: null, variant: 'none', price: 0 });
+      console.log('[TIER_CHANGE] Cleared all components for new tier:', selectedTier.id);
+    }
+  }, [selectedTier?.id, setValue]);
+
   // Fetch package components for the selected tier
   useEffect(() => {
     if (!selectedTier?.id) return;
@@ -203,7 +219,7 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
       `)
       .eq('event_id', selectedEvent.id)
       .eq('active', true)
-      .gt('quantity_available', 0)
+      .or('is_provisional.eq.true,quantity_available.gt.0')
       .order('price_with_markup', { ascending: true })
       .then(({ data }) => {
         setAvailableTickets(data || []);
@@ -248,6 +264,7 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
           .select('*')
           .in('id', roomIds)
           .eq('active', true)
+          .or('is_provisional.eq.true,quantity_available.gt.0')
           .then(({ data: rooms }) => {
             console.log('[HOTEL_INIT] Fetched rooms:', rooms);
             if (rooms && rooms.length > 0) {
@@ -590,11 +607,6 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
                                 </SelectTrigger>
                                 <SelectContent>
                                   {availableTickets
-                                    .filter((t: any) => {
-                                      // Allow the current ticket id, but not any others already selected
-                                      const selectedIds = components.tickets.map((tk: any, i: number) => i !== index && tk.id).filter(Boolean);
-                                      return t.id === ticket.id || !selectedIds.includes(t.id);
-                                    })
                                     .map((t: any) => (
                                       <SelectItem key={t.id} value={t.id}>
                                         <div className="flex items-center justify-between w-full">
@@ -685,7 +697,20 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
                                 +
                               </Button>
                               <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
-                                Max: {maxQuantity} <span className="text-[var(--color-border)]">({available} available)</span>
+                                Max: {maxQuantity} <span className="text-[var(--color-border)]">
+                                  {ticketData?.is_provisional ? (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="font-semibold text-orange-600">PTO</span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Provisional - Purchased to Order</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  ) : (
+                                    `(${available} available)`
+                                  )}
+                                </span>
                               </span>
                               {ticketData && ticketInfo.length > 0 && (
                                 <HoverCard>
@@ -871,7 +896,8 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
         .from('hotel_rooms')
         .select('*')
         .eq('event_id', selectedEvent?.id)
-        .eq('active', true);
+        .eq('active', true)
+        .or('is_provisional.eq.true,quantity_available.gt.0');
       
       console.log('[HOTEL_ROOMS_DEBUG] fetched rooms:', rooms);
       
@@ -908,7 +934,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
 
   // Add another room type (if not all adults are covered)
   function handleAddRoom() {
-    // Find a room not already selected
+    // Find a room not already selected (including provisional rooms)
     const selectedIds = selectedRooms.map((r: any) => r.roomId);
     const nextRoom = hotelRooms.find((r: any) => !selectedIds.includes(r.id));
     if (!nextRoom) return;
@@ -917,7 +943,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
       {
         hotelId: nextRoom.hotel_id,
         roomId: nextRoom.id,
-        quantity: 1,
+        quantity: nextRoom.is_provisional ? 1 : 1, // Always start with 1, but provisional rooms will be locked to 1
         checkIn: nextRoom.check_in,
         checkOut: nextRoom.check_out,
       },
@@ -983,17 +1009,19 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
       <Card className="mb-8 bg-[var(--color-card)]/95 py-0 border border-[var(--color-border)] shadow-lg rounded-2xl overflow-hidden min-h-[340px] h-full">
         <div className="flex flex-col md:flex-row h-full min-h-[340px] items-stretch">
           {/* Images Carousel */}
-          <div className="md:w-[340px] w-full bg-black/10 flex-shrink-0 h-full min-h-[340px]">
-            <Carousel className="w-full h-full">
+          <div className="md:w-[340px] w-full flex-shrink-0 h-full min-h-[340px]">
+            <Carousel className="w-full h-full [&>div]:h-full [&_[data-slot=carousel-content]]:h-full [&_[data-slot=carousel-content]>div]:h-full [&_[data-slot=carousel-content]>div]:-ml-0">
               <CarouselContent className="h-full">
                 {images.map((img: string, idx: number) => (
-                  <CarouselItem key={idx} className="w-full h-full">
-                    <img src={img} alt={room.room_type_id} className="w-full h-full object-cover md:rounded-l-2xl" />
+                  <CarouselItem key={idx} className="w-full h-full pl-0">
+                    <div className="w-full h-full">
+                      <img src={img} alt={room.room_type_id} className="w-full h-full object-cover md:rounded-l-2xl" />
+                    </div>
                   </CarouselItem>
                 ))}
               </CarouselContent>
-              <CarouselPrevious />
-              <CarouselNext />
+              <CarouselPrevious className="absolute left-2 top-1/2 transform -translate-y-1/2 z-10" />
+              <CarouselNext className="absolute right-2 top-1/2 transform -translate-y-1/2 z-10" />
             </Carousel>
           </div>
           {/* Info & Controls */}
@@ -1050,6 +1078,31 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-semibold text-base text-[var(--color-foreground)]">{room.room_type_id}</span>
                   <Badge variant="secondary" className="text-xs px-2 py-0.5">Max {room.max_people || 2} people</Badge>
+                  {/* Show provisional status */}
+                  {room.is_provisional && (
+                    <Badge variant="destructive" className="text-xs px-2 py-0.5">
+                      <span className="flex items-center gap-1">
+                        <span>PTO</span>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <HelpCircle className="h-3 w-3" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Purchased to order - provisional availability</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </span>
+                    </Badge>
+                  )}
+                  {/* Show bed_type and flexibility if present */}
+                  {room.bed_type && (
+                    <Badge variant="outline" className="text-xs px-2 py-0.5">Bed: {room.bed_type}</Badge>
+                  )}
+                  {room.flexibility && (
+                    <Badge variant="outline" className="text-xs px-2 py-0.5">Flexibility: {room.flexibility}</Badge>
+                  )}
                 </div>
                 <div className="text-xs text-[var(--color-muted-foreground)] mb-2">{room.description}</div>
                 <div className="flex flex-wrap gap-2 mb-2">
@@ -1062,11 +1115,57 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
               <div className="flex flex-col items-end gap-1 min-w-[120px]">
                 <Label className="text-xs font-semibold mb-1">Rooms</Label>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => onChange({ ...selected, quantity: Math.max(1, selected.quantity - 1) })} disabled={selected.quantity <= 1}>-</Button>
-                  <Input type="number" min={1} max={room.quantity_available || 1} value={selected.quantity} onChange={e => onChange({ ...selected, quantity: Math.max(1, Math.min(room.quantity_available || 1, parseInt(e.target.value) || 1)) })} className="w-14 text-center font-bold text-lg" />
-                  <Button size="sm" variant="outline" onClick={() => onChange({ ...selected, quantity: Math.min(room.quantity_available || 1, selected.quantity + 1) })} disabled={selected.quantity >= (room.quantity_available || 1)} >+</Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => onChange({ ...selected, quantity: Math.max(1, selected.quantity - 1) })} 
+                    disabled={selected.quantity <= 1 || room.is_provisional}
+                  >
+                    -
+                  </Button>
+                  <Input 
+                    type="number" 
+                    min={1} 
+                    max={room.is_provisional ? 1 : (room.quantity_available || 1)} 
+                    value={room.is_provisional ? 1 : selected.quantity} 
+                    onChange={e => {
+                      if (room.is_provisional) return; // Don't allow changes for provisional rooms
+                      onChange({ 
+                        ...selected, 
+                        quantity: Math.max(1, Math.min(room.quantity_available || 1, parseInt(e.target.value) || 1)) 
+                      })
+                    }} 
+                    className="w-14 text-center font-bold text-lg" 
+                    disabled={room.is_provisional}
+                  />
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => onChange({ ...selected, quantity: Math.min(room.quantity_available || 1, selected.quantity + 1) })} 
+                    disabled={selected.quantity >= (room.quantity_available || 1) || room.is_provisional}
+                  >
+                    +
+                  </Button>
                 </div>
-                <div className="text-xs text-[var(--color-muted-foreground)]">Available: {room.quantity_available || 1}</div>
+                <div className="text-xs text-[var(--color-muted-foreground)]">
+                  {room.is_provisional ? (
+                    <span className="flex items-center gap-1">
+                      <span>PTO</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <HelpCircle className="h-3 w-3" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Purchased to order - provisional availability</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </span>
+                  ) : (
+                    `Available: ${room.quantity_available || 1}`
+                  )}
+                </div>
               </div>
             </div>
             {/* Price Breakdown */}
@@ -1103,18 +1202,73 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
         const hotel = getHotel(sel.hotelId);
         const room = getRoom(sel.roomId);
         if (!hotel || !room) return null;
+        // Find available rooms for swapping (not already selected except current)
+        const selectedIds = selectedRooms.map((r: any) => r.roomId);
+        const swapOptions = hotelRooms.filter((r: any) => r.id === sel.roomId || !selectedIds.includes(r.id));
         return (
-          <RoomCard
-            key={sel.hotelId + sel.roomId}
-            hotel={hotel}
-            room={room}
-            selected={sel}
-            onChange={(updated: any) => {
-              const newRooms = [...selectedRooms];
-              newRooms[idx] = updated;
-              setValue('components.hotels', newRooms);
-            }}
-          />
+          <div key={sel.hotelId + sel.roomId} className="mb-8">
+            {/* Swap Room Dropdown */}
+            <div className="mb-2 flex items-center gap-2">
+              <Label className="text-xs font-semibold">Swap Room:</Label>
+              <Select
+                value={sel.roomId}
+                onValueChange={roomId => {
+                  const newRoom = getRoom(roomId);
+                  if (!newRoom) return;
+                  const newRooms = [...selectedRooms];
+                  newRooms[idx] = {
+                    ...sel,
+                    hotelId: newRoom.hotel_id,
+                    roomId: newRoom.id,
+                    checkIn: newRoom.check_in,
+                    checkOut: newRoom.check_out,
+                  };
+                  setValue('components.hotels', newRooms);
+                }}
+              >
+                <SelectTrigger className="w-96">
+                  <SelectValue placeholder="Select a room" />
+                </SelectTrigger>
+                <SelectContent>
+                  {swapOptions.map((opt: any) => {
+                    const optHotel = getHotel(opt.hotel_id);
+                    return (
+                      <SelectItem key={opt.id} value={opt.id}>
+                        {optHotel?.name || 'Unknown Hotel'} | {opt.room_type_id} | Bed: {opt.bed_type} | Flex: {opt.flexibility}
+                        {opt.is_provisional && (
+                          <span className="ml-2 text-xs text-orange-600 font-semibold">(PTO)</span>
+                        )}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              {/* Delete Room Button */}
+              {selectedRooms.length > 1 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="ml-2"
+                  onClick={() => {
+                    const newRooms = selectedRooms.filter((_: any, i: number) => i !== idx);
+                    setValue('components.hotels', newRooms);
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
+            </div>
+            <RoomCard
+              hotel={hotel}
+              room={room}
+              selected={sel}
+              onChange={(updated: any) => {
+                const newRooms = [...selectedRooms];
+                newRooms[idx] = updated;
+                setValue('components.hotels', newRooms);
+              }}
+            />
+          </div>
         );
       })}
       {/* Add another room type if not all adults are covered and there are more room types */}

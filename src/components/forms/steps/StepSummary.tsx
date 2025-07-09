@@ -33,6 +33,7 @@ interface StepSummaryProps {
 export function StepSummary({ disabled }: StepSummaryProps) {
   const form = useFormContext<NewIntake>();
   const formData = form.watch();
+  console.log('[STEP_SUMMARY] formData:', formData);
 
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat('en-US', {

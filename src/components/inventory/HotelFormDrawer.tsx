@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, ChevronLeft, ChevronRight, Save, Building2, MapPin, Clock, Phone, Mail, Star, Sparkles, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -70,10 +70,7 @@ const COMMON_AMENITIES = [
   'Concierge', 'Parking', 'Airport Shuttle', 'Business Center', 'Laundry'
 ];
 
-const COMMON_ROOM_TYPES = [
-  'Standard', 'Deluxe', 'Suite', 'Executive', 'Presidential Suite',
-  'Family Room', 'Accessible Room', 'Ocean View', 'City View'
-];
+const COMMON_ROOM_TYPES = ['Standard'];
 
 export function HotelFormDrawer({ hotel, isOpen, onClose }: HotelFormDrawerProps) {
   const queryClient = useQueryClient();
@@ -100,6 +97,61 @@ export function HotelFormDrawer({ hotel, isOpen, onClose }: HotelFormDrawerProps
     phone: hotel?.phone || '',
     room_types: hotel?.room_types || [],
   });
+
+  // Reset form data when hotel prop changes
+  useEffect(() => {
+    setFormData({
+      name: hotel?.name || '',
+      brand: hotel?.brand || '',
+      star_rating: hotel?.star_rating || null,
+      address: hotel?.address || '',
+      city: hotel?.city || '',
+      country: hotel?.country || '',
+      latitude: hotel?.latitude || null,
+      longitude: hotel?.longitude || null,
+      description: hotel?.description || '',
+      images: hotel?.images || [],
+      amenities: hotel?.amenities || [],
+      check_in_time: hotel?.check_in_time || '15:00',
+      check_out_time: hotel?.check_out_time || '11:00',
+      contact_email: hotel?.contact_email || '',
+      phone: hotel?.phone || '',
+      room_types: hotel?.room_types || [],
+    });
+    // Reset step to 1 when switching between edit/add
+    setCurrentStep(1);
+    // Reset other states
+    setSelectedMediaItems([]);
+    setIsAutoFilling(false);
+  }, [hotel]);
+
+  // Reset form data when drawer opens (for add mode)
+  useEffect(() => {
+    if (isOpen && !hotel) {
+      // Reset form when opening drawer for add mode
+      setFormData({
+        name: '',
+        brand: '',
+        star_rating: null,
+        address: '',
+        city: '',
+        country: '',
+        latitude: null,
+        longitude: null,
+        description: '',
+        images: [],
+        amenities: [],
+        check_in_time: '15:00',
+        check_out_time: '11:00',
+        contact_email: '',
+        phone: '',
+        room_types: [],
+      });
+      setCurrentStep(1);
+      setSelectedMediaItems([]);
+      setIsAutoFilling(false);
+    }
+  }, [isOpen, hotel]);
 
   const createMutation = useMutation({
     mutationFn: (data: HotelInsert) => HotelService.createHotel(data),
@@ -538,19 +590,30 @@ export function HotelFormDrawer({ hotel, isOpen, onClose }: HotelFormDrawerProps
                         </Badge>
                       ))}
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      {COMMON_ROOM_TYPES.map((roomType) => (
-                        <Button
-                          key={roomType}
-                          variant="outline"
-                          size="sm"
-                          className="border-border hover:bg-accent hover:text-accent-foreground transition-colors"
-                          onClick={() => addRoomType(roomType)}
-                          disabled={formData.room_types.includes(roomType)}
-                        >
-                          {roomType}
-                        </Button>
-                      ))}
+                    <div className="flex gap-2 items-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-border hover:bg-accent hover:text-accent-foreground transition-colors"
+                        onClick={() => addRoomType('Standard')}
+                        disabled={formData.room_types.includes('Standard')}
+                      >
+                        Standard
+                      </Button>
+                      <Input
+                        type="text"
+                        placeholder="Add custom room type"
+                        className="w-48"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            const value = e.currentTarget.value.trim();
+                            if (value && !formData.room_types.includes(value)) {
+                              addRoomType(value);
+                              e.currentTarget.value = '';
+                            }
+                          }
+                        }}
+                      />
                     </div>
                   </div>
                 </CardContent>

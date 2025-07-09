@@ -17,6 +17,7 @@ import {
   Upload,
   Settings
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { HotelRoomService, type HotelRoom, type HotelRoomInsert } from '@/lib/hotelRoomService';
@@ -76,6 +77,12 @@ export function HotelRoomManager({ hotelId, hotelName, onBack }: HotelRoomManage
     queryFn: () => HotelRoomService.getHotelRooms(hotelId),
   });
 
+  // Debug: Log the first room to see what fields are available
+  console.log('DEBUG - Component: First room data:', rooms[0]);
+  console.log('DEBUG - Component: is_provisional value:', rooms[0]?.is_provisional);
+  console.log('DEBUG - Component: typeof is_provisional:', typeof rooms[0]?.is_provisional);
+  console.log('DEBUG - Component: Boolean(rooms[0]?.is_provisional):', Boolean(rooms[0]?.is_provisional));
+
   // Fetch room stats
   const { data: roomStats } = useQuery({
     queryKey: ['hotel-room-stats', hotelId],
@@ -104,9 +111,9 @@ export function HotelRoomManager({ hotelId, hotelName, onBack }: HotelRoomManage
     const matchesRoomType = filterRoomType === 'all' || room.room_type_id === filterRoomType;
     
     const matchesStatus = filterStatus === 'all' || 
-                         (filterStatus === 'available' && room.quantity_available > 0) ||
-                         (filterStatus === 'reserved' && room.quantity_reserved > 0) ||
-                         (filterStatus === 'provisional' && room.quantity_provisional > 0);
+                         (filterStatus === 'available' && (room.quantity_available ?? 0) > 0) ||
+                         (filterStatus === 'reserved' && (room.quantity_reserved ?? 0) > 0) ||
+                         (filterStatus === 'provisional' && room.is_provisional);
 
     return matchesSearch && matchesRoomType && matchesStatus;
   });
@@ -127,15 +134,17 @@ export function HotelRoomManager({ hotelId, hotelName, onBack }: HotelRoomManage
     setIsFormOpen(false);
   };
 
-  const getAvailabilityColor = (available: number, total: number) => {
-    const percentage = (available / total) * 100;
+  const getAvailabilityColor = (available: number | null | undefined, total: number) => {
+    const availableNum = available ?? 0;
+    const percentage = (availableNum / total) * 100;
     if (percentage >= 70) return 'text-green-600';
     if (percentage >= 30) return 'text-yellow-600';
     return 'text-red-600';
   };
 
-  const getAvailabilityBadge = (available: number, total: number) => {
-    const percentage = (available / total) * 100;
+  const getAvailabilityBadge = (available: number | null | undefined, total: number) => {
+    const availableNum = available ?? 0;
+    const percentage = (availableNum / total) * 100;
     if (percentage >= 70) return <Badge variant="default" className="bg-green-100 text-green-800">High</Badge>;
     if (percentage >= 30) return <Badge variant="secondary">Medium</Badge>;
     return <Badge variant="destructive">Low</Badge>;
@@ -360,11 +369,14 @@ export function HotelRoomManager({ hotelId, hotelName, onBack }: HotelRoomManage
               <TableHeader>
                 <TableRow>
                   <TableHead>Room Type</TableHead>
+                  <TableHead>Bed Type</TableHead>
+                  <TableHead>Flexibility</TableHead>
                   <TableHead>Dates</TableHead>
                   <TableHead>Availability</TableHead>
                   <TableHead>Price</TableHead>
                   <TableHead>Supplier</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Commission %</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -374,9 +386,13 @@ export function HotelRoomManager({ hotelId, hotelName, onBack }: HotelRoomManage
                     <TableCell>
                       <div>
                         <div className="font-medium">{room.room_type_id}</div>
-                        <div className="text-sm text-muted-foreground">{room.nights} nights</div>
+                        <div className="text-sm text-muted-foreground">
+                          {Math.ceil((new Date(room.check_out).getTime() - new Date(room.check_in).getTime()) / (1000 * 60 * 60 * 24))} nights
+                        </div>
                       </div>
                     </TableCell>
+                    <TableCell>{room.bed_type}</TableCell>
+                    <TableCell>{room.flexibility}</TableCell>
                     <TableCell>
                       <div className="text-sm">
                         <div>{format(new Date(room.check_in), 'MMM dd')}</div>
@@ -386,22 +402,49 @@ export function HotelRoomManager({ hotelId, hotelName, onBack }: HotelRoomManage
                     <TableCell>
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-sm">
-                          <span>Available: {room.quantity_available}</span>
-                          <span className={getAvailabilityColor(room.quantity_available, room.quantity_total)}>
-                            {Math.round((room.quantity_available / room.quantity_total) * 100)}%
+                          <span>
+                            Available: {(() => {
+                              console.log('DEBUG - Render: room.is_provisional =', room.is_provisional, 'type:', typeof room.is_provisional);
+                              if (room.is_provisional) {
+                                console.log('DEBUG - Render: Showing PTO');
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="font-semibold text-orange-600">PTO</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Provisional</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              } else {
+                                console.log('DEBUG - Render: Showing quantity:', room.quantity_available ?? 0);
+                                return (room.quantity_available ?? 0);
+                              }
+                            })()}
                           </span>
+                          {!room.is_provisional && (
+                            <span className={getAvailabilityColor(room.quantity_available, room.quantity_total)}>
+                              {Math.round(((room.quantity_available ?? 0) / room.quantity_total) * 100)}%
+                            </span>
+                          )}
                         </div>
-                        <Progress 
-                          value={(room.quantity_available / room.quantity_total) * 100} 
-                          className="h-2"
-                        />
+                        {!room.is_provisional && (
+                          <Progress 
+                            value={((room.quantity_available ?? 0) / room.quantity_total) * 100} 
+                            className="h-2"
+                          />
+                        )}
+                        {room.is_provisional && (
+                          <div className="text-xs text-muted-foreground">Purchased to order</div>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div>
-                        <div className="font-medium">£{room.price_gbp}</div>
+                        <div className="font-medium">£{room.total_price_per_night_gbp_with_markup ?? 0}</div>
                         <div className="text-sm text-muted-foreground">
-                          {room.supplier_price} {room.supplier_currency}
+                          {room.supplier_price_per_night} {room.supplier_currency}
                         </div>
                       </div>
                     </TableCell>
@@ -416,6 +459,7 @@ export function HotelRoomManager({ hotelId, hotelName, onBack }: HotelRoomManage
                     <TableCell>
                       {getAvailabilityBadge(room.quantity_available, room.quantity_total)}
                     </TableCell>
+                    <TableCell>{room.commission_percent ?? 0}%</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button
@@ -454,12 +498,18 @@ export function HotelRoomManager({ hotelId, hotelName, onBack }: HotelRoomManage
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <div className="font-medium">£{room.price_gbp}</div>
+                        <div className="font-medium">£{room.total_price_per_night_gbp_with_markup ?? 0}</div>
                         <div className="text-muted-foreground">Per night</div>
                       </div>
                       <div>
-                        <div className="font-medium">{room.quantity_available}</div>
-                        <div className="text-muted-foreground">Available</div>
+                        <div className="font-medium">
+                          {room.is_provisional ? (
+                            <span className="text-primary">PTO</span>
+                          ) : room.quantity_available}
+                        </div>
+                        <div className="text-muted-foreground">
+                          {room.is_provisional ? 'Purchased to order' : 'Available'}
+                        </div>
                       </div>
                     </div>
                     <Separator />

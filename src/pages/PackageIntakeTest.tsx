@@ -65,6 +65,7 @@ import { StepComponents } from '@/components/forms/steps/StepComponents';
 import { StepFlights, FlightSource, SelectedFlight } from '@/components/forms/steps/StepFlights';
 import { QuoteService } from '@/lib/quoteService';
 import { CurrencyService } from '@/lib/currencyService';
+import { FlightApiService } from '@/lib/flightApiService';
 
 // Package Intake Schema
 const packageIntakeSchema = z.object({
@@ -530,6 +531,8 @@ function roundUpHundredMinusTwo(n: number) {
     );
   }
 
+
+
 export function PackageIntakeTest() {
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -756,7 +759,7 @@ export function PackageIntakeTest() {
           }),
           circuitTransfers: data.components.circuitTransfers || [],
           airportTransfers: data.components.airportTransfers || [],
-          flights: data.components.flights || [],
+          flights: (data.components.flights || []).map((f: any) => ({ ...f })), // send all flight details
           loungePass: data.components.loungePass
         },
         paymentsData: {
@@ -776,6 +779,43 @@ export function PackageIntakeTest() {
       console.log('📋 Quote Data being sent:', quoteData);
       console.log('🎫 Lounge Pass Data:', quoteData.componentsData.loungePass);
       console.log('🏨 Hotel Data:', quoteData.componentsData.hotels);
+      
+      // Debug: Log payment data specifically to check constraint
+      console.log('💰 Payment Data Debug:', {
+        total: quoteData.paymentsData.total,
+        deposit: quoteData.paymentsData.deposit,
+        secondPayment: quoteData.paymentsData.secondPayment,
+        finalPayment: quoteData.paymentsData.finalPayment,
+        sum: quoteData.paymentsData.deposit + quoteData.paymentsData.secondPayment + quoteData.paymentsData.finalPayment,
+        difference: quoteData.paymentsData.total - (quoteData.paymentsData.deposit + quoteData.paymentsData.secondPayment + quoteData.paymentsData.finalPayment),
+        currency: quoteData.paymentsData.currency
+      });
+      
+      // --- Payment Calculation ---
+      // Calculate payment breakdown - ensure they add up exactly to total
+      const total = quoteData.paymentsData.total;
+      const deposit = Math.round((total / 3) * 100) / 100;
+      const secondPayment = Math.round((total / 3) * 100) / 100;
+      let finalPayment = Math.round((total - deposit - secondPayment) * 100) / 100;
+      // Fix any floating point error by adjusting finalPayment
+      const sum = Math.round((deposit + secondPayment + finalPayment) * 100) / 100;
+      if (sum !== Math.round(total * 100) / 100) {
+        finalPayment = Math.round((total - deposit - secondPayment) * 100) / 100 + (Math.round(total * 100) / 100 - sum);
+        finalPayment = Math.round(finalPayment * 100) / 100;
+      }
+      quoteData.paymentsData.deposit = deposit;
+      quoteData.paymentsData.secondPayment = secondPayment;
+      quoteData.paymentsData.finalPayment = finalPayment;
+      // --- End Payment Calculation ---
+      
+      console.log('🔧 Fixed Payment Data:', {
+        total: quoteData.paymentsData.total,
+        deposit: quoteData.paymentsData.deposit,
+        secondPayment: quoteData.paymentsData.secondPayment,
+        finalPayment: quoteData.paymentsData.finalPayment,
+        sum: quoteData.paymentsData.deposit + quoteData.paymentsData.secondPayment + quoteData.paymentsData.finalPayment,
+        difference: quoteData.paymentsData.total - (quoteData.paymentsData.deposit + quoteData.paymentsData.secondPayment + quoteData.paymentsData.finalPayment)
+      });
       
       // Create quote
       const quoteId = await QuoteService.createQuoteFromIntake(quoteData);
@@ -1013,8 +1053,7 @@ export function PackageIntakeTest() {
   );
 }
 
-// --- SUMMARY STEP COMPONENT ---
-function SummaryStep({ form, isGenerating }: { form: any, isGenerating: boolean }) {
+export function SummaryStep({ form, isGenerating }: { form: any, isGenerating: boolean }) {
   const data = form.getValues();
   console.log('[SUMMARY_STEP] Form data:', data);
   console.log('[SUMMARY_STEP] Components data:', data.components);
@@ -1895,7 +1934,7 @@ function SummaryStep({ form, isGenerating }: { form: any, isGenerating: boolean 
         </CardContent>
       </Card>
       {/* Price Summary */}
-      <PriceSummaryCardContent />
+
     </div>
   );
 } 

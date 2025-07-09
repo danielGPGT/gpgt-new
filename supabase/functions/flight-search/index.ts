@@ -8,6 +8,7 @@ interface FlightSearchRequest {
   adults: number;
   children?: number;
   cabinClass?: string;
+  directFlightsOnly?: boolean;
 }
 
 interface AuthToken {
@@ -78,7 +79,7 @@ async function searchFlights(searchRequest: FlightSearchRequest): Promise<any> {
     FlightRequestType: searchRequest.returnDate ? "Return" : "Oneway",
     RequestedFlights: [
       {
-        RequestedFlightTypes: ["NoStopDirect", "StopDirect"],
+        RequestedFlightTypes: searchRequest.directFlightsOnly ? ["NoStopDirect"] : [],
         DepartureLocation: { AirportId: searchRequest.origin },
         ArrivalLocation: { AirportId: searchRequest.destination },
         DepartureDateTime: searchRequest.departureDate,
@@ -106,7 +107,7 @@ async function searchFlights(searchRequest: FlightSearchRequest): Promise<any> {
   // Add return flight if specified
   if (searchRequest.returnDate) {
     requestBody.RequestedFlights.push({
-      RequestedFlightTypes: ["NoStopDirect", "StopDirect"],
+      RequestedFlightTypes: searchRequest.directFlightsOnly ? ["NoStopDirect"] : [],
       DepartureLocation: { AirportId: searchRequest.destination },
       ArrivalLocation: { AirportId: searchRequest.origin },
       DepartureDateTime: searchRequest.returnDate,
@@ -222,7 +223,7 @@ function formatFlightResults(apiResponse: any): any[] {
     const totalPrice = recommendation.Passengers?.reduce((sum: number, passenger: any) => 
       sum + (passenger.Total || 0), 0) || 0;
     
-    // Get outbound flight details
+    // Get outbound flight details - handle multi-segment flights
     const outboundFlight = outboundFlights[0];
     const outboundCabin = outboundFlight?.Cabins?.[0];
     const outboundMarketingAirline = apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === outboundFlight?.MarketingAirlineId);
@@ -230,13 +231,21 @@ function formatFlightResults(apiResponse: any): any[] {
     const outboundDepartureLocation = apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === outboundFlight?.DepartureAirportId);
     const outboundArrivalLocation = apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === outboundFlight?.ArrivalAirportId);
     
-    // Get inbound flight details (for return flights)
+    // Get final destination for outbound (last flight in the route)
+    const finalOutboundFlight = outboundFlights[outboundFlights.length - 1];
+    const finalOutboundArrivalLocation = apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === finalOutboundFlight?.ArrivalAirportId);
+    
+    // Get inbound flight details (for return flights) - handle multi-segment flights
     const inboundFlight = returnFlights[0];
     const inboundCabin = inboundFlight?.Cabins?.[0];
     const inboundMarketingAirline = inboundFlight ? apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === inboundFlight?.MarketingAirlineId) : null;
     const inboundOperatingAirline = inboundFlight ? apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === inboundFlight?.OperatingAirlineId) : null;
     const inboundDepartureLocation = inboundFlight ? apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === inboundFlight?.DepartureAirportId) : null;
     const inboundArrivalLocation = inboundFlight ? apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === inboundFlight?.ArrivalAirportId) : null;
+    
+    // Get final destination for inbound (last flight in the return route)
+    const finalInboundFlight = returnFlights[returnFlights.length - 1];
+    const finalInboundArrivalLocation = inboundFlight ? apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === finalInboundFlight?.ArrivalAirportId) : null;
     
     // Get fare type details
     const fareType = apiResponse.LowFareResult.FareTypes?.find((f: any) => f.FareTypeId === recommendation.FareTypeId);
@@ -249,7 +258,7 @@ function formatFlightResults(apiResponse: any): any[] {
       id: recommendation.RecommendationId,
       source: 'api' as const,
       origin: outboundFlight?.DepartureAirportId || '',
-      destination: outboundFlight?.ArrivalAirportId || '',
+      destination: finalOutboundFlight?.ArrivalAirportId || outboundFlight?.ArrivalAirportId || '',
       departureDate: outboundFlight?.DepartureDateTime || '',
       returnDate: inboundFlight?.DepartureDateTime || undefined,
       price: totalPrice,
@@ -260,12 +269,12 @@ function formatFlightResults(apiResponse: any): any[] {
       duration: outboundFlight?.FlightDuration || '',
       returnDuration: inboundFlight?.FlightDuration || '',
       cabin: outboundCabin?.GenericCabinId || 'ECO',
-      stops: outboundFlight?.Stops?.length || 0,
-      returnStops: inboundFlight?.Stops?.length || 0,
+      stops: outboundFlights.length - 1, // Number of stops is flights - 1
+      returnStops: returnFlights.length - 1, // Number of stops is flights - 1
       departureTerminal: outboundFlight?.DepartureTerminal || '',
-      arrivalTerminal: outboundFlight?.ArrivalTerminal || '',
+      arrivalTerminal: finalOutboundFlight?.ArrivalTerminal || outboundFlight?.ArrivalTerminal || '',
       returnDepartureTerminal: inboundFlight?.DepartureTerminal || '',
-      returnArrivalTerminal: inboundFlight?.ArrivalTerminal || '',
+      returnArrivalTerminal: finalInboundFlight?.ArrivalTerminal || inboundFlight?.ArrivalTerminal || '',
       aircraft: outboundFlight?.AircraftType || '',
       returnAircraft: inboundFlight?.AircraftType || '',
       ticketingDeadline: recommendation.TicketingDeadline || '',
@@ -275,6 +284,71 @@ function formatFlightResults(apiResponse: any): any[] {
       currency: apiResponse.LowFareResult.Currency?.CurrencyId || 'GBP',
       layoverInfo: extractLayoverInfo(outboundFlights, apiResponse.LowFareResult.Locations),
       returnLayoverInfo: extractLayoverInfo(returnFlights, apiResponse.LowFareResult.Locations),
+      
+      // Add all flight segments for multi-segment flights
+      outboundFlightSegments: outboundFlights.map((segment: any, index: number) => {
+        const segmentMarketingAirline = apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === segment?.MarketingAirlineId);
+        const segmentOperatingAirline = apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === segment?.OperatingAirlineId);
+        const segmentDepartureLocation = apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === segment?.DepartureAirportId);
+        const segmentArrivalLocation = apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === segment?.ArrivalAirportId);
+        
+        return {
+          segmentIndex: index + 1,
+          flightId: segment?.FlightId,
+          flightNumber: segment?.FlightNumber,
+          marketingAirlineId: segment?.MarketingAirlineId,
+          operatingAirlineId: segment?.OperatingAirlineId,
+          marketingAirlineName: segmentMarketingAirline?.AirlineName,
+          operatingAirlineName: segmentOperatingAirline?.AirlineName,
+          departureAirportId: segment?.DepartureAirportId,
+          departureAirportName: segmentDepartureLocation?.AirportName,
+          arrivalAirportId: segment?.ArrivalAirportId,
+          arrivalAirportName: segmentArrivalLocation?.AirportName,
+          departureDateTime: segment?.DepartureDateTime,
+          departureDateTimeUtc: segment?.DepartureDateTimeUtc,
+          arrivalDateTime: segment?.ArrivalDateTime,
+          arrivalDateTimeUtc: segment?.ArrivalDateTimeUtc,
+          flightDuration: segment?.FlightDuration,
+          aircraftType: segment?.AircraftType,
+          departureTerminal: segment?.DepartureTerminal,
+          arrivalTerminal: segment?.ArrivalTerminal,
+          cabinId: segment?.Cabins?.[0]?.CabinId,
+          cabinName: segment?.Cabins?.[0]?.CabinName,
+          isLastSegment: index === outboundFlights.length - 1
+        };
+      }),
+      
+      returnFlightSegments: returnFlights.map((segment: any, index: number) => {
+        const segmentMarketingAirline = apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === segment?.MarketingAirlineId);
+        const segmentOperatingAirline = apiResponse.LowFareResult.Airlines?.find((a: any) => a.AirlineId === segment?.OperatingAirlineId);
+        const segmentDepartureLocation = apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === segment?.DepartureAirportId);
+        const segmentArrivalLocation = apiResponse.LowFareResult.Locations?.find((l: any) => l.AirportId === segment?.ArrivalAirportId);
+        
+        return {
+          segmentIndex: index + 1,
+          flightId: segment?.FlightId,
+          flightNumber: segment?.FlightNumber,
+          marketingAirlineId: segment?.MarketingAirlineId,
+          operatingAirlineId: segment?.OperatingAirlineId,
+          marketingAirlineName: segmentMarketingAirline?.AirlineName,
+          operatingAirlineName: segmentOperatingAirline?.AirlineName,
+          departureAirportId: segment?.DepartureAirportId,
+          departureAirportName: segmentDepartureLocation?.AirportName,
+          arrivalAirportId: segment?.ArrivalAirportId,
+          arrivalAirportName: segmentArrivalLocation?.AirportName,
+          departureDateTime: segment?.DepartureDateTime,
+          departureDateTimeUtc: segment?.DepartureDateTimeUtc,
+          arrivalDateTime: segment?.ArrivalDateTime,
+          arrivalDateTimeUtc: segment?.ArrivalDateTimeUtc,
+          flightDuration: segment?.FlightDuration,
+          aircraftType: segment?.AircraftType,
+          departureTerminal: segment?.DepartureTerminal,
+          arrivalTerminal: segment?.ArrivalTerminal,
+          cabinId: segment?.Cabins?.[0]?.CabinId,
+          cabinName: segment?.Cabins?.[0]?.CabinName,
+          isLastSegment: index === returnFlights.length - 1
+        };
+      }),
       
       // Enhanced detailed flight information
       // Outbound flight details
@@ -427,6 +501,16 @@ serve(async (req) => {
     }
 
     const apiResponse = await searchFlights(searchRequest);
+    
+    // Log raw JSON response for first two flights
+    console.log('=== RAW FLIGHT RESPONSE (FIRST 2 FLIGHTS) ===');
+    if (apiResponse.LowFareResult?.Recommendations) {
+      apiResponse.LowFareResult.Recommendations.slice(0, 2).forEach((recommendation: any, index: number) => {
+        console.log(`Flight ${index + 1}:`, JSON.stringify(recommendation, null, 2));
+      });
+    }
+    console.log('=== END RAW FLIGHT RESPONSE ===');
+    
     const formattedFlights = formatFlightResults(apiResponse);
 
     return new Response(JSON.stringify({

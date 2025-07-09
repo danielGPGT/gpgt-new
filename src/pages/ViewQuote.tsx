@@ -62,6 +62,8 @@ import { QuoteService } from '@/lib/quoteService';
 import { Quote, QuoteDetails, QuoteActivity } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { FlightApiService } from '@/lib/flightApiService';
+import { supabase } from '@/lib/supabase';
 
 export function ViewQuote() {
   const { quoteId } = useParams<{ quoteId: string }>();
@@ -86,6 +88,11 @@ export function ViewQuote() {
     subject: '',
     message: ''
   });
+  
+  // Transfer data state
+  const [circuitTransfers, setCircuitTransfers] = useState<any[]>([]);
+  const [airportTransfers, setAirportTransfers] = useState<any[]>([]);
+  const [hotels, setHotels] = useState<any[]>([]);
 
   useEffect(() => {
     if (quoteId) {
@@ -106,11 +113,60 @@ export function ViewQuote() {
         subject: `Your Quote ${details.quote.quoteNumber} - ${details.quote.eventName || 'Event Package'}`,
         message: `Dear ${details.quote.clientName},\n\nThank you for your interest in our event package. Please find your detailed quote attached.\n\nBest regards,\nYour Travel Team`
       });
+      
+      // Fetch transfer data if components exist
+      if (details.quote.selectedComponents) {
+        await fetchTransferData(details.quote.selectedComponents);
+      }
     } catch (err) {
       console.error('Error loading quote details:', err);
       setError(err instanceof Error ? err.message : 'Failed to load quote details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTransferData = async (components: any) => {
+    try {
+      // Fetch circuit transfers
+      if (components.circuitTransfers && components.circuitTransfers.length > 0) {
+        const circuitIds = components.circuitTransfers.map((t: any) => t.id).filter(Boolean);
+        if (circuitIds.length > 0) {
+          const { data: circuitData } = await supabase
+            .from('circuit_transfers')
+            .select('*')
+            .in('id', circuitIds);
+          setCircuitTransfers(circuitData || []);
+        }
+      }
+
+      // Fetch airport transfers
+      if (components.airportTransfers && components.airportTransfers.length > 0) {
+        const airportIds = components.airportTransfers.map((t: any) => t.id).filter(Boolean);
+        if (airportIds.length > 0) {
+          const { data: airportData } = await supabase
+            .from('airport_transfers')
+            .select('*')
+            .in('id', airportIds);
+          setAirportTransfers(airportData || []);
+        }
+      }
+
+      // Fetch hotels for transfer references
+      const hotelIds = new Set([
+        ...(components.circuitTransfers || []).map((t: any) => t.hotelId).filter(Boolean),
+        ...(components.airportTransfers || []).map((t: any) => t.hotelId).filter(Boolean)
+      ]);
+      
+      if (hotelIds.size > 0) {
+        const { data: hotelData } = await supabase
+          .from('gpgt_hotels')
+          .select('*')
+          .in('id', Array.from(hotelIds));
+        setHotels(hotelData || []);
+      }
+    } catch (err) {
+      console.error('Error fetching transfer data:', err);
     }
   };
 
@@ -666,19 +722,172 @@ export function ViewQuote() {
                         <Car className="h-5 w-5 text-primary" />
                         Circuit Transfers
                       </h4>
-                      {quote.selectedComponents.circuitTransfers.map((transfer: any, index: number) => (
-                        <div key={index} className="flex justify-between items-center p-4 bg-muted/50 rounded-lg border">
-                          <div className="space-y-1">
-                            <p className="font-medium">Circuit Transfer</p>
-                            <p className="text-sm text-muted-foreground">
-                              Quantity: {transfer.quantity} × {formatCurrency(transfer.price, quote.currency)}
-                            </p>
+                      {quote.selectedComponents.circuitTransfers.map((transfer: any, index: number) => {
+                        const transferData = circuitTransfers.find(t => t.id === transfer.id);
+                        const hotel = hotels.find(h => h.id === transferData?.hotel_id);
+                        
+                        return (
+                          <div key={index} className="space-y-4 p-4 bg-muted/50 rounded-lg border">
+                            {/* Transfer Header */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Car className="h-4 w-4 text-primary" />
+                                <span className="font-semibold text-base">
+                                  {transferData?.transfer_type?.toUpperCase() || 'Circuit Transfer'}
+                                </span>
+                                {hotel && (
+                                  <span className="text-sm text-muted-foreground">
+                                    • {hotel.name}
+                                  </span>
+                                )}
                         </div>
-                          <p className="font-medium text-lg">
-                            {formatCurrency(transfer.quantity * transfer.price, quote.currency)}
-                          </p>
+                              <div className="text-right">
+                                <div className="font-bold text-primary">
+                                  {formatCurrency(transfer.price || 0, quote.currency)}
                           </div>
-                        ))}
+                                <div className="text-xs text-muted-foreground">
+                                  per seat × {transfer.quantity || 1}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Transfer Details */}
+                            {transferData && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Transfer Type:</span>
+                                  <span className="ml-2 font-medium capitalize">
+                                    {transferData.transfer_type}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Coach Capacity:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.coach_capacity} passengers
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Days:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.days} day{transferData.days !== 1 ? 's' : ''}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Expected Hours:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.expected_hours || transferData.quote_hours || 'TBD'} hours
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Coaches Required:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.coaches_required || 'Calculated'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Utilisation:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.utilisation_percent || 100}%
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Guide Included:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.guide_included ? 'Yes' : 'No'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Supplier:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.supplier || 'TBD'}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Cost Breakdown */}
+                            {transferData && (
+                              <div className="border-t border-border/30 pt-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <CreditCard className="h-4 w-4 text-purple-600" />
+                                  <span className="font-medium text-sm">Cost Breakdown</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                  {transferData.coach_cost_gbp && (
+                                    <div>
+                                      <span className="text-muted-foreground">Coach Cost (GBP):</span>
+                                      <span className="ml-2 font-medium">
+                                        £{transferData.coach_cost_gbp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {transferData.guide_cost_gbp && (
+                                    <div>
+                                      <span className="text-muted-foreground">Guide Cost (GBP):</span>
+                                      <span className="ml-2 font-medium">
+                                        £{transferData.guide_cost_gbp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {transferData.utilisation_cost_per_seat_gbp && (
+                                    <div>
+                                      <span className="text-muted-foreground">Cost per Seat (GBP):</span>
+                                      <span className="ml-2 font-medium">
+                                        £{transferData.utilisation_cost_per_seat_gbp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {transferData.sell_price_per_seat_gbp && (
+                                    <div>
+                                      <span className="text-muted-foreground">Sell Price per Seat (GBP):</span>
+                                      <span className="ml-2 font-medium">
+                                        £{transferData.sell_price_per_seat_gbp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {transferData.markup_percent && (
+                                    <div>
+                                      <span className="text-muted-foreground">Markup:</span>
+                                      <span className="ml-2 font-medium">
+                                        {transferData.markup_percent}%
+                                      </span>
+                                    </div>
+                                  )}
+                                  {transferData.supplier_currency && (
+                                    <div>
+                                      <span className="text-muted-foreground">Supplier Currency:</span>
+                                      <span className="ml-2 font-medium">
+                                        {transferData.supplier_currency}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Transfer Summary */}
+                            <div className="border-t border-border/30 pt-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-4">
+                                  <span className="text-muted-foreground">
+                                    Quantity: <span className="font-medium">{transfer.quantity || 1}</span>
+                                  </span>
+                                  {transferData?.notes && (
+                                    <span className="text-muted-foreground">
+                                      Notes: <span className="font-medium">{transferData.notes}</span>
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-semibold">
+                                    Total: {formatCurrency((transfer.price || 0) * (transfer.quantity || 1), quote.currency)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -689,24 +898,169 @@ export function ViewQuote() {
                         <Car className="h-5 w-5 text-primary" />
                         Airport Transfers
                       </h4>
-                      {quote.selectedComponents.airportTransfers.map((transfer: any, index: number) => (
-                        <div key={index} className="flex justify-between items-center p-4 bg-muted/50 rounded-lg border">
-                          <div className="space-y-1">
-                            <p className="font-medium">Airport Transfer</p>
-                            <p className="text-sm text-muted-foreground">
-                              Quantity: {transfer.quantity} × {formatCurrency(transfer.price, quote.currency)}
-                            </p>
+                      {quote.selectedComponents.airportTransfers.map((transfer: any, index: number) => {
+                        const transferData = airportTransfers.find(t => t.id === transfer.id);
+                        const hotel = hotels.find(h => h.id === transferData?.hotel_id);
+                        
+                        return (
+                          <div key={index} className="space-y-4 p-4 bg-muted/50 rounded-lg border">
+                            {/* Transfer Header */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Car className="h-4 w-4 text-primary" />
+                                <span className="font-semibold text-base">
+                                  {transferData?.transport_type?.replace('_', ' ').toUpperCase() || 'Airport Transfer'}
+                                </span>
+                                {hotel && (
+                                  <span className="text-sm text-muted-foreground">
+                                    • {hotel.name}
+                                  </span>
+                                )}
                             {transfer.transferDirection && (
-                              <p className="text-sm text-muted-foreground">
-                                Direction: {transfer.transferDirection}
-                              </p>
+                                  <Badge variant="outline" className="text-xs">
+                                    {transfer.transferDirection}
+                                  </Badge>
                             )}
                         </div>
-                          <p className="font-medium text-lg">
-                            {formatCurrency(transfer.quantity * transfer.price, quote.currency)}
-                          </p>
+                              <div className="text-right">
+                                <div className="font-bold text-primary">
+                                  {formatCurrency(transfer.price || 0, quote.currency)}
                           </div>
-                        ))}
+                                <div className="text-xs text-muted-foreground">
+                                  per vehicle × {transfer.quantity || 1}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Transfer Details */}
+                            {transferData && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Transport Type:</span>
+                                  <span className="ml-2 font-medium capitalize">
+                                    {transferData.transport_type?.replace('_', ' ')}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Max Capacity:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.max_capacity} passengers
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Used Capacity:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.used || 0} passengers
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Supplier:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.supplier || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Quote Currency:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.quote_currency || 'GBP'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Paid to Supplier:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.paid_to_supplier ? 'Yes' : 'No'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Outstanding:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.outstanding ? 'Yes' : 'No'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Active:</span>
+                                  <span className="ml-2 font-medium">
+                                    {transferData.active ? 'Yes' : 'No'}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Cost Breakdown */}
+                            {transferData && (
+                              <div className="border-t border-border/30 pt-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <CreditCard className="h-4 w-4 text-purple-600" />
+                                  <span className="font-medium text-sm">Cost Breakdown</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                  {transferData.supplier_quote_per_car_local && (
+                                    <div>
+                                      <span className="text-muted-foreground">Supplier Quote (Local):</span>
+                                      <span className="ml-2 font-medium">
+                                        {transferData.supplier_quote_per_car_local.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {transferData.quote_currency || 'GBP'}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {transferData.supplier_quote_per_car_gbp && (
+                                    <div>
+                                      <span className="text-muted-foreground">Supplier Quote (GBP):</span>
+                                      <span className="ml-2 font-medium">
+                                        £{transferData.supplier_quote_per_car_gbp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {transferData.price_per_car_gbp_markup && (
+                                    <div>
+                                      <span className="text-muted-foreground">Price with Markup (GBP):</span>
+                                      <span className="ml-2 font-medium">
+                                        £{transferData.price_per_car_gbp_markup.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {transferData.markup && (
+                                    <div>
+                                      <span className="text-muted-foreground">Markup:</span>
+                                      <span className="ml-2 font-medium">
+                                        {transferData.markup}%
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Transfer Summary */}
+                            <div className="border-t border-border/30 pt-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-4">
+                                  <span className="text-muted-foreground">
+                                    Quantity: <span className="font-medium">{transfer.quantity || 1}</span>
+                                  </span>
+                                  {transfer.transferDirection === 'both' && (
+                                    <span className="text-muted-foreground">
+                                      Direction: <span className="font-medium">Both ways</span>
+                                    </span>
+                                  )}
+                                  {transferData?.notes && (
+                                    <span className="text-muted-foreground">
+                                      Notes: <span className="font-medium">{transferData.notes}</span>
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-semibold">
+                                    Total: {formatCurrency(
+                                      (transfer.price || 0) * (transfer.quantity || 1) * (transfer.transferDirection === 'both' ? 2 : 1), 
+                                      quote.currency
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -718,19 +1072,451 @@ export function ViewQuote() {
                         Flights
                       </h4>
                       {quote.selectedComponents.flights.map((flight: any, index: number) => (
-                        <div key={index} className="flex justify-between items-center p-4 bg-muted/50 rounded-lg border">
-                          <div className="space-y-1">
-                            <p className="font-medium">{flight.origin} → {flight.destination}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {flight.departureDate} {flight.returnDate && `- ${flight.returnDate}`}
-                            </p>
-                            {flight.airline && (
-                              <p className="text-sm text-muted-foreground">{flight.airline}</p>
+                        <div key={index} className="space-y-4 p-4 bg-muted/50 rounded-lg border">
+                          
+
+                          {/* Outbound Flight Details */}
+                          <div className="">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Plane className="h-4 w-4 text-green-600" />
+                              <span className="font-medium text-sm">Outbound Flight</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Flight Number:</span>
+                                <span className="ml-2 font-medium">
+                                  {FlightApiService.formatFlightNumber(
+                                    FlightApiService.getAirlineCode(flight),
+                                    flight.outboundFlightNumber || flight.flightNumber || ''
+                                  ) || 'TBD'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Route:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundDepartureAirportId || flight.origin} → {flight.outboundArrivalAirportId || flight.destination}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Airports:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundDepartureAirportName || flight.outboundDepartureAirportId || flight.origin} → {flight.outboundArrivalAirportName || flight.outboundArrivalAirportId || flight.destination}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Departure:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundDepartureDateTime ? new Date(flight.outboundDepartureDateTime).toLocaleString('en-GB', {
+                                    weekday: 'short',
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : 'TBD'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Arrival:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundArrivalDateTime ? new Date(flight.outboundArrivalDateTime).toLocaleString('en-GB', {
+                                    weekday: 'short',
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : 'TBD'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Duration:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundFlightDuration || flight.duration || 'TBD'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Airline:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundMarketingAirlineName || flight.outboundOperatingAirlineName || flight.airline || 'TBD'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Aircraft:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundAircraftType || flight.aircraft || 'TBD'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Class:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundCabinName || flight.outboundCabinId || flight.cabin || 'TBD'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Terminals:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundDepartureTerminal && flight.outboundArrivalTerminal ? 
+                                    `${flight.outboundDepartureTerminal} → ${flight.outboundArrivalTerminal}` : 
+                                    flight.departureTerminal && flight.arrivalTerminal ? 
+                                    `${flight.departureTerminal} → ${flight.arrivalTerminal}` : 'TBD'
+                                  }
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Stops:</span>
+                                <span className="ml-2 font-medium">
+                                  {flight.outboundStops?.length || flight.stops || 0} {flight.outboundStops?.length === 1 || flight.stops === 1 ? 'stop' : 'stops'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Multi-segment outbound flight display */}
+                            {flight.outboundFlightSegments && flight.outboundFlightSegments.length > 0 && (
+                              <div className="mt-3 p-3 bg-primary/5 rounded-lg">
+                                <div className="text-sm font-medium mb-2">Flight Segments:</div>
+                                {flight.outboundFlightSegments.map((segment: any, segmentIndex: number) => (
+                                  <div key={segmentIndex} className="text-xs space-y-1 mb-2 last:mb-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">Segment {segment.segmentIndex || segmentIndex + 1}:</span>
+                                      <span>{FlightApiService.formatFlightNumber(segment.marketingAirlineId, segment.flightNumber)}</span>
+                                    </div>
+                                    <div className="ml-4 text-muted-foreground">
+                                      {segment.departureAirportName || segment.departureAirportId} → {segment.arrivalAirportName || segment.arrivalAirportId}
+                                    </div>
+                                    <div className="ml-4 text-muted-foreground">
+                                      {segment.departureDateTime ? new Date(segment.departureDateTime).toLocaleString('en-GB', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      }) : ''} - {segment.arrivalDateTime ? new Date(segment.arrivalDateTime).toLocaleString('en-GB', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      }) : ''} ({segment.flightDuration})
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Baggage Information */}
+                            {(flight.outboundCheckedBaggage || flight.outboundCarryOnBaggage || flight.outboundBaggageAllowance || flight.baggageAllowance) && (
+                              <div className="mt-3 p-3 bg-secondary/10 rounded-lg">
+                                <div className="text-sm font-medium mb-2">Baggage:</div>
+                                <div className="space-y-1 text-xs">
+                                  {flight.outboundCheckedBaggage && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-medium">Checked:</span>
+                                      {flight.outboundCheckedBaggage.pieces && <span>{flight.outboundCheckedBaggage.pieces} piece{flight.outboundCheckedBaggage.pieces !== 1 ? 's' : ''}</span>}
+                                      {flight.outboundCheckedBaggage.weight && <span>{flight.outboundCheckedBaggage.weight} {flight.outboundCheckedBaggage.weightUnit}</span>}
+                                      {flight.outboundCheckedBaggage.dimensions && <span>({flight.outboundCheckedBaggage.dimensions})</span>}
+                          </div>
+                                  )}
+                                  {flight.outboundCarryOnBaggage && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-medium">Carry-on:</span>
+                                      {flight.outboundCarryOnBaggage.pieces && <span>{flight.outboundCarryOnBaggage.pieces} piece{flight.outboundCarryOnBaggage.pieces !== 1 ? 's' : ''}</span>}
+                                      {flight.outboundCarryOnBaggage.weight && <span>{flight.outboundCarryOnBaggage.weight} {flight.outboundCarryOnBaggage.weightUnit}</span>}
+                                      {flight.outboundCarryOnBaggage.dimensions && <span>({flight.outboundCarryOnBaggage.dimensions})</span>}
+                                    </div>
+                                  )}
+                                  {flight.outboundBaggageAllowance && !flight.outboundCheckedBaggage && !flight.outboundCarryOnBaggage && (
+                                    <div className="flex items-center gap-1">
+                                      <span>
+                                        {typeof flight.outboundBaggageAllowance === 'string'
+                                          ? flight.outboundBaggageAllowance
+                                          : flight.outboundBaggageAllowance.pieces
+                                            ? `${flight.outboundBaggageAllowance.pieces} pieces`
+                                            : flight.outboundBaggageAllowance.weight
+                                              ? `${flight.outboundBaggageAllowance.weight}${flight.outboundBaggageAllowance.weightUnit || 'kg'}`
+                                              : 'Baggage included'
+                                        }
+                                      </span>
+                                    </div>
+                                  )}
+                                  {flight.baggageAllowance && !flight.outboundCheckedBaggage && !flight.outboundCarryOnBaggage && !flight.outboundBaggageAllowance && (
+                                    <div className="flex items-center gap-1">
+                                      <span>
+                                        {typeof flight.baggageAllowance === 'string'
+                                          ? flight.baggageAllowance
+                                          : flight.baggageAllowance.NumberOfPieces
+                                            ? `${flight.baggageAllowance.NumberOfPieces} pieces`
+                                            : flight.baggageAllowance.WeightInKilograms
+                                              ? `${flight.baggageAllowance.WeightInKilograms}kg`
+                                              : 'Baggage included'
+                                        }
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             )}
                           </div>
-                          <p className="font-medium text-lg">
-                            {formatCurrency(flight.price || 0, quote.currency)}
-                          </p>
+
+                          {/* Inbound Flight Details (if return flight) */}
+                          {flight.returnDate && (flight.inboundFlightNumber || flight.returnFlightNumber) && (
+                            <div className="border-t border-border/30 pt-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Plane className="h-4 w-4 text-blue-600" />
+                                <span className="font-medium text-sm">Return Flight</span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Flight Number:</span>
+                                  <span className="ml-2 font-medium">
+                                    {FlightApiService.formatFlightNumber(
+                                      FlightApiService.getAirlineCode(flight),
+                                      flight.inboundFlightNumber || flight.returnFlightNumber || ''
+                                    ) || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Route:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundDepartureAirportId} → {flight.inboundArrivalAirportId}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Airports:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundDepartureAirportName || flight.inboundDepartureAirportId} → {flight.inboundArrivalAirportName || flight.inboundArrivalAirportId}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Departure:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundDepartureDateTime ? new Date(flight.inboundDepartureDateTime).toLocaleString('en-GB', {
+                                      weekday: 'short',
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }) : 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Arrival:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundArrivalDateTime ? new Date(flight.inboundArrivalDateTime).toLocaleString('en-GB', {
+                                      weekday: 'short',
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }) : 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Duration:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundFlightDuration || flight.returnDuration || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Airline:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundMarketingAirlineName || flight.inboundOperatingAirlineName || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Aircraft:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundAircraftType || flight.returnAircraft || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Class:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundCabinName || flight.inboundCabinId || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Terminals:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundDepartureTerminal && flight.inboundArrivalTerminal ? 
+                                      `${flight.inboundDepartureTerminal} → ${flight.inboundArrivalTerminal}` : 
+                                      flight.returnDepartureTerminal && flight.returnArrivalTerminal ? 
+                                      `${flight.returnDepartureTerminal} → ${flight.returnArrivalTerminal}` : 'TBD'
+                                    }
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Stops:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.inboundStops?.length || flight.returnStops || 0} {flight.inboundStops?.length === 1 || flight.returnStops === 1 ? 'stop' : 'stops'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Multi-segment return flight display */}
+                              {flight.returnFlightSegments && flight.returnFlightSegments.length > 0 && (
+                                <div className="mt-3 p-3 bg-primary/5 rounded-lg">
+                                  <div className="text-sm font-medium mb-2">Flight Segments:</div>
+                                  {flight.returnFlightSegments.map((segment: any, segmentIndex: number) => (
+                                    <div key={segmentIndex} className="text-xs space-y-1 mb-2 last:mb-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">Segment {segment.segmentIndex || segmentIndex + 1}:</span>
+                                        <span>{FlightApiService.formatFlightNumber(segment.marketingAirlineId, segment.flightNumber)}</span>
+                                      </div>
+                                      <div className="ml-4 text-muted-foreground">
+                                        {segment.departureAirportName || segment.departureAirportId} → {segment.arrivalAirportName || segment.arrivalAirportId}
+                                      </div>
+                                      <div className="ml-4 text-muted-foreground">
+                                        {segment.departureDateTime ? new Date(segment.departureDateTime).toLocaleString('en-GB', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        }) : ''} - {segment.arrivalDateTime ? new Date(segment.arrivalDateTime).toLocaleString('en-GB', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        }) : ''} ({segment.flightDuration})
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Baggage Information for Return Flight */}
+                              {(flight.inboundCheckedBaggage || flight.inboundCarryOnBaggage || flight.inboundBaggageAllowance) && (
+                                <div className="mt-3 p-3 bg-secondary/10 rounded-lg">
+                                  <div className="text-sm font-medium mb-2">Baggage:</div>
+                                  <div className="space-y-1 text-xs">
+                                    {flight.inboundCheckedBaggage && (
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-medium">Checked:</span>
+                                        {flight.inboundCheckedBaggage.pieces && <span>{flight.inboundCheckedBaggage.pieces} piece{flight.inboundCheckedBaggage.pieces !== 1 ? 's' : ''}</span>}
+                                        {flight.inboundCheckedBaggage.weight && <span>{flight.inboundCheckedBaggage.weight} {flight.inboundCheckedBaggage.weightUnit}</span>}
+                                        {flight.inboundCheckedBaggage.dimensions && <span>({flight.inboundCheckedBaggage.dimensions})</span>}
+                                      </div>
+                                    )}
+                                    {flight.inboundCarryOnBaggage && (
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-medium">Carry-on:</span>
+                                        {flight.inboundCarryOnBaggage.pieces && <span>{flight.inboundCarryOnBaggage.pieces} piece{flight.inboundCarryOnBaggage.pieces !== 1 ? 's' : ''}</span>}
+                                        {flight.inboundCarryOnBaggage.weight && <span>{flight.inboundCarryOnBaggage.weight} {flight.inboundCarryOnBaggage.weightUnit}</span>}
+                                        {flight.inboundCarryOnBaggage.dimensions && <span>({flight.inboundCarryOnBaggage.dimensions})</span>}
+                                      </div>
+                                    )}
+                                    {flight.inboundBaggageAllowance && !flight.inboundCheckedBaggage && !flight.inboundCarryOnBaggage && (
+                                      <div className="flex items-center gap-1">
+                                        <span>
+                                          {typeof flight.inboundBaggageAllowance === 'string'
+                                            ? flight.inboundBaggageAllowance
+                                            : flight.inboundBaggageAllowance.pieces
+                                              ? `${flight.inboundBaggageAllowance.pieces} pieces`
+                                              : flight.inboundBaggageAllowance.weight
+                                                ? `${flight.inboundBaggageAllowance.weight}${flight.inboundBaggageAllowance.weightUnit || 'kg'}`
+                                                : 'Baggage included'
+                                          }
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Fare and Pricing Details */}
+                          {(flight.fareTypeName || flight.fareSubTypeName || flight.revenueStreamName || flight.baseFare || flight.taxes || flight.fees) && (
+                            <div className="border-t border-border/30 pt-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <CreditCard className="h-4 w-4 text-purple-600" />
+                                <span className="font-medium text-sm">Fare Details</span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                {flight.fareTypeName && (
+                                  <div>
+                                    <span className="text-muted-foreground">Fare Type:</span>
+                                    <span className="ml-2 font-medium">{flight.fareTypeName}</span>
+                                  </div>
+                                )}
+                                {flight.fareSubTypeName && (
+                                  <div>
+                                    <span className="text-muted-foreground">Fare Sub-Type:</span>
+                                    <span className="ml-2 font-medium">{flight.fareSubTypeName}</span>
+                                  </div>
+                                )}
+                                {flight.revenueStreamName && (
+                                  <div>
+                                    <span className="text-muted-foreground">Revenue Stream:</span>
+                                    <span className="ml-2 font-medium">{flight.revenueStreamName}</span>
+                                  </div>
+                                )}
+                                {flight.baseFare && (
+                                  <div>
+                                    <span className="text-muted-foreground">Base Fare:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.currencySymbol || flight.currencyId || '£'}{flight.baseFare.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                )}
+                                {flight.taxes && (
+                                  <div>
+                                    <span className="text-muted-foreground">Taxes:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.currencySymbol || flight.currencyId || '£'}{flight.taxes.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                )}
+                                {flight.fees && (
+                                  <div>
+                                    <span className="text-muted-foreground">Fees:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.currencySymbol || flight.currencyId || '£'}{flight.fees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                )}
+                                {flight.ticketingDeadline && (
+                                  <div>
+                                    <span className="text-muted-foreground">Ticketing Deadline:</span>
+                                    <span className="ml-2 font-medium">
+                                      {new Date(flight.ticketingDeadline).toLocaleDateString('en-GB')}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Flight Summary */}
+                          <div className="border-t border-border/30 pt-3 mt-3">
+                            <div className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-4">
+                                <span className="text-muted-foreground">
+                                  Passengers: <span className="font-medium">{flight.passengers || 1}</span>
+                                </span>
+                                {flight.refundable !== undefined && (
+                                  <span className="text-muted-foreground">
+                                    Refundable: <span className="font-medium">{flight.refundable ? 'Yes' : 'No'}</span>
+                                  </span>
+                                )}
+                                {flight.validatingAirlineName && (
+                                  <span className="text-muted-foreground">
+                                    Validating: <span className="font-medium">{flight.validatingAirlineName}</span>
+                                  </span>
+                                )}
+                                {flight.skytraxRating && (
+                                  <span className="text-muted-foreground">
+                                    Rating: <span className="font-medium">{flight.skytraxRating}/5</span>
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <div className="font-semibold">
+                                  Total: {formatCurrency((flight.price || 0) * (flight.passengers || 1), quote.currency)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                           </div>
                         ))}
                     </div>

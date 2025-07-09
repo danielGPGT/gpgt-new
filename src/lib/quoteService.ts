@@ -48,6 +48,40 @@ function groupComponents(componentsArray: any[]) {
 }
 
 export class QuoteService {
+  // Generate quote reference based on event name, sport, year, and sequence
+  private static async generateQuoteReference(eventName: string, eventLocation: string, year: string): Promise<string> {
+    // Extract event type (first 3 letters, uppercase)
+    const eventPrefix = eventName.substring(0, 3).toUpperCase();
+    
+    // Extract sport/location (first 2-3 letters, uppercase)
+    const sportPrefix = eventLocation.substring(0, 3).toUpperCase();
+    
+    // Get current year
+    const currentYear = year || new Date().getFullYear().toString();
+    
+    // Query database to get the next sequence number for this pattern
+    const pattern = `${eventPrefix}-${sportPrefix}-${currentYear}-%`;
+    
+    const { data: existingQuotes, error } = await supabase
+      .from('quotes')
+      .select('quote_reference')
+      .like('quote_reference', pattern)
+      .order('quote_reference', { ascending: false })
+      .limit(1);
+    
+    let sequence = 1;
+    if (!error && existingQuotes && existingQuotes.length > 0) {
+      // Extract the sequence number from the last quote reference
+      const lastReference = existingQuotes[0].quote_reference;
+      const match = lastReference.match(/-(\d{3})$/);
+      if (match) {
+        sequence = parseInt(match[1]) + 1;
+      }
+    }
+    
+    return `${eventPrefix}-${sportPrefix}-${currentYear}-${sequence.toString().padStart(3, '0')}`;
+  }
+
   // Create a new quote from package intake form data
   static async createQuoteFromIntake(data: CreateQuoteData): Promise<string> {
     try {
@@ -66,6 +100,14 @@ export class QuoteService {
         if (!dateString) return null;
         return new Date(dateString).toISOString().split('T')[0];
       };
+
+      // Generate quote reference
+      const eventYear = data.eventData.startDate ? new Date(data.eventData.startDate).getFullYear().toString() : new Date().getFullYear().toString();
+      const quoteReference = await this.generateQuoteReference(
+        data.eventData.name,
+        data.eventData.location,
+        eventYear
+      );
 
       // Prepare components data for JSONB storage
       const componentsArray = [
@@ -192,6 +234,7 @@ export class QuoteService {
           // Quote Details
           status: 'draft',
           internal_notes: data.internalNotes,
+          quote_reference: quoteReference,
           
           // Component Data (JSONB)
           selected_components: componentsArray,
@@ -339,6 +382,14 @@ export class QuoteService {
     try {
       const originalQuote = await this.getQuoteById(originalQuoteId);
       
+      // Generate new quote reference for the revision
+      const eventYear = originalQuote.eventStartDate ? new Date(originalQuote.eventStartDate).getFullYear().toString() : new Date().getFullYear().toString();
+      const quoteReference = await this.generateQuoteReference(
+        originalQuote.eventName,
+        originalQuote.eventLocation,
+        eventYear
+      );
+      
       // Create a new quote based on the original
       const { data: newQuote, error } = await supabase
         .from('quotes')
@@ -393,6 +444,7 @@ export class QuoteService {
           version: (originalQuote.version || 1) + 1,
           is_revision: true,
           parent_quote_id: originalQuoteId,
+          quote_reference: quoteReference,
           internal_notes: revisionNotes || `Revision of quote ${originalQuote.quoteNumber}`,
           
           // Component Data (JSONB)
@@ -721,6 +773,7 @@ export class QuoteService {
       paymentSecondPayment: quote.paymentSecondPayment,
       paymentFinalPayment: quote.paymentFinalPayment,
       quoteNumber: quote.quoteNumber,
+      quoteReference: quote.quoteReference,
       createdAt: quote.createdAt,
       updatedAt: quote.updatedAt,
       selectedComponents: quote.selectedComponents,
@@ -749,11 +802,12 @@ export class QuoteService {
         travelersAdults: quote.travelersAdults,
         travelersChildren: quote.travelersChildren,
         travelersTotal: quote.travelersTotal,
-        paymentDeposit: quote.paymentDeposit,
-        paymentSecondPayment: quote.paymentSecondPayment,
-        paymentFinalPayment: quote.paymentFinalPayment,
-        quoteNumber: quote.quoteNumber,
-        createdAt: quote.createdAt,
+              paymentDeposit: quote.paymentDeposit,
+      paymentSecondPayment: quote.paymentSecondPayment,
+      paymentFinalPayment: quote.paymentFinalPayment,
+      quoteNumber: quote.quoteNumber,
+      quoteReference: quote.quoteReference,
+      createdAt: quote.createdAt,
         updatedAt: quote.updatedAt,
         selectedComponents: quote.selectedComponents,
         selectedPackage: quote.selectedPackage,

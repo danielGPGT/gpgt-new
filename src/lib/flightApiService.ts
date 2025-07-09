@@ -8,6 +8,7 @@ export interface FlightSearchParams {
   adults: number;
   children?: number;
   cabinClass?: string;
+  directFlightsOnly?: boolean;
 }
 
 export interface ApiFlight {
@@ -131,6 +132,10 @@ export interface ApiFlight {
   };
   inboundStops?: any[];
   inboundLayoverInfo?: any[];
+  
+  // Flight segments for multi-segment flights
+  outboundFlightSegments?: any[];
+  returnFlightSegments?: any[];
   
   // Fare and pricing details
   fareTypeId?: string;
@@ -303,5 +308,26 @@ export class FlightApiService {
     
     const [hours, minutes] = duration.split(':').map(Number);
     return hours + (minutes / 60);
+  }
+
+  // Helper method to format flight number universally
+  static formatFlightNumber(airlineCode: string, flightNumber: string): string {
+    if (!airlineCode || !flightNumber) return flightNumber || '';
+    
+    // Remove any existing airline code from the flight number if it's already there
+    const cleanFlightNumber = flightNumber.replace(/^[A-Z]{2,3}/, '');
+    
+    // Format as airline code + flight number (e.g., "EK 123" or "BA 456")
+    return `${airlineCode} ${cleanFlightNumber}`;
+  }
+
+  // Helper method to get airline code from various sources
+  static getAirlineCode(flight: any): string {
+    // Try different sources for airline code in order of preference
+    return flight.outboundMarketingAirlineId || 
+           flight.inboundMarketingAirlineId || 
+           flight.validatingAirlineId || 
+           flight.airline?.substring(0, 2) || 
+           '';
   }
 } 

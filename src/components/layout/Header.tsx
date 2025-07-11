@@ -125,7 +125,7 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
           <Tooltip>
             <TooltipTrigger asChild>
               <Button asChild size="xs" className="p-1 bg-primary rounded-full hover:bg-primary/80 text-primary-foreground ml-1">
-                <Link to="/new-proposal">
+                <Link to="/package-intake-test">
                   <Plus className="h-6 w-6" />
                 </Link>
               </Button>

@@ -269,14 +269,14 @@ export default function PackageManager() {
   };
 
     return (
-    <div className="mx-auto px-8 pt-0 pb-8 space-y-8">
+    <div className="mx-auto px-8 py-8 pb-8 space-y-8">
       {/* Header Section */}
       <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
         <div>
-          <h1 className="text-3xl font-bold text-[var(--foreground)] mb-2">Package Manager</h1>
-          <p className="text-[var(--muted-foreground)] text-base">
-            Manage Formula 1 events, venues, and travel packages
-          </p>
+        <h1 className="text-2xl font-bold flex-1">Package Manager</h1>
+      <p className="text-muted-foreground">
+        Manage Formula 1 events, venues, and travel packages
+      </p>
         </div>
         <div className="flex items-center gap-3">
           <Button 

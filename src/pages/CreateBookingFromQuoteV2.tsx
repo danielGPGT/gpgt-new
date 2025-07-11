@@ -320,7 +320,7 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
       const bookingId = await BookingService.createBookingFromQuote(bookingData);
 
       toast.success('Booking created successfully!');
-      navigate(`/bookings/${bookingId}`);
+      navigate(`/booking/${bookingId}`);
 
     } catch (err) {
       console.error('Error creating booking:', err);
@@ -402,7 +402,7 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
             </div>
 
             <div className="flex items-center gap-2 pt-4">
-              <Button onClick={() => navigate(`/bookings/${existingBooking.id}`)}>
+              <Button onClick={() => navigate(`/booking/${existingBooking.id}`)}>
                 View Booking Details
               </Button>
               <Button variant="outline" onClick={() => navigate(`/quotes/${quote.id}`)}>

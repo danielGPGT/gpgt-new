@@ -190,6 +190,7 @@ export class QuoteService {
           user_id: data.consultantId || (await supabase.auth.getUser()).data.user?.id,
           team_id: teamId,
           consultant_id: data.consultantId,
+          client_id: data.clientId, // <-- Store client_id
           
           // Client Information
           client_name: `${data.clientData.firstName} ${data.clientData.lastName}`,
@@ -279,7 +280,15 @@ export class QuoteService {
 
       let query = supabase
         .from('quotes')
-        .select('*', { count: 'exact' })
+        .select(`
+          *,
+          teams!quotes_team_id_fkey (
+            id,
+            name,
+            logo_url,
+            agency_name
+          )
+        `, { count: 'exact' })
         .eq('team_id', teamId)
         .order('created_at', { ascending: false });
 
@@ -302,12 +311,65 @@ export class QuoteService {
     }
   }
 
+  // Get user's own quotes (only quotes created by the current user)
+  static async getUserQuotes(
+    status?: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<{ quotes: Quote[]; total: number }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User must be authenticated to view quotes');
+      }
+
+      let query = supabase
+        .from('quotes')
+        .select(`
+          *,
+          teams!quotes_team_id_fkey (
+            id,
+            name,
+            logo_url,
+            agency_name
+          )
+        `, { count: 'exact' })
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data, error, count } = await query
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        throw new Error(`Failed to fetch user quotes: ${error.message}`);
+      }
+
+      const quotes = data?.map(this.mapQuoteFromJson) || [];
+      return { quotes, total: count || 0 };
+    } catch (error) {
+      console.error('Error in getUserQuotes:', error);
+      throw error;
+    }
+  }
+
   // Get a single quote by ID
   static async getQuoteById(quoteId: string): Promise<Quote> {
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('*')
+        .select(`
+          *,
+          teams!quotes_team_id_fkey (
+            id,
+            name,
+            logo_url,
+            agency_name
+          )
+        `)
         .eq('id', quoteId)
         .single();
 
@@ -639,34 +701,79 @@ export class QuoteService {
     searchTerm: string,
     status?: string,
     limit: number = 50,
-    offset: number = 0
+    offset: number = 0,
+    scope: 'team' | 'user' = 'team'
   ): Promise<{ quotes: Quote[]; total: number }> {
     try {
-      const teamId = await getCurrentUserTeamId();
-      if (!teamId) {
-        throw new Error('User must be part of a team to search quotes');
+      if (scope === 'user') {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('User must be authenticated to search quotes');
+        }
+
+        let query = supabase
+          .from('quotes')
+          .select(`
+            *,
+            teams!quotes_team_id_fkey (
+              id,
+              name,
+              logo_url,
+              agency_name
+            )
+          `, { count: 'exact' })
+          .eq('user_id', user.id)
+          .or(`client_name.ilike.%${searchTerm}%,client_email.ilike.%${searchTerm}%,event_name.ilike.%${searchTerm}%,package_name.ilike.%${searchTerm}%`)
+          .order('created_at', { ascending: false });
+
+        if (status) {
+          query = query.eq('status', status);
+        }
+
+        const { data, error, count } = await query
+          .range(offset, offset + limit - 1);
+
+        if (error) {
+          throw new Error(`Failed to search user quotes: ${error.message}`);
+        }
+
+        const quotes = data?.map(this.mapQuoteFromJson) || [];
+        return { quotes, total: count || 0 };
+      } else {
+        const teamId = await getCurrentUserTeamId();
+        if (!teamId) {
+          throw new Error('User must be part of a team to search quotes');
+        }
+
+        let query = supabase
+          .from('quotes')
+          .select(`
+            *,
+            teams!quotes_team_id_fkey (
+              id,
+              name,
+              logo_url,
+              agency_name
+            )
+          `, { count: 'exact' })
+          .eq('team_id', teamId)
+          .or(`client_name.ilike.%${searchTerm}%,client_email.ilike.%${searchTerm}%,event_name.ilike.%${searchTerm}%,package_name.ilike.%${searchTerm}%`)
+          .order('created_at', { ascending: false });
+
+        if (status) {
+          query = query.eq('status', status);
+        }
+
+        const { data, error, count } = await query
+          .range(offset, offset + limit - 1);
+
+        if (error) {
+          throw new Error(`Failed to search quotes: ${error.message}`);
+        }
+
+        const quotes = data?.map(this.mapQuoteFromJson) || [];
+        return { quotes, total: count || 0 };
       }
-
-      let query = supabase
-        .from('quotes')
-        .select('*', { count: 'exact' })
-        .eq('team_id', teamId)
-        .or(`client_name.ilike.%${searchTerm}%,client_email.ilike.%${searchTerm}%,event_name.ilike.%${searchTerm}%,package_name.ilike.%${searchTerm}%`)
-        .order('created_at', { ascending: false });
-
-      if (status) {
-        query = query.eq('status', status);
-      }
-
-      const { data, error, count } = await query
-        .range(offset, offset + limit - 1);
-
-      if (error) {
-        throw new Error(`Failed to search quotes: ${error.message}`);
-      }
-
-      const quotes = data?.map(this.mapQuoteFromJson) || [];
-      return { quotes, total: count || 0 };
     } catch (error) {
       console.error('Error in searchQuotes:', error);
       throw error;
@@ -681,6 +788,12 @@ export class QuoteService {
       clientId: data.client_id,
       teamId: data.team_id,
       consultantId: data.consultant_id,
+      team: data.teams ? {
+        id: data.teams.id,
+        name: data.teams.name,
+        logo_url: data.teams.logo_url,
+        agency_name: data.teams.agency_name
+      } : undefined,
       
       // Client Information
       clientName: data.client_name,

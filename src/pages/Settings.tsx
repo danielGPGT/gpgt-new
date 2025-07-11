@@ -790,6 +790,18 @@ const TeamManagement = () => {
   const [teamRole, setTeamRole] = useState<string | null>(null);
   const [editingRole, setEditingRole] = useState<string | null>(null);
   const [newRole, setNewRole] = useState<string>('');
+  
+  // Team branding state
+  const [teamId, setTeamId] = useState<string | null>(null);
+  const [teamAgencyName, setTeamAgencyName] = useState('');
+  const [teamLogoUrl, setTeamLogoUrl] = useState('');
+  const [teamLogoFile, setTeamLogoFile] = useState<File | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isEditingBranding, setIsEditingBranding] = useState(false);
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
+
+  // Check if user can manage team (admin or owner)
+  const canManageTeam = teamRole === 'admin' || teamRole === 'owner';
 
   useEffect(() => {
     async function fetchRole() {
@@ -828,7 +840,7 @@ const TeamManagement = () => {
           // User is a team member, get their team
           const { data: teamsAsMember, error: teamError } = await supabase
             .from('teams')
-            .select('id')
+            .select('id, name, logo_url, agency_name')
             .in('id', memberTeams.map(tm => tm.team_id))
             .single();
           
@@ -843,7 +855,7 @@ const TeamManagement = () => {
         if (!team) {
           const { data: ownedTeam, error: ownedError } = await supabase
             .from('teams')
-            .select('id')
+            .select('id, name, logo_url, agency_name')
             .eq('owner_id', user.id)
             .single();
           
@@ -895,6 +907,11 @@ const TeamManagement = () => {
         }
         
         if (!team || !team.id) return;
+        
+        // Set team branding data
+        setTeamId(team.id);
+        setTeamAgencyName(team.agency_name || team.name || '');
+        setTeamLogoUrl(team.logo_url || '');
         
         // 2. Fetch team members
         const { data: members, error: membersError } = await supabase
@@ -1200,6 +1217,172 @@ const TeamManagement = () => {
     }
   };
 
+  // Team branding functions
+  const uploadTeamLogo = async (file: File): Promise<string | null> => {
+    if (!teamId) {
+      toast.error('Team ID not found');
+      return null;
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please upload a valid image file (JPEG, PNG, WebP, GIF, or SVG)');
+      return null;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Logo file must be smaller than 5MB');
+      return null;
+    }
+
+    const fileExt = file.name.split('.').pop();
+    const filePath = `teams/${teamId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    
+    console.log('Uploading team logo to path:', filePath);
+    
+    try {
+      const { data, error } = await supabase.storage
+        .from('logos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+        
+      if (error) {
+        console.error('Team logo upload error:', error);
+        if (error.message.includes('bucket not found')) {
+          toast.error('Logos storage bucket not found. Please run the setup-logos-bucket.sql script in your Supabase SQL Editor.');
+        } else {
+          toast.error('Team logo upload failed: ' + error.message);
+        }
+        return null;
+      }
+      
+      const { data: publicUrlData } = supabase.storage
+        .from('logos')
+        .getPublicUrl(filePath);
+        
+      const publicUrl = publicUrlData?.publicUrl;
+      console.log('Generated team logo public URL:', publicUrl);
+      
+      if (!publicUrl) {
+        toast.error('Failed to generate public URL for uploaded logo');
+        return null;
+      }
+      
+      return publicUrl;
+    } catch (error) {
+      console.error('Unexpected error uploading team logo:', error);
+      toast.error('Failed to upload team logo');
+      return null;
+    }
+  };
+
+  const handleTeamLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setTeamLogoFile(file);
+    setIsUploadingLogo(true);
+    
+    try {
+      const uploadedUrl = await uploadTeamLogo(file);
+      if (uploadedUrl) {
+        setTeamLogoUrl(uploadedUrl);
+        console.log('Team logo uploaded successfully:', uploadedUrl);
+        toast.success('Team logo uploaded successfully');
+      } else {
+        toast.error('Failed to get team logo URL');
+      }
+    } catch (error) {
+      console.error('Team logo upload error:', error);
+      toast.error('Failed to upload team logo');
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const handleSaveTeamBranding = async () => {
+    if (!teamId || !canManageTeam) return;
+    
+    if (teamAgencyName.trim().length < 2) {
+      toast.error('Agency name must be at least 2 characters long');
+      return;
+    }
+    
+    setIsSavingBranding(true);
+    try {
+      console.log('Saving team branding:', {
+        teamId,
+        agencyName: teamAgencyName.trim(),
+        logoUrl: teamLogoUrl
+      });
+
+      const { error } = await supabase
+        .from('teams')
+        .update({
+          agency_name: teamAgencyName.trim(),
+          logo_url: teamLogoUrl || null, // Ensure null if empty string
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', teamId);
+
+      if (error) {
+        console.error('Error updating team branding:', error);
+        toast.error('Failed to update team branding: ' + error.message);
+        return;
+      }
+
+      console.log('Team branding updated successfully');
+      toast.success('Team branding updated successfully');
+      setIsEditingBranding(false);
+      
+      // Refresh the team data to show updated values
+      const { data: updatedTeam } = await supabase
+        .from('teams')
+        .select('name, logo_url, agency_name')
+        .eq('id', teamId)
+        .single();
+      
+      if (updatedTeam) {
+        setTeamAgencyName(updatedTeam.agency_name || updatedTeam.name || '');
+        setTeamLogoUrl(updatedTeam.logo_url || '');
+      }
+    } catch (error) {
+      console.error('Error saving team branding:', error);
+      toast.error('Failed to save team branding');
+    } finally {
+      setIsSavingBranding(false);
+    }
+  };
+
+  const handleCancelTeamBranding = () => {
+    // Reset to original values
+    if (teamId) {
+      // Reload team data to reset form
+      const fetchTeamData = async () => {
+        try {
+          const { data: team } = await supabase
+            .from('teams')
+            .select('name, logo_url, agency_name')
+            .eq('id', teamId)
+            .single();
+          
+          if (team) {
+            setTeamAgencyName(team.agency_name || team.name || '');
+            setTeamLogoUrl(team.logo_url || '');
+          }
+        } catch (error) {
+          console.error('Error reloading team data:', error);
+        }
+      };
+      fetchTeamData();
+    }
+    setIsEditingBranding(false);
+  };
+
   // Function to resend invitation link
   const handleResendEmail = async (invitationId: string, email: string) => {
     try {
@@ -1322,6 +1505,127 @@ const TeamManagement = () => {
             <p className="text-sm text-muted-foreground">
               Contact your team admin if you need to invite new team members.
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Team Branding - Only show for admin/owner */}
+      {canManageTeam && (
+        <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Building2 className="h-5 w-5 text-primary" />
+              Team Branding
+            </CardTitle>
+            <CardDescription>
+              Customize your agency name and logo for quotes and documents
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {isEditingBranding ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="agency-name" className="text-sm font-medium">Agency Name</Label>
+                  <Input
+                    id="agency-name"
+                    type="text"
+                    value={teamAgencyName}
+                    onChange={(e) => setTeamAgencyName(e.target.value)}
+                    placeholder="Enter your agency name"
+                    className="h-11 rounded-xl"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="team-logo" className="text-sm font-medium">Team Logo</Label>
+                  <div className="flex items-center gap-4">
+                    {teamLogoUrl && (
+                      <div className="relative">
+                        <img 
+                          src={teamLogoUrl} 
+                          alt="Team Logo" 
+                          className="w-auto h-16 rounded-lg border object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <Input
+                        id="team-logo"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleTeamLogoChange}
+                        disabled={isUploadingLogo}
+                        className="h-11 rounded-xl"
+                      />
+                      {isUploadingLogo && (
+                        <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading logo...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleSaveTeamBranding}
+                    disabled={isSavingBranding || teamAgencyName.trim().length < 2}
+                    className="px-6 bg-primary hover:bg-primary/90 rounded-xl"
+                  >
+                    {isSavingBranding ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={handleCancelTeamBranding}
+                    disabled={isSavingBranding}
+                    className="px-6 rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  {teamLogoUrl ? (
+                    <img 
+                      src={teamLogoUrl} 
+                      alt="Team Logo" 
+                      className="w-auto h-16 rounded-lg border object-cover"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg border bg-muted flex items-center justify-center">
+                      <Building2 className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <h4 className="font-medium">{teamAgencyName || 'No agency name set'}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {teamLogoUrl ? 'Logo uploaded' : 'No logo uploaded'}
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline"
+                    onClick={() => setIsEditingBranding(true)}
+                    className="px-4 rounded-xl"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

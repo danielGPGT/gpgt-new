@@ -98,6 +98,9 @@ import { PackageDetails } from '@/components/package-manager/PackageDetails';
 // Import custom icons
 import f1Icon from '@/assets/icons/f1.svg';
 import motogpIcon from '@/assets/icons/motogp.svg';
+import { useEffect} from 'react';
+import { hasTeamFeature } from '@/lib/teamUtils';
+import { Navigate } from 'react-router-dom';
 
 interface Filters {
   sport_ids?: string[];
@@ -111,6 +114,13 @@ interface Filters {
 }
 
 export default function PackageManager() {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    hasTeamFeature('package_manager_access').then(setAllowed);
+  }, []);
+
+  // Always call hooks in the same order
   const [filters, setFilters] = useState<Filters>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
@@ -147,33 +157,44 @@ export default function PackageManager() {
     },
   });
 
-  // Fetch data
+  // Fetch data (only if allowed)
   const { data: sports } = useQuery({
     queryKey: ['sports'],
     queryFn: () => PackageManagerService.getSports(),
+    enabled: allowed === true,
   });
 
   const { data: venues } = useQuery({
     queryKey: ['venues'],
     queryFn: () => PackageManagerService.getVenues(),
+    enabled: allowed === true,
   });
 
   const { data: events, isLoading } = useQuery({
     queryKey: ['events', filters],
     queryFn: () => PackageManagerService.getEvents(filters),
+    enabled: allowed === true,
   });
 
   const { data: packages } = useQuery({
     queryKey: ['packages', selectedEvent?.id],
     queryFn: () => selectedEvent ? PackageManagerService.getPackagesByEvent(selectedEvent.id) : null,
-    enabled: !!selectedEvent,
+    enabled: allowed === true && !!selectedEvent,
   });
 
   // Add query for all packages to get counts
   const { data: allPackages } = useQuery({
     queryKey: ['all-packages'],
     queryFn: () => PackageManagerService.getPackages(),
+    enabled: allowed === true,
   });
+
+  // Sorting
+  const [sortOption, setSortOption] = useState<'date-asc' | 'date-desc' | 'name-asc' | 'name-desc'>('date-asc');
+
+  // Only control what is rendered, not whether hooks are called
+  if (allowed === null) return null; // or loading spinner
+  if (!allowed) return <Navigate to="/dashboard" replace />;
 
   const filteredEvents = events?.filter(event => {
     // Search filter
@@ -223,7 +244,6 @@ export default function PackageManager() {
   }) || [];
 
   // Sorting
-  const [sortOption, setSortOption] = useState<'date-asc' | 'date-desc' | 'name-asc' | 'name-desc'>('date-asc');
   const sortedEvents = [...filteredEvents].sort((a, b) => {
     if (sortOption === 'date-asc') {
       const aTime = a.start_date ? new Date(a.start_date).getTime() : 0;

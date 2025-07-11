@@ -63,6 +63,12 @@ export interface Quote {
   clientId?: string;
   teamId?: string;
   consultantId?: string;
+  team?: {
+    id: string;
+    name: string;
+    logo_url?: string;
+    agency_name?: string;
+  };
   
   // Client Information
   clientName: string;
@@ -144,6 +150,7 @@ export interface Quote {
 
 // Quote creation data interface
 export interface CreateQuoteData {
+  clientId?: string;
   clientData: {
     firstName: string;
     lastName: string;

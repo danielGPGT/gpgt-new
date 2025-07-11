@@ -27,11 +27,12 @@ import {
   SlidersHorizontal,
   FilterX
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { PDFExportButton } from '@/components/PDFExportButton';
 import { QuoteService, QuoteResponse } from '@/lib/quoteService';
 import { useAuth } from '@/lib/AuthProvider';
+import { hasTeamFeature } from '@/lib/teamUtils';
 
 // Updated interface to match quote data structure
 interface QuoteItinerary {
@@ -53,7 +54,8 @@ interface QuoteItinerary {
   currency: string;
 }
 
-export function Itineraries() {
+export default function ItinerariesPage() {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
   const [itineraries, setItineraries] = useState<QuoteItinerary[]>([]);
   const [filteredItineraries, setFilteredItineraries] = useState<QuoteItinerary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,14 +70,23 @@ export function Itineraries() {
   const { user } = useAuth();
 
   useEffect(() => {
-    fetchAllItineraries();
+    hasTeamFeature('itineraries_access').then(setAllowed);
   }, []);
 
   useEffect(() => {
-    filterAndSortItineraries();
-  }, [itineraries, searchTerm, sortBy, filterDestination]);
+    if (allowed) {
+      fetchAllItineraries();
+    }
+  }, [allowed]);
+
+  useEffect(() => {
+    if (allowed) {
+      filterAndSortItineraries();
+    }
+  }, [itineraries, searchTerm, sortBy, filterDestination, allowed]);
 
   const fetchAllItineraries = async () => {
+    if (!allowed) return;
     setLoading(true);
     try {
       // Use QuoteService to get team-based quotes
@@ -105,6 +116,7 @@ export function Itineraries() {
   };
 
   const filterAndSortItineraries = () => {
+    if (!allowed) return;
     let filtered = [...itineraries];
 
     // Search filter
@@ -144,6 +156,7 @@ export function Itineraries() {
   };
 
   const handleDeleteItinerary = async (id: string) => {
+    if (!allowed) return;
     if (!confirm('Are you sure you want to delete this itinerary?')) return;
     
     try {
@@ -174,6 +187,7 @@ export function Itineraries() {
   };
 
   const getUniqueDestinations = () => {
+    if (!allowed) return [];
     const destinations = [...new Set(itineraries.map(it => it.destination))];
     return destinations.sort();
   };
@@ -198,6 +212,20 @@ export function Itineraries() {
   };
 
   const hasActiveFilters = searchTerm || filterDestination !== 'all' || sortBy !== 'date';
+
+  if (allowed === null) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!allowed) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   if (loading) {
     return (

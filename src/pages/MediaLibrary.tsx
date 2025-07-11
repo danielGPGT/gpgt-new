@@ -12,6 +12,8 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Loader2, Upload, Search, Edit, Trash2, RefreshCw, Eye, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { Navigate } from 'react-router-dom';
+import { hasTeamFeature } from '@/lib/teamUtils';
 
 import UnsplashSearch from '../components/UnsplashSearch';
 import { ImageProcessor } from '../lib/imageProcessor';
@@ -29,16 +31,33 @@ export default function MediaLibrary() {
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [editingItem, setEditingItem] = useState<MediaItem | null>(null);
   const [showUnsplashSearch, setShowUnsplashSearch] = useState(false);
+  const [canAccessMediaLibrary, setCanAccessMediaLibrary] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (user) {
-      loadMediaLibrary();
+    const checkAccess = async () => {
+      const hasAccess = await hasTeamFeature('media_library_access');
+      setCanAccessMediaLibrary(hasAccess);
+    };
+    checkAccess();
+  }, []);
+
+  // Define filterItems function before it's used in useEffect
+  const filterItems = () => {
+    let filtered = mediaItems;
+
+    if (searchTerm) {
+      filtered = filtered.filter(item =>
+        item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
     }
-  }, [user]);
 
-  useEffect(() => {
-    filterItems();
-  }, [mediaItems, searchTerm, selectedCategory]);
+    if (selectedCategory && selectedCategory !== 'all') {
+      filtered = filtered.filter(item => item.category === selectedCategory);
+    }
+
+    setFilteredItems(filtered);
+  };
 
   const loadMediaLibrary = async () => {
     if (!user) return;
@@ -58,22 +77,29 @@ export default function MediaLibrary() {
     }
   };
 
-  const filterItems = () => {
-    let filtered = mediaItems;
-
-    if (searchTerm) {
-      filtered = filtered.filter(item =>
-        item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+  useEffect(() => {
+    if (user && canAccessMediaLibrary) {
+      loadMediaLibrary();
     }
+  }, [user, canAccessMediaLibrary]);
 
-    if (selectedCategory && selectedCategory !== 'all') {
-      filtered = filtered.filter(item => item.category === selectedCategory);
-    }
+  useEffect(() => {
+    filterItems();
+  }, [mediaItems, searchTerm, selectedCategory]);
 
-    setFilteredItems(filtered);
-  };
+  // Show loading while checking access
+  if (canAccessMediaLibrary === null) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Redirect if no access
+  if (canAccessMediaLibrary === false) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

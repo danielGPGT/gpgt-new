@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,8 @@ import { InventoryService } from '@/lib/inventoryService';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
+import { hasTeamFeature } from '@/lib/teamUtils';
+import { Navigate } from 'react-router-dom';
 
 // Import inventory components (we'll create these next)
 import { TicketsManager } from '@/components/inventory/TicketsManager';
@@ -36,11 +38,17 @@ const tabOptions = [
 
 export default function InventoryPage() {
   const [tab, setTab] = useState(tabOptions[0].value);
+  const [allowed, setAllowed] = useState<boolean | null>(null);
 
-  // Fetch inventory summary
+  useEffect(() => {
+    hasTeamFeature('inventory_access').then(setAllowed);
+  }, []);
+
+  // Always call hooks in the same order
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['inventory-summary'],
     queryFn: () => InventoryService.getInventorySummary(),
+    enabled: allowed === true, // Only fetch if allowed
   });
 
   const summaryData: InventorySummary = summary || {
@@ -56,6 +64,9 @@ export default function InventoryPage() {
   const handleRefresh = () => {
     toast.success('Inventory refreshed');
   };
+
+  if (allowed === null) return null; // or loading spinner
+  if (!allowed) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="mx-auto py-4 px-8">

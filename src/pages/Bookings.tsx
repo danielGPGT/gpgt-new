@@ -8,12 +8,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUserTeamId } from '@/lib/teamUtils';
 import { BookingService, Booking } from '@/lib/bookingService';
-import { Calendar, MapPin, Users, DollarSign, Clock, Search, Filter, Download, Eye, Phone, Mail, CalendarDays, TrendingUp, ArrowUpRight, ArrowDownRight, CheckCircle, XCircle, AlertCircle, Edit, Trash2, MoreHorizontal, Plus, FileText, User, Building, CreditCard, Plane, Hotel, Car, Ticket } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Calendar, MapPin, Users, DollarSign, Clock, Search, Filter, Download, Eye, Phone, Mail, CalendarDays, TrendingUp, ArrowUpRight, ArrowDownRight, CheckCircle, XCircle, AlertCircle, Edit, Trash2, MoreHorizontal, Plus, FileText, User, Building, CreditCard, Plane, Hotel, Car, Ticket, Grid3X3, List } from 'lucide-react';
+import { Link, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { hasTeamFeature } from '@/lib/teamUtils';
 
 interface BookingWithDetails {
   id: string;
@@ -71,11 +73,13 @@ interface BookingWithDetails {
 }
 
 export default function Bookings() {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<BookingWithDetails[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('createdAt');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<BookingWithDetails | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -90,14 +94,6 @@ export default function Bookings() {
   const [newStatus, setNewStatus] = useState('');
   const [statusNotes, setStatusNotes] = useState('');
 
-  useEffect(() => {
-    loadBookings();
-  }, []);
-
-  useEffect(() => {
-    filterAndSortBookings();
-  }, [bookings, searchTerm, statusFilter, sortBy]);
-
   const loadBookings = async () => {
     try {
       setIsLoading(true);
@@ -105,7 +101,6 @@ export default function Bookings() {
       if (!teamId) {
         throw new Error('User not part of a team');
       }
-
       // Fetch bookings with related data
       const { data: bookingsData, error } = await supabase
         .from('bookings')
@@ -142,11 +137,9 @@ export default function Bookings() {
         `)
         .eq('team_id', teamId)
         .order('created_at', { ascending: false });
-
       if (error) {
         throw new Error(`Failed to fetch bookings: ${error.message}`);
       }
-
       setBookings(bookingsData || []);
     } catch (error) {
       console.error('Failed to load bookings:', error);
@@ -197,6 +190,21 @@ export default function Bookings() {
 
     setFilteredBookings(filtered);
   };
+
+  useEffect(() => {
+    loadBookings();
+  }, []);
+
+  useEffect(() => {
+    filterAndSortBookings();
+  }, [bookings, searchTerm, statusFilter, sortBy]);
+
+  useEffect(() => {
+    hasTeamFeature('bookings_access').then(setAllowed);
+  }, []);
+
+  if (allowed === null) return null; // or loading spinner
+  if (!allowed) return <Navigate to="/dashboard" replace />;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -505,14 +513,34 @@ export default function Bookings() {
                 <SelectItem value="bookingReference">Booking Reference</SelectItem>
               </SelectContent>
             </Select>
-            <Button 
-              variant="outline" 
-              onClick={loadBookings} 
-              disabled={isLoading}
-              className="rounded-xl px-6"
-            >
-              {isLoading ? 'Loading...' : 'Refresh'}
-            </Button>
+            <div className="flex gap-2">
+              <div className="flex border border-input rounded-xl overflow-hidden">
+                <Button
+                  variant={viewMode === 'cards' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('cards')}
+                  className="rounded-none border-0"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'table' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('table')}
+                  className="rounded-none border-0"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={loadBookings} 
+                disabled={isLoading}
+                className="rounded-xl px-6"
+              >
+                {isLoading ? 'Loading...' : 'Refresh'}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -534,7 +562,7 @@ export default function Bookings() {
               <h3 className="text-lg font-semibold mb-3">Loading bookings...</h3>
               <p className="text-muted-foreground">Please wait while we fetch your booking data</p>
             </div>
-          ) : filteredBookings.length > 0 ? (
+          ) : filteredBookings.length > 0 ? viewMode === 'cards' ? (
             <div className="space-y-4">
               {filteredBookings.map((booking) => (
                 <Card key={booking.id} className="pt-0 pb-0 group hover:shadow-lg transition-all duration-300 overflow-hidden border border-border/50 bg-gradient-to-r from-card/95 to-background/20">
@@ -801,6 +829,121 @@ export default function Bookings() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Booking Reference</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Total Price</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Travelers</TableHead>
+                    <TableHead>Components</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredBookings.map((booking) => (
+                    <TableRow key={booking.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{booking.booking_reference}</div>
+                          <div className="text-sm text-muted-foreground">#{booking.id.slice(0, 8)}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{booking.quote?.client_name || 'Not specified'}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{booking.quote?.event_name || 'Not specified'}</div>
+                          {booking.quote?.event_location && (
+                            <div className="text-sm text-muted-foreground">{booking.quote.event_location}</div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusColor(booking.status)}>
+                          {getStatusIcon(booking.status)}
+                          <span className="ml-1 capitalize">{booking.status.replace('_', ' ')}</span>
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">
+                          {formatCurrency(booking.total_price, booking.currency)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{getTimeAgo(booking.created_at)}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(booking.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {booking.travelers && booking.travelers.length > 0 ? (
+                          <div className="flex items-center gap-1">
+                            <User className="h-4 w-4" />
+                            <span>{booking.travelers.length}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {booking.components && booking.components.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {booking.components.slice(0, 2).map((component, index) => (
+                              <div key={index} className="flex items-center gap-1 text-xs bg-muted px-1 py-0.5 rounded">
+                                {getComponentIcon(component.component_type)}
+                                <span>{component.quantity}</span>
+                              </div>
+                            ))}
+                            {booking.components.length > 2 && (
+                              <span className="text-xs text-muted-foreground">+{booking.components.length - 2}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="outline" size="sm" asChild>
+                            <Link to={`/booking/${booking.id}`}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleEditBooking(booking)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                              setSelectedBooking(booking);
+                              setNewStatus('');
+                              setStatusNotes('');
+                              setIsStatusDialogOpen(true);
+                            }}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           ) : (
             <div className="text-center py-16">

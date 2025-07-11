@@ -173,3 +173,27 @@ export async function canManageTeam(teamId: string): Promise<boolean> {
     return false;
   }
 } 
+
+/**
+ * Check if the current user's team has a specific feature enabled
+ */
+export async function hasTeamFeature(featureName: string): Promise<boolean> {
+  try {
+    const team = await getCurrentUserTeam();
+    if (!team?.id) return false;
+    const { data, error } = await supabase
+      .from('team_features')
+      .select('enabled')
+      .eq('team_id', team.id)
+      .eq('feature_name', featureName)
+      .single();
+    if (error) {
+      console.error('Error checking team feature:', error);
+      return false;
+    }
+    return !!data?.enabled;
+  } catch (error) {
+    console.error('Error in hasTeamFeature:', error);
+    return false;
+  }
+} 

@@ -19,6 +19,7 @@ import {
   Download, 
   Calendar, 
   Users, 
+  User,
   DollarSign, 
   MapPin,
   Loader2,
@@ -39,9 +40,12 @@ import {
   Square
 } from 'lucide-react';
 import { QuoteService } from '@/lib/quoteService';
+import { downloadQuotePDF } from '@/lib/pdfService';
 import { Quote } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { hasTeamFeature } from '@/lib/teamUtils';
+import { supabase } from '@/lib/supabase';
 
 export function Quotes() {
   const navigate = useNavigate();
@@ -60,6 +64,7 @@ export function Quotes() {
   const [quoteToDuplicate, setQuoteToDuplicate] = useState<Quote | null>(null);
   const [duplicateNotes, setDuplicateNotes] = useState('');
   const [duplicateLoading, setDuplicateLoading] = useState(false);
+  const [viewScope, setViewScope] = useState<'team' | 'user'>('team');
   const [stats, setStats] = useState({
     total: 0,
     draft: 0,
@@ -69,13 +74,25 @@ export function Quotes() {
     expired: 0,
     totalValue: 0
   });
+  const [hasTeamAccess, setHasTeamAccess] = useState(false);
 
   const itemsPerPage = 20;
 
   useEffect(() => {
     loadQuotes();
     loadStats();
-  }, [currentPage, statusFilter]);
+  }, [currentPage, statusFilter, viewScope]);
+
+  useEffect(() => {
+    checkTeamAccess();
+  }, []);
+
+  // Force user view if team access is lost
+  useEffect(() => {
+    if (!hasTeamAccess && viewScope === 'team') {
+      setViewScope('user');
+    }
+  }, [hasTeamAccess, viewScope]);
 
   useEffect(() => {
     // Debounce search
@@ -88,13 +105,20 @@ export function Quotes() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm]);
+  }, [searchTerm, viewScope]);
 
   const loadQuotes = async () => {
     try {
       setLoading(true);
       const offset = (currentPage - 1) * itemsPerPage;
-      const result = await QuoteService.getTeamQuotes(statusFilter === 'all' ? undefined : statusFilter, itemsPerPage, offset);
+      
+      let result;
+      if (viewScope === 'user') {
+        result = await QuoteService.getUserQuotes(statusFilter === 'all' ? undefined : statusFilter, itemsPerPage, offset);
+      } else {
+        result = await QuoteService.getTeamQuotes(statusFilter === 'all' ? undefined : statusFilter, itemsPerPage, offset);
+      }
+      
       setQuotes(result.quotes);
       setTotalQuotes(result.total);
       setSelectedQuotes(new Set()); // Clear selections when loading new data
@@ -117,7 +141,7 @@ export function Quotes() {
   const performSearch = async () => {
     try {
       setLoading(true);
-      const result = await QuoteService.searchQuotes(searchTerm, statusFilter === 'all' ? undefined : statusFilter);
+      const result = await QuoteService.searchQuotes(searchTerm, statusFilter === 'all' ? undefined : statusFilter, itemsPerPage, 0, viewScope);
       setQuotes(result.quotes);
       setTotalQuotes(result.total);
       setSelectedQuotes(new Set()); // Clear selections when searching
@@ -125,6 +149,16 @@ export function Quotes() {
       setError(err instanceof Error ? err.message : 'Failed to search quotes');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkTeamAccess = async () => {
+    const access = await hasTeamFeature('team_quotes');
+    setHasTeamAccess(access);
+    
+    // If user doesn't have team access, force them to "My Quotes" view
+    if (!access && viewScope === 'team') {
+      setViewScope('user');
     }
   };
 
@@ -195,6 +229,107 @@ export function Quotes() {
       toast.error('Failed to send quote');
     } finally {
       setBulkActionLoading(false);
+    }
+  };
+
+  const handleDownloadPDF = async (quote: Quote) => {
+    try {
+      // Fetch transfer details from database
+      const fetchTransferDetails = async () => {
+        const components = [];
+        
+        if (quote.selectedComponents?.tickets) {
+          components.push(...quote.selectedComponents.tickets);
+        }
+        if (quote.selectedComponents?.hotels) {
+          components.push(...quote.selectedComponents.hotels);
+        }
+        if (quote.selectedComponents?.flights) {
+          components.push(...quote.selectedComponents.flights);
+        }
+        if (quote.selectedComponents?.loungePass) {
+          components.push(quote.selectedComponents.loungePass);
+        }
+        
+        // Fetch circuit transfer details
+        if (quote.selectedComponents?.circuitTransfers) {
+          const circuitIds = quote.selectedComponents.circuitTransfers.map((t: any) => t.id);
+          if (circuitIds.length > 0) {
+            const { data: circuitData } = await supabase
+              .from('circuit_transfers')
+              .select('*')
+              .in('id', circuitIds);
+            
+            const circuitTransfersWithDetails = quote.selectedComponents.circuitTransfers.map((transfer: any) => {
+              const details = circuitData?.find((c: any) => c.id === transfer.id);
+              return {
+                ...transfer,
+                component_type: 'circuit_transfer',
+                transfer_type: details?.transfer_type || 'coach',
+                days: details?.days || 1
+              };
+            });
+            components.push(...circuitTransfersWithDetails);
+          }
+        }
+        
+        // Fetch airport transfer details
+        if (quote.selectedComponents?.airportTransfers) {
+          const airportIds = quote.selectedComponents.airportTransfers.map((t: any) => t.id);
+          if (airportIds.length > 0) {
+            const { data: airportData } = await supabase
+              .from('airport_transfers')
+              .select('*')
+              .in('id', airportIds);
+            
+            const airportTransfersWithDetails = quote.selectedComponents.airportTransfers.map((transfer: any) => {
+              const details = airportData?.find((a: any) => a.id === transfer.id);
+              return {
+                ...transfer,
+                component_type: 'airport_transfer',
+                transport_type: details?.transport_type || 'hotel_chauffeur'
+              };
+            });
+            components.push(...airportTransfersWithDetails);
+          }
+        }
+        
+        return components.filter(component => component && typeof component === 'object');
+      };
+
+      // Convert Quote to QuoteData format
+      const quoteData = {
+        quote_number: quote.quoteNumber,
+        created_at: quote.createdAt,
+        status: quote.status,
+        client_name: quote.clientName,
+        client_email: quote.clientEmail,
+        client_phone: quote.clientPhone,
+        event_name: quote.eventName,
+        event_location: quote.eventLocation,
+        event_start_date: quote.eventStartDate,
+        event_end_date: quote.eventEndDate,
+        package_name: quote.packageName,
+        tier_name: quote.tierName,
+        travelers: [], // Convert travelers object to array if needed
+        travelers_total: quote.travelersTotal,
+        total_price: quote.totalPrice,
+        currency: quote.currency,
+        payment_deposit: quote.paymentDeposit,
+        payment_second_payment: quote.paymentSecondPayment,
+        payment_final_payment: quote.paymentFinalPayment,
+        payment_deposit_date: quote.paymentDepositDate,
+        payment_second_payment_date: quote.paymentSecondPaymentDate,
+        payment_final_payment_date: quote.paymentFinalPaymentDate,
+        team: quote.team,
+        selected_components: await fetchTransferDetails()
+      };
+      
+      await downloadQuotePDF(quoteData);
+      toast.success('PDF downloaded successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
     }
   };
 
@@ -342,6 +477,38 @@ export function Quotes() {
           <Plus className="h-4 w-4" />
           Create New Quote
         </Button>
+      </div>
+
+      {/* View Toggle */}
+      <div className="flex items-center justify-start gap-4">
+        <div className="flex border border-input rounded-xl overflow-hidden bg-background">
+          <Button
+            variant={viewScope === 'user' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewScope('user')}
+            className="rounded-none border-0 px-6"
+          >
+            <User className="h-4 w-4 mr-2" />
+            My Quotes
+          </Button>
+          {hasTeamAccess && (
+            <Button
+              variant={viewScope === 'team' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewScope('team')}
+              className="rounded-none border-0 px-6"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Team Quotes
+            </Button>
+          )}
+        </div>
+        {!hasTeamAccess && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="h-4 w-4" />
+            <span>Team quotes access not available</span>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -672,6 +839,7 @@ export function Quotes() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => handleDownloadPDF(quote)}
                       className="flex-1 rounded-lg h-8 text-xs"
                     >
                       <Download className="h-3 w-3 mr-1" />

@@ -40,6 +40,7 @@ import {
 import gpgtLogoDark from "@/assets/imgs/gpgt_logo_dark.svg";
 import gpgtLogoLight from "@/assets/imgs/gpgt_logo_light.svg";
 import { useTheme } from "@/components/ThemeProvider";
+import { hasTeamFeature } from '@/lib/teamUtils';
 
 // Logo Component
 const Logo = ({ className, darkMode }: { className?: string; darkMode?: boolean }) => (
@@ -59,6 +60,19 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
   const { user } = useAuth();
   const location = useLocation();
   const { theme } = useTheme();
+  const [canSeeInventory, setCanSeeInventory] = useState(false);
+  const [canSeePackageManager, setCanSeePackageManager] = useState(false);
+  const [canSeeBookings, setCanSeeBookings] = useState(false);
+  const [canSeeItineraries, setCanSeeItineraries] = useState(false);
+  const [canSeeMediaLibrary, setCanSeeMediaLibrary] = useState(false);
+
+  useEffect(() => {
+    hasTeamFeature('inventory_access').then(setCanSeeInventory);
+    hasTeamFeature('package_manager_access').then(setCanSeePackageManager);
+    hasTeamFeature('bookings_access').then(setCanSeeBookings);
+    hasTeamFeature('itineraries_access').then(setCanSeeItineraries);
+    hasTeamFeature('media_library_access').then(setCanSeeMediaLibrary);
+  }, []);
 
   const handleToggleCollapse = () => {
     if (onCollapsedChange) {
@@ -113,6 +127,9 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
       <nav className="flex-1 px-2 py-4">
         <div className="space-y-1">
           {navItems.map((item) => {
+            if (item.label === "Bookings" && !canSeeBookings) return null;
+            if (item.label === "Itineraries" && !canSeeItineraries) return null;
+            if (item.label === "Media Library" && !canSeeMediaLibrary) return null;
             const active = location.pathname === item.href;
             return (
               <Link to={item.href} key={item.href} tabIndex={collapsed ? -1 : 0}>
@@ -166,38 +183,42 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
 
         {/* Inventory Section */}
         <div className="mt-6">
-          {!collapsed && (
+          {(!collapsed && (canSeeInventory || canSeePackageManager)) && (
             <div className="px-3 py-1 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
               Inventory
             </div>
           )}
           <div className="space-y-1 mt-1">
-            <Link to="/inventory" tabIndex={collapsed ? -1 : 0}>
-              <Button
-                variant="ghost"
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                  location.pathname.startsWith('/inventory')
-                    ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] font-semibold"
-                    : "text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]"
-                } ${collapsed ? "justify-center px-2" : "justify-start"}`}
-              >
-                <PackageIcon className="w-5 h-5" />
-                {!collapsed && <span className="truncate flex-1 text-left">Inventory</span>}
-              </Button>
-            </Link>
-            <Link to="/package-manager" tabIndex={collapsed ? -1 : 0}>
-              <Button
-                variant="ghost"
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                  location.pathname.startsWith('/package-manager')
-                    ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] font-semibold"
-                    : "text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]"
-                } ${collapsed ? "justify-center px-2" : "justify-start"}`}
-              >
-                <Trophy className="w-5 h-5" />
-                {!collapsed && <span className="truncate flex-1 text-left">Package Manager</span>}
-              </Button>
-            </Link>
+            {canSeeInventory && (
+              <Link to="/inventory" tabIndex={collapsed ? -1 : 0}>
+                <Button
+                  variant="ghost"
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                    location.pathname.startsWith('/inventory')
+                      ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] font-semibold"
+                      : "text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]"
+                  } ${collapsed ? "justify-center px-2" : "justify-start"}`}
+                >
+                  <PackageIcon className="w-5 h-5" />
+                  {!collapsed && <span className="truncate flex-1 text-left">Inventory</span>}
+                </Button>
+              </Link>
+            )}
+            {canSeePackageManager && (
+              <Link to="/package-manager" tabIndex={collapsed ? -1 : 0}>
+                <Button
+                  variant="ghost"
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                    location.pathname.startsWith('/package-manager')
+                      ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] font-semibold"
+                      : "text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]"
+                  } ${collapsed ? "justify-center px-2" : "justify-start"}`}
+                >
+                  <Trophy className="w-5 h-5" />
+                  {!collapsed && <span className="truncate flex-1 text-left">Package Manager</span>}
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </nav>

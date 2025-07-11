@@ -8,7 +8,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import NewProposal from "./pages/NewProposal";
-import { Itineraries } from "./pages/Itineraries";
+import ItinerariesPage from "./pages/Itineraries";
 import ViewItinerary from "./pages/ViewItinerary";
 import EditItinerary from "./pages/EditItinerary";
 import { Dashboard } from "./pages/Dashboard";
@@ -112,7 +112,7 @@ function AppContent() {
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/new-proposal" element={<NewProposal />} />
                   <Route path="/new-trip" element={<div>New Trip Page (Coming Soon)</div>} />
-                  <Route path="/itineraries" element={<Itineraries />} />
+                  <Route path="/itineraries" element={<ItinerariesPage />} />
                   <Route path="/itinerary/:id" element={<ViewItinerary />} />
                   <Route path="/edit-itinerary/:id" element={<EditItinerary />} />
                   <Route path="/quote-test" element={<QuoteTest />} />

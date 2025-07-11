@@ -59,6 +59,7 @@ import {
   Info
 } from 'lucide-react';
 import { QuoteService } from '@/lib/quoteService';
+import { downloadQuotePDF } from '@/lib/pdfService';
 import { Quote, QuoteDetails, QuoteActivity } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -215,9 +216,107 @@ export function ViewQuote() {
     }
   };
 
-  const handleDownloadPDF = () => {
-    // TODO: Implement PDF generation
-    toast.info('PDF download feature coming soon');
+  const handleDownloadPDF = async () => {
+    if (!quoteDetails?.quote) {
+      toast.error('Quote data not available');
+      return;
+    }
+    
+    try {
+      // Convert Quote to QuoteData format
+      const quoteData = {
+        quote_number: quoteDetails.quote.quoteNumber,
+        created_at: quoteDetails.quote.createdAt,
+        status: quoteDetails.quote.status,
+        client_name: quoteDetails.quote.clientName,
+        client_email: quoteDetails.quote.clientEmail,
+        client_phone: quoteDetails.quote.clientPhone,
+        event_name: quoteDetails.quote.eventName,
+        event_location: quoteDetails.quote.eventLocation,
+        event_start_date: quoteDetails.quote.eventStartDate,
+        event_end_date: quoteDetails.quote.eventEndDate,
+        package_name: quoteDetails.quote.packageName,
+        tier_name: quoteDetails.quote.tierName,
+        travelers: [], // Convert travelers object to array if needed
+        travelers_total: quoteDetails.quote.travelersTotal,
+        total_price: quoteDetails.quote.totalPrice,
+        currency: quoteDetails.quote.currency,
+        payment_deposit: quoteDetails.quote.paymentDeposit,
+        payment_second_payment: quoteDetails.quote.paymentSecondPayment,
+        payment_final_payment: quoteDetails.quote.paymentFinalPayment,
+        payment_deposit_date: quoteDetails.quote.paymentDepositDate,
+        payment_second_payment_date: quoteDetails.quote.paymentSecondPaymentDate,
+        payment_final_payment_date: quoteDetails.quote.paymentFinalPaymentDate,
+        team: quoteDetails.quote.team,
+        selected_components: await (async () => {
+          const components = [];
+          
+          if (quoteDetails.quote.selectedComponents?.tickets) {
+            components.push(...quoteDetails.quote.selectedComponents.tickets);
+          }
+          if (quoteDetails.quote.selectedComponents?.hotels) {
+            components.push(...quoteDetails.quote.selectedComponents.hotels);
+          }
+          if (quoteDetails.quote.selectedComponents?.flights) {
+            components.push(...quoteDetails.quote.selectedComponents.flights);
+          }
+          if (quoteDetails.quote.selectedComponents?.loungePass) {
+            components.push(quoteDetails.quote.selectedComponents.loungePass);
+          }
+          
+          // Fetch circuit transfer details
+          if (quoteDetails.quote.selectedComponents?.circuitTransfers) {
+            const circuitIds = quoteDetails.quote.selectedComponents.circuitTransfers.map((t: any) => t.id);
+            if (circuitIds.length > 0) {
+              const { data: circuitData } = await supabase
+                .from('circuit_transfers')
+                .select('*')
+                .in('id', circuitIds);
+              
+              const circuitTransfersWithDetails = quoteDetails.quote.selectedComponents.circuitTransfers.map((transfer: any) => {
+                const details = circuitData?.find((c: any) => c.id === transfer.id);
+                return {
+                  ...transfer,
+                  component_type: 'circuit_transfer',
+                  transfer_type: details?.transfer_type || 'coach',
+                  days: details?.days || 1
+                };
+              });
+              components.push(...circuitTransfersWithDetails);
+            }
+          }
+          
+          // Fetch airport transfer details
+          if (quoteDetails.quote.selectedComponents?.airportTransfers) {
+            const airportIds = quoteDetails.quote.selectedComponents.airportTransfers.map((t: any) => t.id);
+            if (airportIds.length > 0) {
+              const { data: airportData } = await supabase
+                .from('airport_transfers')
+                .select('*')
+                .in('id', airportIds);
+              
+              const airportTransfersWithDetails = quoteDetails.quote.selectedComponents.airportTransfers.map((transfer: any) => {
+                const details = airportData?.find((a: any) => a.id === transfer.id);
+                return {
+                  ...transfer,
+                  component_type: 'airport_transfer',
+                  transport_type: details?.transport_type || 'hotel_chauffeur'
+                };
+              });
+              components.push(...airportTransfersWithDetails);
+            }
+          }
+          
+          return components.filter(component => component && typeof component === 'object');
+        })()
+      };
+      
+      await downloadQuotePDF(quoteData);
+      toast.success('PDF downloaded successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
+    }
   };
 
   const handlePrint = () => {

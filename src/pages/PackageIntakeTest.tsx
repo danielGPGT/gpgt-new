@@ -358,7 +358,28 @@ function roundUpHundredMinusTwo(n: number) {
   const loungePass = components.loungePass;
   const loungePassTotal = loungePass && loungePass.id ? (loungePass.price || 0) * (loungePass.quantity || 1) : 0;
   const originalTotal = ticketsTotal + hotelsTotal + circuitTransfersTotal + airportTransfersTotal + flightsTotal + loungePassTotal;
-  const roundedTotal = roundUpHundredMinusTwo(originalTotal);
+  
+  // Apply hidden 10% markup for teams other than the specific team ID
+  const [teamId, setTeamId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const getTeamId = async () => {
+      try {
+        const { getCurrentUserTeamId } = await import('@/lib/teamUtils');
+        const id = await getCurrentUserTeamId();
+        setTeamId(id);
+      } catch (error) {
+        console.error('Error getting team ID:', error);
+        setTeamId(null);
+      }
+    };
+    getTeamId();
+  }, []);
+  
+  // Apply 10% markup for all teams except the specific team ID
+  const markupMultiplier = teamId && teamId !== '0cef0867-1b40-4de1-9936-16b867a753d7' ? 1.10 : 1.00;
+  const totalWithMarkup = originalTotal * markupMultiplier;
+  const roundedTotal = roundUpHundredMinusTwo(totalWithMarkup);
 
     // Currency conversion effect
     useEffect(() => {
@@ -1138,7 +1159,39 @@ export function SummaryStep({ form, isGenerating }: { form: any, isGenerating: b
   const loungePass = components.loungePass;
   const loungePassTotal = loungePass && loungePass.id ? (loungePass.price || 0) * (loungePass.quantity || 1) : 0;
   const originalTotal = ticketsTotal + hotelsTotal + circuitTransfersTotal + airportTransfersTotal + flightsTotal + loungePassTotal;
-  const roundedTotal = roundUpHundredMinusTwo(originalTotal);
+  
+  // Apply hidden 10% markup for teams other than the specific team ID
+  const [teamId, setTeamId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const getTeamId = async () => {
+      try {
+        const { getCurrentUserTeamId } = await import('@/lib/teamUtils');
+        const id = await getCurrentUserTeamId();
+        setTeamId(id);
+      } catch (error) {
+        console.error('Error getting team ID:', error);
+        setTeamId(null);
+      }
+    };
+    getTeamId();
+  }, []);
+  
+  // Apply 10% markup for all teams except the specific team ID
+  const markupMultiplier = teamId && teamId !== '0cef0867-1b40-4de1-9936-16b867a753d7' ? 1.10 : 1.00;
+  const totalWithMarkup = originalTotal * markupMultiplier;
+  const roundedTotal = roundUpHundredMinusTwo(totalWithMarkup);
+
+  // Debug log (only in development)
+  if (process.env.NODE_ENV === 'development' && markupMultiplier > 1.00) {
+    console.log('💰 Team markup applied (SummaryStep):', {
+      teamId,
+      originalTotal: originalTotal.toFixed(2),
+      markupMultiplier,
+      totalWithMarkup: totalWithMarkup.toFixed(2),
+      roundedTotal: roundedTotal.toFixed(2)
+    });
+  }
   
   // Calculate payment breakdown - ensure they add up exactly to total
   const deposit = Math.round((roundedTotal / 3) * 100) / 100;

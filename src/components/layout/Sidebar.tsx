@@ -85,7 +85,6 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
   // CRM section
   const crmItems = [
     { label: "Clients", icon: Users, href: "/crm" },
-    { label: "New Client", icon: User, href: "/crm/new-client" },
     { label: "Integrations", icon: Building2, href: "/integrations" },
   ];
 

@@ -35,37 +35,20 @@ CREATE TABLE public.billing_history (
   billing_reason text CHECK (billing_reason = ANY (ARRAY['subscription_cycle'::text, 'subscription_create'::text, 'subscription_update'::text, 'subscription_threshold'::text, 'manual'::text])),
   created_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.booking_activity_log (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  booking_id uuid NOT NULL,
-  activity_type text NOT NULL,
-  activity_description text,
-  performed_by uuid,
-  performed_at timestamp with time zone DEFAULT now(),
-  metadata jsonb,
-  CONSTRAINT booking_activity_log_pkey PRIMARY KEY (id),
-  CONSTRAINT booking_activity_log_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES auth.users(id),
-  CONSTRAINT booking_activity_log_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
-);
 CREATE TABLE public.booking_components (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   booking_id uuid NOT NULL,
   component_type text NOT NULL CHECK (component_type = ANY (ARRAY['ticket'::text, 'hotel_room'::text, 'circuit_transfer'::text, 'airport_transfer'::text, 'flight'::text, 'lounge_pass'::text])),
   component_id uuid,
   component_name text,
-  component_description text,
-  quantity integer NOT NULL DEFAULT 1,
-  unit_price numeric NOT NULL,
-  total_price numeric NOT NULL,
-  booking_status text DEFAULT 'pending'::text CHECK (booking_status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text, 'refunded'::text])),
-  supplier_confirmed boolean DEFAULT false,
-  supplier_confirmed_at timestamp with time zone,
-  supplier_name text,
-  supplier_ref text,
-  supplier_booking_ref text,
+  quantity integer,
+  unit_price numeric,
+  total_price numeric,
   component_data jsonb,
+  component_snapshot jsonb,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp with time zone,
   CONSTRAINT booking_components_pkey PRIMARY KEY (id),
   CONSTRAINT booking_components_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
@@ -75,7 +58,8 @@ CREATE TABLE public.booking_payments (
   payment_type text NOT NULL CHECK (payment_type = ANY (ARRAY['deposit'::text, 'second_payment'::text, 'final_payment'::text, 'additional'::text])),
   payment_number integer NOT NULL,
   amount numeric NOT NULL,
-  due_date date NOT NULL,
+  currency text DEFAULT 'GBP'::text,
+  due_date date,
   paid boolean DEFAULT false,
   paid_at timestamp with time zone,
   payment_reference text,
@@ -83,6 +67,7 @@ CREATE TABLE public.booking_payments (
   notes text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp with time zone,
   CONSTRAINT booking_payments_pkey PRIMARY KEY (id),
   CONSTRAINT booking_payments_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
@@ -90,7 +75,6 @@ CREATE TABLE public.booking_travelers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   booking_id uuid NOT NULL,
   traveler_type text NOT NULL CHECK (traveler_type = ANY (ARRAY['lead'::text, 'guest'::text])),
-  traveler_number integer NOT NULL,
   first_name text NOT NULL,
   last_name text NOT NULL,
   email text,
@@ -103,55 +87,76 @@ CREATE TABLE public.booking_travelers (
   special_requests text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp with time zone,
   CONSTRAINT booking_travelers_pkey PRIMARY KEY (id),
   CONSTRAINT booking_travelers_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
 CREATE TABLE public.bookings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  quote_id uuid NOT NULL,
-  user_id uuid NOT NULL,
-  team_id uuid,
-  client_id uuid,
-  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text, 'completed'::text, 'refunded'::text])),
-  deposit_paid boolean DEFAULT false,
-  deposit_paid_at timestamp with time zone,
-  deposit_amount numeric,
-  deposit_reference text,
-  lead_traveler_name text NOT NULL,
-  lead_traveler_email text,
-  lead_traveler_phone text,
-  guest_travelers jsonb,
+  booking_reference text NOT NULL UNIQUE,
+  quote_id uuid,
+  parent_quote_id uuid,
+  quote_version integer,
   event_id uuid,
-  event_name text,
-  event_location text,
-  event_start_date date,
-  event_end_date date,
-  package_id uuid,
-  package_name text,
-  tier_id uuid,
-  tier_name text,
-  total_cost numeric NOT NULL,
+  client_id uuid,
+  consultant_id uuid,
+  user_id uuid,
+  team_id uuid,
+  status text NOT NULL CHECK (status = ANY (ARRAY['draft'::text, 'provisional'::text, 'pending_payment'::text, 'confirmed'::text, 'cancelled'::text, 'completed'::text, 'refunded'::text])),
+  total_price numeric NOT NULL,
   currency text DEFAULT 'GBP'::text,
-  original_payment_schedule jsonb,
-  adjusted_payment_schedule jsonb,
-  payment_terms text,
-  selected_components jsonb,
-  component_availability jsonb,
-  supplier_refs jsonb,
-  booking_notes text,
-  internal_notes text,
-  special_requests text,
+  payment_schedule_snapshot jsonb,
+  package_snapshot jsonb,
+  provisional_expires_at timestamp with time zone,
+  provisional_reason text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
-  confirmed_at timestamp with time zone,
-  cancelled_at timestamp with time zone,
+  deleted_at timestamp with time zone,
+  lead_traveler_id uuid,
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
+  CONSTRAINT bookings_quote_id_fkey FOREIGN KEY (quote_id) REFERENCES public.quotes(id),
+  CONSTRAINT bookings_lead_traveler_id_fkey FOREIGN KEY (lead_traveler_id) REFERENCES public.booking_travelers(id),
   CONSTRAINT bookings_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id),
+  CONSTRAINT bookings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT bookings_consultant_id_fkey FOREIGN KEY (consultant_id) REFERENCES public.team_members(id),
   CONSTRAINT bookings_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id),
   CONSTRAINT bookings_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
-  CONSTRAINT bookings_package_id_fkey FOREIGN KEY (package_id) REFERENCES public.packages(id),
-  CONSTRAINT bookings_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES public.package_tiers(id),
-  CONSTRAINT bookings_quote_id_fkey FOREIGN KEY (quote_id) REFERENCES public.quotes(id)
+  CONSTRAINT bookings_parent_quote_id_fkey FOREIGN KEY (parent_quote_id) REFERENCES public.quotes(id)
+);
+CREATE TABLE public.bookings_flights (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  booking_id uuid NOT NULL,
+  source_flight_id uuid,
+  api_source text,
+  ticketing_deadline date,
+  booking_pnr text,
+  flight_status text CHECK (flight_status = ANY (ARRAY['Booked - Ticketed - Paid'::text, 'Booked - Ticketed - Not Paid'::text, 'Booked - Not Ticketed'::text])),
+  flight_details jsonb NOT NULL,
+  quantity integer NOT NULL DEFAULT 1,
+  unit_price numeric NOT NULL,
+  total_price numeric NOT NULL,
+  currency text DEFAULT 'GBP'::text,
+  refundable boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp with time zone,
+  CONSTRAINT bookings_flights_pkey PRIMARY KEY (id),
+  CONSTRAINT bookings_flights_source_flight_id_fkey FOREIGN KEY (source_flight_id) REFERENCES public.flights(id),
+  CONSTRAINT bookings_flights_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
+);
+CREATE TABLE public.bookings_lounge_passes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  booking_id uuid NOT NULL,
+  lounge_pass_id uuid,
+  booking_reference text,
+  quantity integer,
+  unit_price numeric,
+  total_price numeric,
+  created_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp with time zone,
+  CONSTRAINT bookings_lounge_passes_pkey PRIMARY KEY (id),
+  CONSTRAINT bookings_lounge_passes_lounge_pass_id_fkey FOREIGN KEY (lounge_pass_id) REFERENCES public.lounge_passes(id),
+  CONSTRAINT bookings_lounge_passes_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
 CREATE TABLE public.circuit_transfers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -189,8 +194,8 @@ CREATE TABLE public.circuit_transfers (
   notes text,
   created_at timestamp without time zone DEFAULT now(),
   updated_at timestamp without time zone DEFAULT now(),
-  CONSTRAINT circuit_transfers_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
-  CONSTRAINT circuit_transfers_hotel_id_fkey FOREIGN KEY (hotel_id) REFERENCES public.gpgt_hotels(id)
+  CONSTRAINT circuit_transfers_hotel_id_fkey FOREIGN KEY (hotel_id) REFERENCES public.gpgt_hotels(id),
+  CONSTRAINT circuit_transfers_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id)
 );
 CREATE TABLE public.client_interactions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -224,7 +229,7 @@ CREATE TABLE public.clients (
   team_id uuid,
   first_name text NOT NULL,
   last_name text NOT NULL,
-  email text,
+  email text UNIQUE,
   phone text,
   company text,
   job_title text,
@@ -256,8 +261,8 @@ CREATE TABLE public.event_consultants (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT event_consultants_pkey PRIMARY KEY (id),
-  CONSTRAINT event_consultants_consultant_id_fkey FOREIGN KEY (consultant_id) REFERENCES public.team_members(id),
   CONSTRAINT event_consultants_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
+  CONSTRAINT event_consultants_consultant_id_fkey FOREIGN KEY (consultant_id) REFERENCES public.team_members(id),
   CONSTRAINT event_consultants_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.events (
@@ -272,9 +277,9 @@ CREATE TABLE public.events (
   event_image jsonb,
   primary_consultant_id uuid,
   CONSTRAINT events_pkey PRIMARY KEY (id),
-  CONSTRAINT events_primary_consultant_id_fkey FOREIGN KEY (primary_consultant_id) REFERENCES public.team_members(id),
+  CONSTRAINT events_sport_id_fkey FOREIGN KEY (sport_id) REFERENCES public.sports(id),
   CONSTRAINT events_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id),
-  CONSTRAINT events_sport_id_fkey FOREIGN KEY (sport_id) REFERENCES public.sports(id)
+  CONSTRAINT events_primary_consultant_id_fkey FOREIGN KEY (primary_consultant_id) REFERENCES public.team_members(id)
 );
 CREATE TABLE public.flights (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -337,8 +342,6 @@ CREATE TABLE public.hotel_rooms (
   check_out date NOT NULL,
   quantity_total integer NOT NULL,
   quantity_reserved integer DEFAULT 0,
-  quantity_provisional integer DEFAULT 0,
-  quantity_available integer DEFAULT ((quantity_total - quantity_reserved) - quantity_provisional),
   supplier_price_per_night numeric,
   supplier_currency text DEFAULT 'EUR'::text,
   markup_percent numeric DEFAULT 0.00,
@@ -367,6 +370,15 @@ CREATE TABLE public.hotel_rooms (
   total_price_per_night_gbp_with_markup numeric DEFAULT (total_price_per_night_gbp + ((total_price_per_night_gbp * markup_percent) / (100)::numeric)),
   total_price_per_stay_gbp_with_markup numeric DEFAULT (total_price_per_stay_gbp + ((total_price_per_stay_gbp * markup_percent) / (100)::numeric)),
   extra_night_price_gbp numeric DEFAULT (total_price_per_night_gbp * ((1)::numeric + (extra_night_markup_percent / (100)::numeric))),
+  is_provisional boolean NOT NULL DEFAULT false,
+  quantity_available integer DEFAULT 
+CASE
+    WHEN is_provisional THEN 0
+    ELSE (quantity_total - quantity_reserved)
+END,
+  bed_type text NOT NULL DEFAULT 'Double Room'::text CHECK (bed_type = ANY (ARRAY['Double Room'::text, 'Twin Room'::text, 'Triple Room'::text])),
+  commission_percent numeric DEFAULT 0.00 CHECK (commission_percent >= 0::numeric),
+  flexibility text NOT NULL DEFAULT 'Flex'::text CHECK (flexibility = ANY (ARRAY['Flex'::text, 'Non Flex'::text])),
   CONSTRAINT hotel_rooms_pkey PRIMARY KEY (id),
   CONSTRAINT hotel_rooms_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
   CONSTRAINT hotel_rooms_hotel_id_fkey FOREIGN KEY (hotel_id) REFERENCES public.gpgt_hotels(id)
@@ -480,8 +492,8 @@ CREATE TABLE public.package_components (
   price_override numeric,
   notes text,
   CONSTRAINT package_components_pkey PRIMARY KEY (id),
-  CONSTRAINT package_components_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
-  CONSTRAINT package_components_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES public.package_tiers(id)
+  CONSTRAINT package_components_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES public.package_tiers(id),
+  CONSTRAINT package_components_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id)
 );
 CREATE TABLE public.package_tiers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -564,14 +576,14 @@ CREATE TABLE public.quotes (
   declined_at timestamp with time zone,
   expired_at timestamp with time zone,
   CONSTRAINT quotes_pkey PRIMARY KEY (id),
+  CONSTRAINT quotes_parent_quote_id_fkey FOREIGN KEY (parent_quote_id) REFERENCES public.quotes(id),
+  CONSTRAINT quotes_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id),
+  CONSTRAINT quotes_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
   CONSTRAINT quotes_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id),
   CONSTRAINT quotes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT quotes_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES public.package_tiers(id),
   CONSTRAINT quotes_package_id_fkey FOREIGN KEY (package_id) REFERENCES public.packages(id),
-  CONSTRAINT quotes_consultant_id_fkey FOREIGN KEY (consultant_id) REFERENCES public.team_members(id),
-  CONSTRAINT quotes_parent_quote_id_fkey FOREIGN KEY (parent_quote_id) REFERENCES public.quotes(id),
-  CONSTRAINT quotes_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
-  CONSTRAINT quotes_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id)
+  CONSTRAINT quotes_consultant_id_fkey FOREIGN KEY (consultant_id) REFERENCES public.team_members(id)
 );
 CREATE TABLE public.quotes_backup (
   id uuid,
@@ -652,30 +664,6 @@ CREATE TABLE public.sports (
   name text NOT NULL UNIQUE,
   CONSTRAINT sports_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.stripe_events (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  event_id text NOT NULL,
-  type text,
-  created_at timestamp with time zone DEFAULT now()
-);
-CREATE TABLE public.subscriptions (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid,
-  plan_type text NOT NULL CHECK (plan_type = ANY (ARRAY['free'::text, 'pro'::text, 'agency'::text, 'enterprise'::text])),
-  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'canceled'::text, 'past_due'::text, 'trialing'::text, 'incomplete'::text, 'incomplete_expired'::text])),
-  current_period_start timestamp with time zone DEFAULT now(),
-  current_period_end timestamp with time zone DEFAULT (now() + '1 mon'::interval),
-  cancel_at_period_end boolean DEFAULT false,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  stripe_subscription_id text,
-  stripe_customer_id text,
-  seat_count integer DEFAULT 1,
-  team_name text,
-  base_price integer DEFAULT 0,
-  seat_price integer DEFAULT 0,
-  team_id uuid
-);
 CREATE TABLE public.team_invitations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   email text NOT NULL,
@@ -688,8 +676,8 @@ CREATE TABLE public.team_invitations (
   updated_at timestamp with time zone DEFAULT now(),
   team_id uuid,
   CONSTRAINT team_invitations_pkey PRIMARY KEY (id),
-  CONSTRAINT team_invitations_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id),
-  CONSTRAINT team_invitations_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES auth.users(id)
+  CONSTRAINT team_invitations_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES auth.users(id),
+  CONSTRAINT team_invitations_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id)
 );
 CREATE TABLE public.team_members (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -725,7 +713,7 @@ CREATE TABLE public.teams (
   CONSTRAINT teams_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.ticket_categories (
-  id uuid NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
   category_name text NOT NULL,
   venue_id text,
   sport_type text,
@@ -743,8 +731,6 @@ CREATE TABLE public.tickets (
   ticket_category_id uuid,
   quantity_total integer NOT NULL CHECK (quantity_total >= 0),
   quantity_reserved integer NOT NULL DEFAULT 0 CHECK (quantity_reserved >= 0),
-  quantity_provisional integer NOT NULL DEFAULT 0 CHECK (quantity_provisional >= 0),
-  quantity_available integer DEFAULT ((quantity_total - quantity_reserved) - quantity_provisional),
   price numeric NOT NULL CHECK (price >= 0::numeric),
   markup_percent numeric DEFAULT 0.00 CHECK (markup_percent >= 0::numeric),
   price_with_markup numeric DEFAULT (price + ((price * markup_percent) / (100)::numeric)),
@@ -768,19 +754,15 @@ CREATE TABLE public.tickets (
   price_gbp numeric DEFAULT (supplier_price + ((supplier_price * markup_percent) / (100)::numeric)),
   ticket_days text CHECK (ticket_days = ANY (ARRAY['Monday'::text, 'Tuesday'::text, 'Wednesday'::text, 'Thursday'::text, 'Friday'::text, 'Saturday'::text, 'Sunday'::text, 'Friday-Saturday'::text, 'Saturday-Sunday'::text, 'Friday-Sunday'::text, 'Thursday-Sunday'::text])),
   active boolean DEFAULT true,
+  is_provisional boolean NOT NULL DEFAULT false,
+  quantity_available integer DEFAULT 
+CASE
+    WHEN is_provisional THEN 0
+    ELSE (quantity_total - quantity_reserved)
+END,
   CONSTRAINT tickets_pkey PRIMARY KEY (id),
   CONSTRAINT tickets_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
   CONSTRAINT tickets_ticket_category_id_fkey FOREIGN KEY (ticket_category_id) REFERENCES public.ticket_categories(id)
-);
-CREATE TABLE public.usage_tracking (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  month text NOT NULL,
-  itineraries_created integer DEFAULT 0,
-  pdf_downloads integer DEFAULT 0,
-  api_calls integer DEFAULT 0,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now()
 );
 CREATE TABLE public.users (
   id uuid NOT NULL,

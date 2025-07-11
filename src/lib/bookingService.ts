@@ -44,6 +44,16 @@ export interface CreateBookingData {
   specialRequests?: string;
   depositPaid?: boolean;
   depositReference?: string;
+  flights?: Array<{
+    bookingRef?: string;
+    ticketingDeadline?: string;
+    flightStatus?: string;
+    notes?: string;
+  }>;
+  loungePasses?: Array<{
+    bookingRef: string;
+    notes?: string;
+  }>;
 }
 
 export interface Booking {
@@ -52,7 +62,7 @@ export interface Booking {
   userId: string;
   teamId: string;
   clientId?: string;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'refunded';
+  status: 'draft' | 'provisional' | 'pending_payment' | 'confirmed' | 'cancelled' | 'completed' | 'refunded';
   depositPaid: boolean;
   depositPaidAt?: string;
   depositAmount?: number;
@@ -171,6 +181,78 @@ export class BookingService {
 
     } catch (error) {
       console.error('Fetch bookings error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get booking by quote ID
+   */
+  static async getBookingByQuoteId(quoteId: string): Promise<Booking | null> {
+    try {
+      const teamId = await getCurrentUserTeamId();
+      if (!teamId) {
+        throw new Error('User not part of a team');
+      }
+
+      const { data: booking, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('quote_id', quoteId)
+        .eq('team_id', teamId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw new Error(`Failed to fetch booking: ${error.message}`);
+      }
+
+      if (!booking) {
+        return null;
+      }
+
+      return {
+        id: booking.id,
+        quoteId: booking.quote_id,
+        userId: booking.user_id,
+        teamId: booking.team_id,
+        clientId: booking.client_id,
+        status: booking.status,
+        depositPaid: booking.deposit_paid,
+        depositPaidAt: booking.deposit_paid_at,
+        depositAmount: booking.deposit_amount,
+        depositReference: booking.deposit_reference,
+        leadTravelerName: booking.lead_traveler_name,
+        leadTravelerEmail: booking.lead_traveler_email,
+        leadTravelerPhone: booking.lead_traveler_phone,
+        guestTravelers: booking.guest_travelers,
+        eventId: booking.event_id,
+        eventName: booking.event_name,
+        eventLocation: booking.event_location,
+        eventStartDate: booking.event_start_date,
+        eventEndDate: booking.event_end_date,
+        packageId: booking.package_id,
+        packageName: booking.package_name,
+        tierId: booking.tier_id,
+        tierName: booking.tier_name,
+        totalCost: booking.total_cost,
+        currency: booking.currency,
+        originalPaymentSchedule: booking.original_payment_schedule,
+        adjustedPaymentSchedule: booking.adjusted_payment_schedule,
+        paymentTerms: booking.payment_terms,
+        selectedComponents: booking.selected_components,
+        componentAvailability: booking.component_availability,
+        supplierRefs: booking.supplier_refs,
+        bookingNotes: booking.booking_notes,
+        internalNotes: booking.internal_notes,
+        specialRequests: booking.special_requests,
+        createdAt: booking.created_at,
+        updatedAt: booking.updated_at,
+        confirmedAt: booking.confirmed_at,
+        cancelledAt: booking.cancelled_at,
+      };
+
+    } catch (error) {
+      console.error('Get booking by quote ID error:', error);
       throw error;
     }
   }
@@ -352,31 +434,18 @@ export class BookingService {
 
       // Prepare booking data
       const bookingData = {
+        booking_reference: `B-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
         quote_id: data.quoteId,
         user_id: user.id,
         team_id: teamId,
         client_id: quote.client_id,
-        status: 'pending',
-        deposit_paid: data.depositPaid || false,
-        deposit_paid_at: data.depositPaid ? new Date().toISOString() : null,
-        deposit_amount: quote.payment_deposit,
-        deposit_reference: data.depositReference,
-        lead_traveler_name: `${data.leadTraveler.firstName} ${data.leadTraveler.lastName}`,
-        lead_traveler_email: data.leadTraveler.email,
-        lead_traveler_phone: data.leadTraveler.phone,
-        guest_travelers: data.guestTravelers,
+        consultant_id: quote.consultant_id,
         event_id: quote.event_id,
-        event_name: quote.event_name,
-        event_location: quote.event_location,
-        event_start_date: quote.start_date,
-        event_end_date: quote.end_date,
-        package_id: quote.package_id,
-        package_name: quote.package_name,
-        tier_id: quote.tier_id,
-        tier_name: quote.tier_name,
-        total_cost: quote.total_price,
+        status: 'pending_payment',
+        total_price: quote.total_price,
         currency: quote.currency,
-        original_payment_schedule: {
+        payment_schedule_snapshot: {
+          original: {
           deposit: quote.payment_deposit,
           secondPayment: quote.payment_second_payment,
           finalPayment: quote.payment_final_payment,
@@ -384,19 +453,26 @@ export class BookingService {
           secondPaymentDate: quote.payment_second_payment_date,
           finalPaymentDate: quote.payment_final_payment_date
         },
-        adjusted_payment_schedule: data.adjustedPaymentSchedule || {
+          adjusted: data.adjustedPaymentSchedule || {
           deposit: quote.payment_deposit,
           secondPayment: quote.payment_second_payment,
           finalPayment: quote.payment_final_payment,
           depositDate: quote.payment_deposit_date,
           secondPaymentDate: quote.payment_second_payment_date,
           finalPaymentDate: quote.payment_final_payment_date
+          }
         },
+        package_snapshot: {
+          package_id: quote.package_id,
+          package_name: quote.package_name,
+          tier_id: quote.tier_id,
+          tier_name: quote.tier_name,
         selected_components: quote.selected_components,
         component_availability: availabilityCheck.availability,
         booking_notes: data.bookingNotes,
         internal_notes: data.internalNotes,
         special_requests: data.specialRequests
+        }
       };
 
       // Create the booking
@@ -410,8 +486,20 @@ export class BookingService {
         throw new Error(`Failed to create booking: ${bookingError.message}`);
       }
 
+      // Merge form data with quote components for flights and lounge passes
+      console.log('🔍 DEBUG: Form data received:', {
+        flights: data.flights,
+        loungePasses: data.loungePasses,
+        selectedComponents: quote.selected_components
+      });
+      
+      const enhancedComponents = this.mergeFormDataWithComponents(quote.selected_components, data.flights, data.loungePasses);
+      
+      console.log('🔍 DEBUG: Enhanced components after merge:', enhancedComponents);
+
       // Create booking components
-      await this.createBookingComponents(booking.id, quote.selected_components);
+      console.log('Creating booking components:', enhancedComponents);
+      await this.createBookingComponents(booking.id, enhancedComponents);
 
       // Create payment schedule
       await this.createPaymentSchedule(booking.id, data.adjustedPaymentSchedule || [
@@ -439,6 +527,7 @@ export class BookingService {
       await this.logBookingActivity(booking.id, 'booking_created', 'Booking created from quote', user.id);
 
       // Update quote status to confirmed
+      try {
       await supabase
         .from('quotes')
         .update({ 
@@ -446,6 +535,10 @@ export class BookingService {
           confirmed_at: new Date().toISOString()
         })
         .eq('id', data.quoteId);
+      } catch (quoteUpdateError) {
+        console.error('Failed to update quote status:', quoteUpdateError);
+        // Don't throw error - quote status update is optional
+      }
 
       console.log('✅ Booking created successfully:', {
         bookingId: booking.id,
@@ -460,6 +553,69 @@ export class BookingService {
       console.error('Create booking error:', error);
       throw error;
     }
+  }
+
+  /**
+   * Merge form data with quote components to include booking references and other form data
+   */
+  static mergeFormDataWithComponents(
+    selectedComponents: any,
+    flights?: Array<{ bookingRef?: string; ticketingDeadline?: string; flightStatus?: string; notes?: string }>,
+    loungePasses?: Array<{ bookingRef: string; notes?: string }>
+  ): any {
+    if (!selectedComponents) return selectedComponents;
+
+    const enhanced = { ...selectedComponents };
+
+    // Handle array format (new format)
+    if (Array.isArray(selectedComponents)) {
+      return selectedComponents.map((component, index) => {
+        const enhancedComponent = { ...component };
+
+        if (component.type === 'flight' && flights && flights[index]) {
+          enhancedComponent.bookingRef = flights[index].bookingRef;
+          enhancedComponent.ticketingDeadline = flights[index].ticketingDeadline;
+          enhancedComponent.flightStatus = flights[index].flightStatus;
+          enhancedComponent.notes = flights[index].notes;
+        }
+
+        if (component.type === 'lounge_pass' && loungePasses && loungePasses[index]) {
+          enhancedComponent.bookingRef = loungePasses[index].bookingRef;
+          enhancedComponent.notes = loungePasses[index].notes;
+        }
+
+        return enhancedComponent;
+      });
+    }
+
+    // Handle object format (legacy support)
+    if (selectedComponents.flights && flights) {
+      enhanced.flights = selectedComponents.flights.map((flight: any, index: number) => ({
+        ...flight,
+        bookingRef: flights[index]?.bookingRef,
+        ticketingDeadline: flights[index]?.ticketingDeadline,
+        flightStatus: flights[index]?.flightStatus,
+        notes: flights[index]?.notes,
+      }));
+    }
+
+    if (selectedComponents.lounge_passes && loungePasses) {
+      enhanced.lounge_passes = selectedComponents.lounge_passes.map((loungePass: any, index: number) => ({
+        ...loungePass,
+        bookingRef: loungePasses[index]?.bookingRef,
+        notes: loungePasses[index]?.notes,
+      }));
+    }
+
+    if (selectedComponents.loungePass && loungePasses && loungePasses.length > 0) {
+      enhanced.loungePass = {
+        ...selectedComponents.loungePass,
+        bookingRef: loungePasses[0]?.bookingRef,
+        notes: loungePasses[0]?.notes,
+      };
+    }
+
+    return enhanced;
   }
 
   /**
@@ -491,7 +647,7 @@ export class BookingService {
         availability[`ticket_${ticket.id}`] = {
           available,
           requested: ticket.quantity,
-          available: ticketData?.quantity_available || 0,
+          availableQuantity: ticketData?.quantity_available || 0,
           componentName: ticketData?.ticket_category?.category_name || 'Ticket'
         };
 
@@ -515,7 +671,7 @@ export class BookingService {
         availability[`hotel_${hotel.roomId}`] = {
           available,
           requested: hotel.quantity || 1,
-          available: roomData?.quantity_available || 0,
+          availableQuantity: roomData?.quantity_available || 0,
           componentName: `Hotel Room: ${roomData?.room_type_id || 'Unknown'}`
         };
 
@@ -539,7 +695,7 @@ export class BookingService {
         availability[`transfer_${transfer.id}`] = {
           available,
           requested: transfer.quantity,
-          available: (transferData?.coach_capacity || 0) - (transferData?.used || 0),
+          availableQuantity: (transferData?.coach_capacity || 0) - (transferData?.used || 0),
           componentName: `Circuit Transfer: ${transferData?.transfer_type || 'Unknown'}`
         };
 
@@ -563,7 +719,7 @@ export class BookingService {
         availability[`airport_transfer_${transfer.id}`] = {
           available,
           requested: transfer.quantity,
-          available: (transferData?.max_capacity || 0) - (transferData?.used || 0),
+          availableQuantity: (transferData?.max_capacity || 0) - (transferData?.used || 0),
           componentName: `Airport Transfer: ${transferData?.transport_type || 'Unknown'}`
         };
 
@@ -587,7 +743,7 @@ export class BookingService {
         availability[`flight_${flight.id}`] = {
           available,
           requested: flight.passengers || 1,
-          available: available ? 999 : 0,
+          availableQuantity: available ? 999 : 0,
           componentName: `Flight: ${flightData?.outbound_flight_number || 'Unknown'}`
         };
 
@@ -610,7 +766,7 @@ export class BookingService {
       availability[`lounge_pass_${quote.selected_components.loungePass.id}`] = {
         available,
         requested: quote.selected_components.loungePass.quantity || 1,
-        available: available ? 999 : 0,
+        availableQuantity: available ? 999 : 0,
         componentName: `Lounge Pass: ${loungeData?.variant || 'Unknown'}`
       };
 
@@ -629,6 +785,161 @@ export class BookingService {
   static async createBookingComponents(bookingId: string, selectedComponents: any): Promise<void> {
     if (!selectedComponents) return;
 
+    console.log('Processing selected components:', selectedComponents);
+
+    // Handle array format (as shown in your quote data)
+    if (Array.isArray(selectedComponents)) {
+      const components: any[] = [];
+
+      for (const component of selectedComponents) {
+        console.log('Processing component:', component);
+
+        // Validate UUID format for component_id
+        const isValidUUID = (str: string) => {
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          return uuidRegex.test(str);
+        };
+
+        const componentData = {
+          booking_id: bookingId,
+          component_type: component.type,
+          component_id: isValidUUID(component.id) ? component.id : null,
+          component_name: component.name,
+          quantity: component.quantity,
+          unit_price: component.unitPrice || component.data?.price || 0,
+          total_price: component.totalPrice || (component.unitPrice || component.data?.price || 0) * component.quantity,
+          component_data: component.data || component,
+          component_snapshot: component
+        };
+
+        console.log('Component data to insert:', componentData);
+
+        // For flights, create only in bookings_flights table (not in booking_components)
+        if (component.type === 'flight') {
+          console.log('🔍 DEBUG: Processing flight component:', {
+            component,
+            bookingRef: component.bookingRef,
+            dataBookingRef: component.data?.bookingRef,
+            finalBookingRef: component.bookingRef || component.data?.bookingRef
+          });
+          
+          try {
+            const flightInsertData = {
+              booking_id: bookingId,
+              source_flight_id: isValidUUID(component.id) ? component.id : null,
+              api_source: component.data?.source || 'manual',
+              ticketing_deadline: component.ticketingDeadline || component.data?.ticketingDeadline,
+              booking_pnr: component.bookingRef || component.data?.bookingRef,
+              flight_status: component.flightStatus || 'Booked - Not Ticketed',
+              flight_details: component.data || component,
+              quantity: component.quantity,
+              unit_price: component.unitPrice || component.data?.price || 0,
+              total_price: component.totalPrice || (component.unitPrice || component.data?.price || 0) * component.quantity,
+              currency: 'GBP',
+              refundable: component.data?.refundable || false
+            };
+            
+            console.log('🔍 DEBUG: Flight insert data:', flightInsertData);
+            
+            const { error: flightError } = await supabase
+              .from('bookings_flights')
+              .insert(flightInsertData);
+
+            if (flightError) {
+              console.error('Failed to create flight booking:', flightError);
+            } else {
+              console.log('Flight booking created successfully');
+            }
+          } catch (error) {
+            console.error('Error creating flight booking:', error);
+          }
+          continue; // Skip adding to booking_components
+        }
+
+        // For lounge passes, create only in bookings_lounge_passes table (not in booking_components)
+        if (component.type === 'lounge_pass') {
+          console.log('🔍 DEBUG: Processing lounge pass component:', {
+            component,
+            bookingRef: component.bookingRef,
+            dataBookingRef: component.data?.bookingRef,
+            finalBookingRef: component.bookingRef || component.data?.bookingRef
+          });
+          
+          try {
+            const loungeInsertData = {
+              booking_id: bookingId,
+              lounge_pass_id: isValidUUID(component.id) ? component.id : null,
+              booking_reference: component.bookingRef || component.data?.bookingRef,
+              quantity: component.quantity,
+              unit_price: component.unitPrice || component.data?.price || 0,
+              total_price: component.totalPrice || (component.unitPrice || component.data?.price || 0) * component.quantity
+            };
+            
+            console.log('🔍 DEBUG: Lounge pass insert data:', loungeInsertData);
+            
+            const { error: loungeError } = await supabase
+              .from('bookings_lounge_passes')
+              .insert(loungeInsertData);
+
+            if (loungeError) {
+              console.error('Failed to create lounge pass booking:', loungeError);
+            } else {
+              console.log('Lounge pass booking created successfully');
+            }
+          } catch (error) {
+            console.error('Error creating lounge pass booking:', error);
+          }
+          continue; // Skip adding to booking_components
+        }
+
+        components.push(componentData);
+      }
+
+      // Insert all components into booking_components table
+      if (components.length > 0) {
+        console.log('Inserting components into booking_components:', components);
+        const { error } = await supabase
+          .from('booking_components')
+          .insert(components);
+
+        if (error) {
+          console.error('Failed to create booking components:', error);
+          throw new Error(`Failed to create booking components: ${error.message}`);
+        } else {
+          console.log('Booking components created successfully');
+          
+          // Reserve tickets after successfully creating booking components
+          const ticketComponents = components.filter(c => c.component_type === 'ticket');
+          if (ticketComponents.length > 0) {
+            console.log('Reserving tickets for booking:', ticketComponents);
+            await this.reserveTickets(bookingId, ticketComponents);
+          }
+
+          // Reserve hotel rooms after successfully creating booking components
+          const hotelRoomComponents = components.filter(c => c.component_type === 'hotel_room');
+          if (hotelRoomComponents.length > 0) {
+            console.log('Reserving hotel rooms for booking:', hotelRoomComponents);
+            await this.reserveHotelRooms(bookingId, hotelRoomComponents);
+          }
+
+          // Reserve circuit transfers after successfully creating booking components
+          const circuitTransferComponents = components.filter(c => c.component_type === 'circuit_transfer');
+          if (circuitTransferComponents.length > 0) {
+            console.log('Reserving circuit transfers for booking:', circuitTransferComponents);
+            await this.reserveCircuitTransfers(bookingId, circuitTransferComponents);
+          }
+
+          // Reserve airport transfers after successfully creating booking components
+          const airportTransferComponents = components.filter(c => c.component_type === 'airport_transfer');
+          if (airportTransferComponents.length > 0) {
+            console.log('Reserving airport transfers for booking:', airportTransferComponents);
+            await this.reserveAirportTransfers(bookingId, airportTransferComponents);
+          }
+        }
+      }
+    } else {
+      // Handle object format (legacy support)
+      console.log('Processing legacy object format components');
     const components: any[] = [];
 
     // Process tickets
@@ -645,7 +956,6 @@ export class BookingService {
           component_type: 'ticket',
           component_id: ticket.id,
           component_name: ticketData?.ticket_category?.category_name || 'Ticket',
-          component_description: ticketData?.ticket_category?.description || '',
           quantity: ticket.quantity,
           unit_price: ticket.price,
           total_price: ticket.price * ticket.quantity,
@@ -668,7 +978,6 @@ export class BookingService {
           component_type: 'hotel_room',
           component_id: hotel.roomId,
           component_name: `${roomData?.gpgt_hotels?.name || 'Hotel'} - ${roomData?.room_type_id || 'Room'}`,
-          component_description: roomData?.description || '',
           quantity: hotel.quantity || 1,
           unit_price: hotel.price || 0,
           total_price: (hotel.price || 0) * (hotel.quantity || 1),
@@ -677,10 +986,107 @@ export class BookingService {
       }
     }
 
-    // Process other components similarly...
-    // (Adding abbreviated processing for brevity)
+      // Process circuit transfers
+      if (selectedComponents.circuitTransfers) {
+        for (const transfer of selectedComponents.circuitTransfers) {
+          const { data: transferData } = await supabase
+            .from('circuit_transfers')
+            .select('*')
+            .eq('id', transfer.id)
+            .single();
 
-    // Insert all components
+          components.push({
+            booking_id: bookingId,
+            component_type: 'circuit_transfer',
+            component_id: transfer.id,
+            component_name: `Circuit Transfer - ${transferData?.transfer_type || 'Transfer'}`,
+            quantity: transfer.quantity || 1,
+            unit_price: transfer.price || 0,
+            total_price: (transfer.price || 0) * (transfer.quantity || 1),
+            component_data: { ...transfer, transferData }
+          });
+        }
+      }
+
+      // Process airport transfers
+      if (selectedComponents.airportTransfers) {
+        for (const transfer of selectedComponents.airportTransfers) {
+          const { data: transferData } = await supabase
+            .from('airport_transfers')
+            .select('*')
+            .eq('id', transfer.id)
+            .single();
+
+          components.push({
+            booking_id: bookingId,
+            component_type: 'airport_transfer',
+            component_id: transfer.id,
+            component_name: `Airport Transfer - ${transferData?.transport_type || 'Transfer'}`,
+            quantity: transfer.quantity || 1,
+            unit_price: transfer.price || 0,
+            total_price: (transfer.price || 0) * (transfer.quantity || 1),
+            component_data: { ...transfer, transferData }
+          });
+        }
+      }
+
+      // Process flights
+      if (selectedComponents.flights) {
+        for (const flight of selectedComponents.flights) {
+          try {
+            const { error: flightError } = await supabase
+              .from('bookings_flights')
+              .insert({
+                booking_id: bookingId,
+                source_flight_id: flight.id,
+                api_source: flight.source || 'manual',
+                ticketing_deadline: flight.ticketingDeadline,
+                booking_pnr: flight.bookingRef,
+                flight_status: flight.flightStatus || 'Booked - Not Ticketed',
+                flight_details: flight,
+                quantity: flight.passengers || 1,
+                unit_price: flight.price || 0,
+                total_price: (flight.price || 0) * (flight.passengers || 1),
+                currency: 'GBP',
+                refundable: flight.refundable || false
+              });
+
+            if (flightError) {
+              console.error('Failed to create flight booking:', flightError);
+            } else {
+              console.log('Flight booking created successfully');
+            }
+          } catch (error) {
+            console.error('Error creating flight booking:', error);
+          }
+        }
+      }
+
+      // Process lounge passes
+      if (selectedComponents.loungePass) {
+        try {
+          const { error: loungeError } = await supabase
+            .from('bookings_lounge_passes')
+            .insert({
+              booking_id: bookingId,
+              lounge_pass_id: selectedComponents.loungePass.id,
+              booking_reference: selectedComponents.loungePass.bookingRef,
+              quantity: selectedComponents.loungePass.quantity || 1,
+              unit_price: selectedComponents.loungePass.price || 0,
+              total_price: (selectedComponents.loungePass.price || 0) * (selectedComponents.loungePass.quantity || 1)
+            });
+
+          if (loungeError) {
+            console.error('Failed to create lounge pass booking:', loungeError);
+          } else {
+            console.log('Lounge pass booking created successfully');
+          }
+        } catch (error) {
+          console.error('Error creating lounge pass booking:', error);
+        }
+      }
+
+      // Insert all components into booking_components table
     if (components.length > 0) {
       const { error } = await supabase
         .from('booking_components')
@@ -688,7 +1094,453 @@ export class BookingService {
 
       if (error) {
         throw new Error(`Failed to create booking components: ${error.message}`);
+        } else {
+          // Reserve tickets after successfully creating booking components
+          const ticketComponents = components.filter(c => c.component_type === 'ticket');
+          if (ticketComponents.length > 0) {
+            console.log('Reserving tickets for booking (object format):', ticketComponents);
+            await this.reserveTickets(bookingId, ticketComponents);
+          }
+
+          // Reserve hotel rooms after successfully creating booking components
+          const hotelRoomComponents = components.filter(c => c.component_type === 'hotel_room');
+          if (hotelRoomComponents.length > 0) {
+            console.log('Reserving hotel rooms for booking (object format):', hotelRoomComponents);
+            await this.reserveHotelRooms(bookingId, hotelRoomComponents);
+          }
+
+          // Reserve circuit transfers after successfully creating booking components
+          const circuitTransferComponents = components.filter(c => c.component_type === 'circuit_transfer');
+          if (circuitTransferComponents.length > 0) {
+            console.log('Reserving circuit transfers for booking (object format):', circuitTransferComponents);
+            await this.reserveCircuitTransfers(bookingId, circuitTransferComponents);
+          }
+
+          // Reserve airport transfers after successfully creating booking components
+          const airportTransferComponents = components.filter(c => c.component_type === 'airport_transfer');
+          if (airportTransferComponents.length > 0) {
+            console.log('Reserving airport transfers for booking (object format):', airportTransferComponents);
+            await this.reserveAirportTransfers(bookingId, airportTransferComponents);
+          }
+        }
       }
+    }
+  }
+
+  /**
+   * Reserve tickets for a booking (update quantity_reserved in tickets table)
+   */
+  static async reserveTickets(bookingId: string, ticketComponents: any[]): Promise<void> {
+    for (const ticketComponent of ticketComponents) {
+      if (ticketComponent.component_type === 'ticket' && ticketComponent.component_id) {
+        try {
+          // Get current ticket data
+          const { data: ticketData, error: fetchError } = await supabase
+            .from('tickets')
+            .select('quantity_reserved, quantity_total, quantity_available')
+            .eq('id', ticketComponent.component_id)
+            .single();
+
+          if (fetchError) {
+            console.error('Failed to fetch ticket data:', fetchError);
+            continue;
+          }
+
+          const newReservedQuantity = (ticketData.quantity_reserved || 0) + ticketComponent.quantity;
+          
+          // Check if we have enough available tickets
+          if (newReservedQuantity > ticketData.quantity_total) {
+            throw new Error(`Cannot reserve ${ticketComponent.quantity} tickets. Only ${ticketData.quantity_available} available.`);
+          }
+
+          // Update the reserved quantity
+          const { error: updateError } = await supabase
+            .from('tickets')
+            .update({ 
+              quantity_reserved: newReservedQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', ticketComponent.component_id);
+
+          if (updateError) {
+            console.error('Failed to update ticket reservation:', updateError);
+            throw new Error(`Failed to reserve tickets: ${updateError.message}`);
+          }
+
+          console.log(`✅ Reserved ${ticketComponent.quantity} tickets for booking ${bookingId}. New reserved total: ${newReservedQuantity}`);
+          
+        } catch (error) {
+          console.error('Error reserving tickets:', error);
+          throw error;
+        }
+      }
+    }
+  }
+
+  /**
+   * Reserve hotel rooms for a booking (update quantity_reserved in hotel_rooms table)
+   */
+  static async reserveHotelRooms(bookingId: string, hotelRoomComponents: any[]): Promise<void> {
+    for (const roomComponent of hotelRoomComponents) {
+      if (roomComponent.component_type === 'hotel_room' && roomComponent.component_id) {
+        try {
+          // Get current hotel room data
+          const { data: roomData, error: fetchError } = await supabase
+            .from('hotel_rooms')
+            .select('quantity_reserved, quantity_total, quantity_available')
+            .eq('id', roomComponent.component_id)
+            .single();
+
+          if (fetchError) {
+            console.error('Failed to fetch hotel room data:', fetchError);
+            continue;
+          }
+
+          const newReservedQuantity = (roomData.quantity_reserved || 0) + roomComponent.quantity;
+          
+          // Check if we have enough available rooms
+          if (newReservedQuantity > roomData.quantity_total) {
+            throw new Error(`Cannot reserve ${roomComponent.quantity} hotel rooms. Only ${roomData.quantity_available} available.`);
+          }
+
+          // Update the reserved quantity
+          const { error: updateError } = await supabase
+            .from('hotel_rooms')
+            .update({ 
+              quantity_reserved: newReservedQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', roomComponent.component_id);
+
+          if (updateError) {
+            console.error('Failed to update hotel room reservation:', updateError);
+            throw new Error(`Failed to reserve hotel rooms: ${updateError.message}`);
+          }
+
+          console.log(`✅ Reserved ${roomComponent.quantity} hotel rooms for booking ${bookingId}. New reserved total: ${newReservedQuantity}`);
+          
+        } catch (error) {
+          console.error('Error reserving hotel rooms:', error);
+          throw error;
+        }
+      }
+    }
+  }
+
+  /**
+   * Reserve circuit transfers for a booking (update used field in circuit_transfers table)
+   */
+  static async reserveCircuitTransfers(bookingId: string, circuitTransferComponents: any[]): Promise<void> {
+    for (const transferComponent of circuitTransferComponents) {
+      if (transferComponent.component_type === 'circuit_transfer' && transferComponent.component_id) {
+        try {
+          // Get current circuit transfer data
+          const { data: transferData, error: fetchError } = await supabase
+            .from('circuit_transfers')
+            .select('used, coach_capacity, coaches_required')
+            .eq('id', transferComponent.component_id)
+            .single();
+
+          if (fetchError) {
+            console.error('Failed to fetch circuit transfer data:', fetchError);
+            continue;
+          }
+
+          const newUsedQuantity = (transferData.used || 0) + transferComponent.quantity;
+          const maxCapacity = transferData.coach_capacity * (transferData.coaches_required || 1);
+          
+          // Check if we have enough available capacity
+          if (newUsedQuantity > maxCapacity) {
+            throw new Error(`Cannot reserve ${transferComponent.quantity} circuit transfer seats. Only ${maxCapacity - (transferData.used || 0)} available.`);
+          }
+
+          // Update the used quantity
+          const { error: updateError } = await supabase
+            .from('circuit_transfers')
+            .update({ 
+              used: newUsedQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', transferComponent.component_id);
+
+          if (updateError) {
+            console.error('Failed to update circuit transfer reservation:', updateError);
+            throw new Error(`Failed to reserve circuit transfers: ${updateError.message}`);
+          }
+
+          console.log(`✅ Reserved ${transferComponent.quantity} circuit transfer seats for booking ${bookingId}. New used total: ${newUsedQuantity}`);
+          
+        } catch (error) {
+          console.error('Error reserving circuit transfers:', error);
+          throw error;
+        }
+      }
+    }
+  }
+
+  /**
+   * Reserve airport transfers for a booking (update used field in airport_transfers table)
+   */
+  static async reserveAirportTransfers(bookingId: string, airportTransferComponents: any[]): Promise<void> {
+    for (const transferComponent of airportTransferComponents) {
+      if (transferComponent.component_type === 'airport_transfer' && transferComponent.component_id) {
+        try {
+          // Get current airport transfer data
+          const { data: transferData, error: fetchError } = await supabase
+            .from('airport_transfers')
+            .select('used, max_capacity')
+            .eq('id', transferComponent.component_id)
+            .single();
+
+          if (fetchError) {
+            console.error('Failed to fetch airport transfer data:', fetchError);
+            continue;
+          }
+
+          const newUsedQuantity = (transferData.used || 0) + transferComponent.quantity;
+          
+          // Check if we have enough available capacity
+          if (newUsedQuantity > transferData.max_capacity) {
+            throw new Error(`Cannot reserve ${transferComponent.quantity} airport transfer seats. Only ${transferData.max_capacity - (transferData.used || 0)} available.`);
+          }
+
+          // Update the used quantity
+          const { error: updateError } = await supabase
+            .from('airport_transfers')
+            .update({ 
+              used: newUsedQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', transferComponent.component_id);
+
+          if (updateError) {
+            console.error('Failed to update airport transfer reservation:', updateError);
+            throw new Error(`Failed to reserve airport transfers: ${updateError.message}`);
+          }
+
+          console.log(`✅ Reserved ${transferComponent.quantity} airport transfer seats for booking ${bookingId}. New used total: ${newUsedQuantity}`);
+          
+        } catch (error) {
+          console.error('Error reserving airport transfers:', error);
+          throw error;
+        }
+      }
+    }
+  }
+
+  /**
+   * Release airport transfers when booking is cancelled (decrease used field)
+   */
+  static async releaseAirportTransfers(bookingId: string): Promise<void> {
+    try {
+      // Get all airport transfer components for this booking
+      const { data: transferComponents, error: fetchError } = await supabase
+        .from('booking_components')
+        .select('component_id, quantity')
+        .eq('booking_id', bookingId)
+        .eq('component_type', 'airport_transfer');
+
+      if (fetchError) {
+        console.error('Failed to fetch airport transfer components:', fetchError);
+        return;
+      }
+
+      for (const transferComponent of transferComponents || []) {
+        if (transferComponent.component_id) {
+          // Get current airport transfer data
+          const { data: transferData, error: transferFetchError } = await supabase
+            .from('airport_transfers')
+            .select('used')
+            .eq('id', transferComponent.component_id)
+            .single();
+
+          if (transferFetchError) {
+            console.error('Failed to fetch airport transfer data for release:', transferFetchError);
+            continue;
+          }
+
+          const newUsedQuantity = Math.max(0, (transferData.used || 0) - transferComponent.quantity);
+
+          // Update the used quantity
+          const { error: updateError } = await supabase
+            .from('airport_transfers')
+            .update({ 
+              used: newUsedQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', transferComponent.component_id);
+
+          if (updateError) {
+            console.error('Failed to release airport transfer reservation:', updateError);
+          } else {
+            console.log(`✅ Released ${transferComponent.quantity} airport transfer seats from booking ${bookingId}. New used total: ${newUsedQuantity}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error releasing airport transfers:', error);
+    }
+  }
+
+  /**
+   * Release circuit transfers when booking is cancelled (decrease used field)
+   */
+  static async releaseCircuitTransfers(bookingId: string): Promise<void> {
+    try {
+      // Get all circuit transfer components for this booking
+      const { data: transferComponents, error: fetchError } = await supabase
+        .from('booking_components')
+        .select('component_id, quantity')
+        .eq('booking_id', bookingId)
+        .eq('component_type', 'circuit_transfer');
+
+      if (fetchError) {
+        console.error('Failed to fetch circuit transfer components:', fetchError);
+        return;
+      }
+
+      for (const transferComponent of transferComponents || []) {
+        if (transferComponent.component_id) {
+          // Get current circuit transfer data
+          const { data: transferData, error: transferFetchError } = await supabase
+            .from('circuit_transfers')
+            .select('used')
+            .eq('id', transferComponent.component_id)
+            .single();
+
+          if (transferFetchError) {
+            console.error('Failed to fetch circuit transfer data for release:', transferFetchError);
+            continue;
+          }
+
+          const newUsedQuantity = Math.max(0, (transferData.used || 0) - transferComponent.quantity);
+
+          // Update the used quantity
+          const { error: updateError } = await supabase
+            .from('circuit_transfers')
+            .update({ 
+              used: newUsedQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', transferComponent.component_id);
+
+          if (updateError) {
+            console.error('Failed to release circuit transfer reservation:', updateError);
+          } else {
+            console.log(`✅ Released ${transferComponent.quantity} circuit transfer seats from booking ${bookingId}. New used total: ${newUsedQuantity}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error releasing circuit transfers:', error);
+    }
+  }
+
+  /**
+   * Release hotel rooms when booking is cancelled (decrease quantity_reserved)
+   */
+  static async releaseHotelRooms(bookingId: string): Promise<void> {
+    try {
+      // Get all hotel room components for this booking
+      const { data: roomComponents, error: fetchError } = await supabase
+        .from('booking_components')
+        .select('component_id, quantity')
+        .eq('booking_id', bookingId)
+        .eq('component_type', 'hotel_room');
+
+      if (fetchError) {
+        console.error('Failed to fetch hotel room components:', fetchError);
+        return;
+      }
+
+      for (const roomComponent of roomComponents || []) {
+        if (roomComponent.component_id) {
+          // Get current hotel room data
+          const { data: roomData, error: roomFetchError } = await supabase
+            .from('hotel_rooms')
+            .select('quantity_reserved')
+            .eq('id', roomComponent.component_id)
+            .single();
+
+          if (roomFetchError) {
+            console.error('Failed to fetch hotel room data for release:', roomFetchError);
+            continue;
+          }
+
+          const newReservedQuantity = Math.max(0, (roomData.quantity_reserved || 0) - roomComponent.quantity);
+
+          // Update the reserved quantity
+          const { error: updateError } = await supabase
+            .from('hotel_rooms')
+            .update({ 
+              quantity_reserved: newReservedQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', roomComponent.component_id);
+
+          if (updateError) {
+            console.error('Failed to release hotel room reservation:', updateError);
+          } else {
+            console.log(`✅ Released ${roomComponent.quantity} hotel rooms from booking ${bookingId}. New reserved total: ${newReservedQuantity}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error releasing hotel rooms:', error);
+    }
+  }
+
+  /**
+   * Release tickets when booking is cancelled (decrease quantity_reserved)
+   */
+  static async releaseTickets(bookingId: string): Promise<void> {
+    try {
+      // Get all ticket components for this booking
+      const { data: ticketComponents, error: fetchError } = await supabase
+        .from('booking_components')
+        .select('component_id, quantity')
+        .eq('booking_id', bookingId)
+        .eq('component_type', 'ticket');
+
+      if (fetchError) {
+        console.error('Failed to fetch ticket components:', fetchError);
+        return;
+      }
+
+      for (const ticketComponent of ticketComponents || []) {
+        if (ticketComponent.component_id) {
+          // Get current ticket data
+          const { data: ticketData, error: ticketFetchError } = await supabase
+            .from('tickets')
+            .select('quantity_reserved')
+            .eq('id', ticketComponent.component_id)
+            .single();
+
+          if (ticketFetchError) {
+            console.error('Failed to fetch ticket data for release:', ticketFetchError);
+            continue;
+          }
+
+          const newReservedQuantity = Math.max(0, (ticketData.quantity_reserved || 0) - ticketComponent.quantity);
+
+          // Update the reserved quantity
+          const { error: updateError } = await supabase
+            .from('tickets')
+            .update({ 
+              quantity_reserved: newReservedQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', ticketComponent.component_id);
+
+          if (updateError) {
+            console.error('Failed to release ticket reservation:', updateError);
+          } else {
+            console.log(`✅ Released ${ticketComponent.quantity} tickets from booking ${bookingId}. New reserved total: ${newReservedQuantity}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error releasing tickets:', error);
     }
   }
 
@@ -715,35 +1567,53 @@ export class BookingService {
   }
 
   /**
-   * Create traveler records
+   * Create traveler records for a booking
    */
   static async createTravelerRecords(bookingId: string, leadTraveler: LeadTraveler, guestTravelers: BookingTraveler[]): Promise<void> {
-    const travelers = [
-      {
+    // First create the lead traveler
+    const { data: leadTravelerData, error: leadError } = await supabase
+      .from('booking_travelers')
+      .insert({
         booking_id: bookingId,
         traveler_type: 'lead',
-        traveler_number: 1,
         first_name: leadTraveler.firstName,
         last_name: leadTraveler.lastName,
         email: leadTraveler.email,
-        phone: leadTraveler.phone,
-        address: leadTraveler.address
-      },
-      ...guestTravelers.map((traveler, index) => ({
+        phone: leadTraveler.phone
+      })
+      .select()
+      .single();
+
+    if (leadError) {
+      throw new Error(`Failed to create lead traveler: ${leadError.message}`);
+    }
+
+    // Update the booking with the lead traveler ID
+    const { error: updateError } = await supabase
+      .from('bookings')
+      .update({ lead_traveler_id: leadTravelerData.id })
+      .eq('id', bookingId);
+
+    if (updateError) {
+      throw new Error(`Failed to update booking with lead traveler: ${updateError.message}`);
+    }
+
+    // Create guest travelers if any
+    if (guestTravelers.length > 0) {
+      const guestTravelerRecords = guestTravelers.map((traveler) => ({
         booking_id: bookingId,
         traveler_type: 'guest',
-        traveler_number: index + 2,
         first_name: traveler.firstName,
         last_name: traveler.lastName
-      }))
-    ];
+      }));
 
-    const { error } = await supabase
+      const { error: guestError } = await supabase
       .from('booking_travelers')
-      .insert(travelers);
+        .insert(guestTravelerRecords);
 
-    if (error) {
-      throw new Error(`Failed to create traveler records: ${error.message}`);
+      if (guestError) {
+        throw new Error(`Failed to create guest traveler records: ${guestError.message}`);
+      }
     }
   }
 
@@ -751,6 +1621,7 @@ export class BookingService {
    * Log booking activity
    */
   static async logBookingActivity(bookingId: string, activityType: string, description: string, performedBy: string): Promise<void> {
+    try {
     const { error } = await supabase
       .from('booking_activity_log')
       .insert({
@@ -762,6 +1633,11 @@ export class BookingService {
 
     if (error) {
       console.error('Failed to log booking activity:', error);
+        // Don't throw error - activity logging is optional
+      }
+    } catch (error) {
+      console.error('Error logging booking activity:', error);
+      // Don't throw error - activity logging is optional
     }
   }
 
@@ -805,7 +1681,7 @@ export class BookingService {
         .from('booking_travelers')
         .select('*')
         .eq('booking_id', bookingId)
-        .order('traveler_number');
+        .order('created_at');
 
       // Get activities
       const { data: activities } = await supabase
@@ -892,6 +1768,11 @@ export class BookingService {
           break;
         case 'cancelled':
           updateData.cancelled_at = new Date().toISOString();
+          // Release tickets, hotel rooms, circuit transfers, and airport transfers when booking is cancelled
+          await this.releaseTickets(bookingId);
+          await this.releaseHotelRooms(bookingId);
+          await this.releaseCircuitTransfers(bookingId);
+          await this.releaseAirportTransfers(bookingId);
           break;
       }
 
@@ -918,6 +1799,66 @@ export class BookingService {
 
     } catch (error) {
       console.error('Update booking status error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a booking and release all reserved inventory
+   */
+  static async deleteBooking(bookingId: string): Promise<void> {
+    try {
+      console.log(`🗑️ Starting deletion process for booking ${bookingId}`);
+      
+      // First, release all reserved inventory
+      console.log('📦 Releasing reserved inventory...');
+      
+      // Release tickets
+      await this.releaseTickets(bookingId);
+      
+      // Release hotel rooms
+      await this.releaseHotelRooms(bookingId);
+      
+      // Release circuit transfers
+      await this.releaseCircuitTransfers(bookingId);
+      
+      // Release airport transfers
+      await this.releaseAirportTransfers(bookingId);
+      
+      console.log('✅ All inventory released successfully');
+      
+      // Now delete the booking and all related records
+      console.log('🗑️ Deleting booking records...');
+      
+      // Delete in the correct order to respect foreign key constraints
+      const deleteOperations = [
+        // Delete booking components first
+        supabase.from('booking_components').delete().eq('booking_id', bookingId),
+        // Delete booking payments
+        supabase.from('booking_payments').delete().eq('booking_id', bookingId),
+        // Delete booking travelers
+        supabase.from('booking_travelers').delete().eq('booking_id', bookingId),
+        // Delete booking flights
+        supabase.from('bookings_flights').delete().eq('booking_id', bookingId),
+        // Delete booking lounge passes
+        supabase.from('bookings_lounge_passes').delete().eq('booking_id', bookingId),
+        // Finally delete the booking itself
+        supabase.from('bookings').delete().eq('id', bookingId)
+      ];
+      
+      // Execute all delete operations
+      for (const operation of deleteOperations) {
+        const { error } = await operation;
+        if (error) {
+          console.error('Error during deletion:', error);
+          throw new Error(`Failed to delete booking records: ${error.message}`);
+        }
+      }
+      
+      console.log(`✅ Booking ${bookingId} deleted successfully with all related records`);
+      
+    } catch (error) {
+      console.error('Error deleting booking:', error);
       throw error;
     }
   }

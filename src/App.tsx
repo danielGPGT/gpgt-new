@@ -36,7 +36,9 @@ import PackageBuilderPage from './pages/PackageBuilderPage';
 import InventoryPage from './pages/Inventory';
 import PackageManager from './pages/PackageManager';
 import { PackageIntakeTest } from "./pages/PackageIntakeTest";
-import CreateBookingFromQuotePage from './pages/CreateBookingFromQuotePage';
+import CreateBookingFromQuotePage from './pages/CreateBookingFromQuoteV2';
+import ViewBooking from './pages/ViewBooking';
+import EditBooking from './pages/EditBooking';
 import "./App.css";
 
 // Create a client
@@ -122,6 +124,8 @@ function AppContent() {
                   <Route path="/quotes/:quoteId" element={<ViewQuote />} />
                   <Route path="/quotes/:quoteId/edit" element={<EditQuote />} />
                   <Route path="/quotes/:quoteId/create-booking" element={<CreateBookingFromQuotePage />} />
+                  <Route path="/booking/:bookingId" element={<ViewBooking />} />
+                  <Route path="/booking/:bookingId/edit" element={<EditBooking />} />
                   <Route path="/order/success" element={<OrderConfirmation />} />
                   
                   {/* CRM Routes */}

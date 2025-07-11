@@ -24,14 +24,13 @@ import CircuitTransfersManager from '@/components/inventory/CircuitTransfersMana
 
 const tabOptions = [
   { value: 'tickets', label: 'Tickets' },
-  { value: 'lounge-passes', label: 'Lounge Passes' },
   { value: 'hotel-rooms', label: 'Hotels' },
-  { value: 'airport-transfers', label: 'Airport Transfers' },
   { value: 'circuit-transfers', label: 'Circuit Transfers' },
+  { value: 'airport-transfers', label: 'Airport Transfers' },
   { value: 'flights', label: 'Flights' },
+  { value: 'lounge-passes', label: 'Lounge Passes' },
   { value: 'sports-events', label: 'Sports Events' },
   { value: 'venues', label: 'Venues' },
-  { value: 'packages', label: 'Packages' },
   // Add more as needed
 ];
 
@@ -79,14 +78,13 @@ export default function InventoryPage() {
 
       <div className="mt-4">
         {tab === 'tickets' && <TicketsManager />}
-        {tab === 'lounge-passes' && <LoungePassesManager />}
         {tab === 'hotel-rooms' && <HotelManager />}
-        {tab === 'airport-transfers' && <AirportTransfersManager />}
         {tab === 'circuit-transfers' && <CircuitTransfersManager />}
+        {tab === 'airport-transfers' && <AirportTransfersManager />}
         {tab === 'flights' && <FlightsManager />}
+        {tab === 'lounge-passes' && <LoungePassesManager />}
         {tab === 'sports-events' && <SportsEventsManager />}
         {tab === 'venues' && <VenuesManager />}
-        {tab === 'packages' && null /* <PackagesManager /> */}
         {/* Add more tab content as needed */}
       </div>
     </div>

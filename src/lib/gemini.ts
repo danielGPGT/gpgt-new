@@ -198,7 +198,7 @@ class GeminiService {
 
     // Gemini 1.5 Flash for media library (better multimodal capabilities)
     this.mediaModel = this.genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash-latest",
+      model: "gemini-2.0-flash-exp",
       generationConfig: {
         temperature: 0.7,
         topK: 32,
@@ -343,7 +343,7 @@ Return a JSON object with the following structure:
   "description": "Detailed hotel description (2-3 sentences)",
   "amenities": ["WiFi", "Pool", "Gym", "Spa", "Restaurant", "Bar", "Room Service", "Concierge", "Parking"],
   "check_in_time": "15:00",
-  "check_out_time": "11:00",
+  "check_out_time": "10:00",
   "contact_email": "info@hotelname.com",
   "phone": "+1 (555) 123-4567",
   "room_types": ["Standard", "Deluxe", "Suite", "Executive"]

@@ -76,13 +76,6 @@ const COMPONENT_CONFIG = {
     description: 'Transportation to/from airport',
     color: 'bg-orange-500'
   },
-  flight: { 
-    label: 'Flights', 
-    required: false, 
-    icon: Plane,
-    description: 'Flight arrangements',
-    color: 'bg-red-500'
-  }
 };
 
 interface SelectedComponent {
@@ -308,8 +301,6 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
         const airportTransferType = component.transport_type;
         const formattedAirportTransferType = airportTransferType?.replace(/_/g, ' ') || 'transfer';
         return `${formattedAirportTransferType} - £${airportPrice.toFixed(2)}`;
-      case 'flight':
-        return `${component.airline} ${component.outbound_flight_number} - £${component.total_price_gbp?.toFixed(2) || '0.00'}`;
       default:
         return component.id;
     }
@@ -325,8 +316,6 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
         return component.sell_price_per_seat_gbp || component.utilisation_cost_per_seat_gbp || 0;
       case 'airport_transfer':
         return component.price_per_car_gbp_markup || component.supplier_quote_per_car_gbp || 0;
-      case 'flight':
-        return component.total_price_gbp || 0;
       default:
         return 0;
     }

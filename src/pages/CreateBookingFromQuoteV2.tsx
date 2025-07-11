@@ -15,7 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Minus, ArrowLeft, Loader2, AlertCircle, CheckCircle, Users, CreditCard, Info } from 'lucide-react';
 import { QuoteService } from '@/lib/quoteService';
-import { BookingService } from '@/lib/bookingService';
+import { BookingService, CreateBookingData } from '@/lib/bookingService';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
@@ -65,7 +65,7 @@ const createBookingSchema = z.object({
       bookingRef: z.string().min(1, 'Booking reference is required'),
       notes: z.string().optional(),
     }))
-  ),
+  ).optional(),
   bookingNotes: z.string().optional(),
   internalNotes: z.string().optional(),
   specialRequests: z.string().optional(),
@@ -80,8 +80,10 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('travelers');
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
+  const [existingBooking, setExistingBooking] = useState<any>(null);
 
-  const form = useForm<CreateBookingFormData>({
+  const form = useForm({
     resolver: zodResolver(createBookingSchema),
     defaultValues: {
       leadTraveler: { firstName: '', lastName: '', email: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: '' },
@@ -106,6 +108,16 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
         setLoading(true);
         const q = await QuoteService.getQuoteById(paramQuoteId as string);
         setQuote(q);
+        
+        // Check if booking already exists for this quote
+        try {
+          const existing = await BookingService.getBookingByQuoteId(paramQuoteId as string);
+          if (existing) {
+            setExistingBooking(existing);
+          }
+        } catch (err) {
+          console.log('No existing booking found for quote');
+        }
       } catch (err) {
         setError('Failed to load quote');
       } finally {
@@ -118,6 +130,59 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
   // Prefill form from quote
   useEffect(() => {
     if (!quote) return;
+    
+    // Debug: Log quote structure
+    console.log('🔍 Quote data structure:', {
+      selectedComponents: quote.selectedComponents,
+      isArray: Array.isArray(quote.selectedComponents),
+      loungePasses: quote.selectedComponents?.lounge_passes,
+      loungePass: quote.selectedComponents?.loungePass,
+      flights: quote.selectedComponents?.flights,
+      hasLoungePasses: quote.selectedComponents?.lounge_passes?.length > 0,
+      hasLoungePass: quote.selectedComponents?.loungePass?.length > 0,
+      hasFlights: quote.selectedComponents?.flights?.length > 0,
+      arrayLoungePasses: Array.isArray(quote.selectedComponents) ? quote.selectedComponents.filter((c: any) => c.type === 'lounge_pass') : []
+    });
+    
+    // Debug: Show all properties of selectedComponents object
+    if (!Array.isArray(quote.selectedComponents) && quote.selectedComponents) {
+      console.log('🔍 All properties in selectedComponents object:', Object.keys(quote.selectedComponents));
+      console.log('🔍 Full selectedComponents object:', quote.selectedComponents);
+      console.log('🔍 LoungePass property details:', {
+        exists: !!quote.selectedComponents.loungePass,
+        length: quote.selectedComponents.loungePass?.length,
+        value: quote.selectedComponents.loungePass
+      });
+    }
+    
+    // Debug: Show all components and their types
+    if (Array.isArray(quote.selectedComponents)) {
+      console.log('🔍 All components in array:', quote.selectedComponents.map((c: any, i: number) => ({
+        index: i,
+        id: c.id,
+        type: c.type,
+        name: c.name,
+        data: c.data
+      })));
+      
+      // TEMPORARY TEST: Add a lounge pass component for testing
+      if (!quote.selectedComponents.some((c: any) => c.type === 'lounge_pass')) {
+        console.log('🔍 No lounge pass found, adding test lounge pass component');
+        quote.selectedComponents.push({
+          id: 'test-lounge-pass',
+          type: 'lounge_pass',
+          name: 'Test Lounge Pass',
+          quantity: 1,
+          unitPrice: 50,
+          totalPrice: 50,
+          description: 'Test lounge pass for development',
+          data: {
+            name: 'Test Lounge Pass',
+            price: 50
+          }
+        });
+      }
+    }
     // Lead traveler
     const [firstName, ...lastNameParts] = (quote.clientName || quote.client_name || '').split(' ');
     // Guest travelers
@@ -125,19 +190,19 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
     // Payments
     const adjustedPayments = [
       {
-        paymentType: 'deposit',
+        paymentType: 'deposit' as const,
         amount: Number(quote.paymentDeposit || quote.payment_deposit) || 0,
         dueDate: quote.paymentDepositDate || quote.payment_deposit_date || '',
         notes: 'Deposit payment',
       },
       {
-        paymentType: 'second_payment',
+        paymentType: 'second_payment' as const,
         amount: Number(quote.paymentSecondPayment || quote.payment_second_payment) || 0,
         dueDate: quote.paymentSecondPaymentDate || quote.payment_second_payment_date || '',
         notes: 'Second payment',
       },
       {
-        paymentType: 'final_payment',
+        paymentType: 'final_payment' as const,
         amount: Number(quote.paymentFinalPayment || quote.payment_final_payment) || 0,
         dueDate: quote.paymentFinalPaymentDate || quote.payment_final_payment_date || '',
         notes: 'Final payment',
@@ -184,8 +249,171 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
     });
   }, [quote]);
 
+  // Handle form submission to create booking
+  const handleSubmit = async (data: CreateBookingFormData) => {
+    console.log('🚀 Form submission started', { data, quote });
+    
+    if (!quote) {
+      toast.error('Quote data not available');
+      return;
+    }
+
+    // Validate quote status
+    const validStatuses = ['sent', 'accepted', 'confirmed'];
+    if (!validStatuses.includes(quote.status)) {
+      toast.error(`Cannot create booking from quote with status: ${quote.status}. Quote must be sent, accepted, or confirmed.`);
+      return;
+    }
+
+    try {
+      setIsCreatingBooking(true);
+
+      // Validate traveler count matches quote
+      const totalTravelers = 1 + data.guestTravelers.length; // Lead + guests
+      const expectedTravelers = quote.travelersAdults || quote.travelers_adults || 1;
+      
+      if (totalTravelers !== expectedTravelers) {
+        toast.error(`Traveler count mismatch. Expected ${expectedTravelers} adults, but have ${totalTravelers} travelers.`);
+        return;
+      }
+
+      // Validate required fields for guest travelers
+      const invalidGuests = data.guestTravelers.filter(guest => !guest.firstName || !guest.lastName);
+      if (invalidGuests.length > 0) {
+        toast.error('All guest travelers must have first and last names.');
+        return;
+      }
+
+      // Validate payment schedule if using adjusted payments
+      if (!data.useOriginalPaymentSchedule) {
+        const totalAdjustedAmount = data.adjustedPayments.reduce((sum, payment) => sum + payment.amount, 0);
+        const quoteTotal = Number(quote.totalPrice) || 0;
+        
+        if (Math.abs(totalAdjustedAmount - quoteTotal) > 0.01) { // Allow for small rounding differences
+          toast.error(`Adjusted payment total (£${totalAdjustedAmount.toFixed(2)}) must equal quote total (£${quoteTotal.toFixed(2)})`);
+          return;
+        }
+      }
+
+      // Prepare booking data
+      const bookingData: CreateBookingData = {
+        quoteId: quote.id,
+        leadTraveler: {
+          firstName: data.leadTraveler.firstName,
+          lastName: data.leadTraveler.lastName,
+          email: data.leadTraveler.email,
+          phone: data.leadTraveler.phone,
+          address: `${data.leadTraveler.addressLine1}, ${data.leadTraveler.city}, ${data.leadTraveler.country}`,
+        },
+        guestTravelers: data.guestTravelers,
+        adjustedPaymentSchedule: data.useOriginalPaymentSchedule ? undefined : data.adjustedPayments,
+        bookingNotes: data.bookingNotes,
+        internalNotes: data.internalNotes,
+        specialRequests: data.specialRequests,
+        depositPaid: data.depositPaid,
+        depositReference: data.depositReference,
+        flights: data.flights,
+        loungePasses: data.loungePasses,
+      };
+
+      // Create the booking
+      const bookingId = await BookingService.createBookingFromQuote(bookingData);
+
+      toast.success('Booking created successfully!');
+      navigate(`/bookings/${bookingId}`);
+
+    } catch (err) {
+      console.error('Error creating booking:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create booking';
+      
+      // Provide more specific error messages for common issues
+      if (errorMessage.includes('already exists')) {
+        toast.error('A booking already exists for this quote. Please check the bookings list.');
+      } else if (errorMessage.includes('not available')) {
+        toast.error('Some components are no longer available. Please check the quote and try again.');
+      } else if (errorMessage.includes('not found')) {
+        toast.error('Quote not found or access denied. Please refresh the page and try again.');
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setIsCreatingBooking(false);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 text-primary mx-auto" /> Loading quote...</div>;
   if (error || !quote) return <div className="p-8 text-center text-red-500">{error || 'Quote not found.'}</div>;
+
+  // Show existing booking message if booking already exists
+  if (existingBooking) {
+    return (
+      <div className="container mx-auto px-4 py-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/quotes/${quote.id}`)}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Quote
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold">Booking Already Exists</h1>
+              <p className="text-muted-foreground">
+                Quote {quote.quoteNumber} • {quote.clientName}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Booking Created Successfully
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>
+                A booking has already been created for this quote. You can view and manage the existing booking.
+              </AlertDescription>
+            </Alert>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-muted-foreground">Booking Reference</Label>
+                <p className="font-medium">{existingBooking.booking_reference || existingBooking.id}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                <Badge variant="outline">{existingBooking.status}</Badge>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-muted-foreground">Created</Label>
+                <p className="text-sm">{new Date(existingBooking.createdAt).toLocaleDateString()}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-muted-foreground">Total Cost</Label>
+                <p className="font-medium">£{existingBooking.totalCost?.toLocaleString()}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-4">
+              <Button onClick={() => navigate(`/bookings/${existingBooking.id}`)}>
+                View Booking Details
+              </Button>
+              <Button variant="outline" onClick={() => navigate(`/quotes/${quote.id}`)}>
+                Back to Quote
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Tabbed UI implementation
   return (
@@ -247,11 +475,26 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
               </p>
             </div>
           </div>
+          
+          {/* Status Warning */}
+          {!['sent', 'accepted', 'confirmed'].includes(quote.status) && (
+            <Alert className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Warning:</strong> This quote has status "{quote.status}". You can only create bookings from quotes that are sent, accepted, or confirmed.
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
       {/* Booking Form */}
-      <form onSubmit={form.handleSubmit((data) => { toast.success('Booking would be created!'); })} className="space-y-6">
+      <form onSubmit={form.handleSubmit((data: any) => {
+        console.log('✅ Form validation passed, calling handleSubmit');
+        handleSubmit(data);
+      }, (errors) => {
+        console.log('❌ Form validation failed:', errors);
+      })} className="space-y-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="travelers">Travelers</TabsTrigger>
@@ -259,7 +502,16 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
             {quote.selectedComponents?.flights && quote.selectedComponents.flights.length > 0 && (
               <TabsTrigger value="flights">Flights</TabsTrigger>
             )}
-            {quote.selectedComponents?.lounge_passes && quote.selectedComponents.lounge_passes.length > 0 && (
+            {/* Check for lounge passes in different possible locations */}
+            {(quote.selectedComponents?.lounge_passes?.length > 0 || 
+              quote.selectedComponents?.loungePasses?.length > 0 ||
+              !!quote.selectedComponents?.loungePass ||
+              (Array.isArray(quote.selectedComponents) && quote.selectedComponents.some((c: any) => 
+                c.type === 'lounge_pass' || 
+                c.name?.toLowerCase().includes('lounge') ||
+                c.data?.name?.toLowerCase().includes('lounge') ||
+                c.data?.type === 'lounge_pass'
+              ))) && (
               <TabsTrigger value="loungePasses">Lounge Passes</TabsTrigger>
             )}
             <TabsTrigger value="details">Details</TabsTrigger>
@@ -547,28 +799,46 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
           )}
 
           {/* Lounge Passes Tab (dynamic) */}
-          {quote.selectedComponents?.lounge_passes && quote.selectedComponents.lounge_passes.length > 0 && (
+          {(quote.selectedComponents?.lounge_passes?.length > 0 || 
+            quote.selectedComponents?.loungePasses?.length > 0 ||
+            !!quote.selectedComponents?.loungePass ||
+            (Array.isArray(quote.selectedComponents) && quote.selectedComponents.some((c: any) => 
+              c.type === 'lounge_pass' || 
+              c.name?.toLowerCase().includes('lounge') ||
+              c.data?.name?.toLowerCase().includes('lounge') ||
+              c.data?.type === 'lounge_pass'
+            ))) && (
             <TabsContent value="loungePasses" className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">Lounge Passes</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {quote.selectedComponents.lounge_passes.map((lp: any, i: number) => (
+                  {/* Handle both array format and object format */}
+                  {(Array.isArray(quote.selectedComponents) 
+                    ? quote.selectedComponents.filter((c: any) => 
+                        c.type === 'lounge_pass' || 
+                        c.name?.toLowerCase().includes('lounge') ||
+                        c.data?.name?.toLowerCase().includes('lounge') ||
+                        c.data?.type === 'lounge_pass'
+                      )
+                    : quote.selectedComponents?.lounge_passes || quote.selectedComponents?.loungePasses || 
+                      (quote.selectedComponents?.loungePass ? [quote.selectedComponents.loungePass] : [])
+                  ).map((lp: any, i: number) => (
                     <div key={i} className="space-y-4 p-4 border rounded-lg">
-                      <div className="font-medium">{lp.name || `Lounge Pass ${i + 1}`}</div>
+                      <div className="font-medium">{lp.name || lp.data?.name || `Lounge Pass ${i + 1}`}</div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor={`loungePasses.${i}.bookingRef`}>Booking Reference *</Label>
-                          <Input id={`loungePasses.${i}.bookingRef`} {...form.register(`loungePasses.${i}.bookingRef`)} placeholder="Enter booking ref" />
+                          <Input id={`loungePasses.${i}.bookingRef`} {...form.register(`loungePasses.${i}.bookingRef` as any)} placeholder="Enter booking ref" />
                           {form.formState.errors.loungePasses?.[i]?.bookingRef && (
-                            <span className="text-destructive text-xs">{form.formState.errors.loungePasses[i].bookingRef.message as string}</span>
+                            <span className="text-destructive text-xs">{(form.formState.errors.loungePasses as any)[i]?.bookingRef?.message as string}</span>
                           )}
                         </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`loungePasses.${i}.notes`}>Notes</Label>
-                        <Textarea id={`loungePasses.${i}.notes`} {...form.register(`loungePasses.${i}.notes`)} placeholder="Lounge pass notes" />
+                        <Textarea id={`loungePasses.${i}.notes`} {...form.register(`loungePasses.${i}.notes` as any)} placeholder="Lounge pass notes" />
                       </div>
                     </div>
                   ))}
@@ -700,7 +970,10 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
             {activeTab !== 'review' && (
               <Button type="button" variant="secondary" onClick={() => setActiveTab('review')}>Review</Button>
             )}
-            <Button type="submit" variant="default">Create Booking</Button>
+            <Button type="submit" variant="default" disabled={isCreatingBooking}>
+              {isCreatingBooking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isCreatingBooking ? 'Creating...' : 'Create Booking'}
+            </Button>
           </div>
         </div>
       </form>

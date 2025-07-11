@@ -196,7 +196,7 @@ Respond with ONLY valid JSON in this exact format:
         description: 'Image content',
         category: 'activity',
         location: undefined,
-        confidence: 0.5
+        confidence: 0.75
       };
     }
   }

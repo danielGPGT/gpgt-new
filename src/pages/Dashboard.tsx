@@ -348,9 +348,9 @@ export function Dashboard() {
   );
 
   const filteredBookings = bookings.filter(booking =>
-    booking.clientName.toLowerCase().includes(bookingSearchTerm.toLowerCase()) ||
-    booking.destination.toLowerCase().includes(bookingSearchTerm.toLowerCase()) ||
-    booking.status.toLowerCase().includes(bookingSearchTerm.toLowerCase())
+    (booking.clientName?.toLowerCase() || '').includes(bookingSearchTerm.toLowerCase()) ||
+    (booking.destination?.toLowerCase() || '').includes(bookingSearchTerm.toLowerCase()) ||
+    (booking.status?.toLowerCase() || '').includes(bookingSearchTerm.toLowerCase())
   );
 
   if (loading) {

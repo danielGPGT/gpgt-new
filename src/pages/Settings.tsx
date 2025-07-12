@@ -349,63 +349,6 @@ const ProfileSettings = () => {
 
   return (
     <div className="space-y-6">
-      {/* Avatar/Logo Section */}
-      <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Building2 className="h-5 w-5 text-primary" />
-            Agency Branding
-          </CardTitle>
-          <CardDescription>
-            Upload your agency logo to personalize your experience
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center gap-6">
-            <div className="flex-shrink-0">
-              {logoUrl ? (
-                <div className="w-20 h-20 rounded-xl border-4 border-primary/10 overflow-hidden bg-white shadow-lg">
-                  <img 
-                    src={logoUrl} 
-                    alt="Agency Logo" 
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-              ) : (
-                <div className="w-20 h-20 rounded-xl border-4 border-primary/10 bg-primary/10 flex items-center justify-center">
-                  <Building2 className="h-8 w-8 text-primary" />
-                </div>
-              )}
-            </div>
-            <div className="flex-1 space-y-4">
-              <div>
-                <Label htmlFor="logo" className="text-sm font-medium">
-                  Agency Logo
-                </Label>
-                <div className="mt-2">
-                  <input
-                    id="logo"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoChange}
-                    disabled={!isEditing || isUploading}
-                    className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-colors disabled:opacity-50"
-                  />
-                </div>
-                {isUploading && (
-                  <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Uploading logo...
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  Recommended: Square image, 512x512px or larger
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Profile Information */}
       <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
@@ -1866,7 +1809,7 @@ export function Settings() {
 
 
       {/* Main Settings Card */}
-      <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
+      <Card className="bg-gradient-to-b py-0 from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
         <CardContent className="p-0">
           <Tabs defaultValue="profile" className="space-y-4">
             <TabsList className="bg-card rounded-t-2xl p-1">

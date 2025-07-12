@@ -5,7 +5,6 @@ import { MainLayout } from "./components/layout/MainLayout";
 import { PublicLayout } from "./components/layout/PublicLayout";
 import { AuthProvider, useAuth } from "./lib/AuthProvider";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import NewProposal from "./pages/NewProposal";
 import ItinerariesPage from "./pages/Itineraries";
@@ -76,11 +75,6 @@ function AppContent() {
         <Route path="/login" element={
           <PublicLayout>
             <Login />
-          </PublicLayout>
-        } />
-        <Route path="/signup" element={
-          <PublicLayout>
-            <Signup />
           </PublicLayout>
         } />
         

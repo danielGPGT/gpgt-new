@@ -249,10 +249,10 @@ export function PackageDetails({ event, packages, onClose }: PackageDetailsProps
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="border-b border-border p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between">
           <div>
             <h2 className="text-xl font-semibold">{event.name} Packages</h2>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+            <div className="flex items-start pt-5 gap-4 text-sm text-muted-foreground mt-1 flex-col">
               <div className="flex items-center gap-1">
                 <Trophy className="h-4 w-4" />
                 <span>{event.sport?.name}</span>
@@ -267,7 +267,7 @@ export function PackageDetails({ event, packages, onClose }: PackageDetailsProps
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-end justify-end gap-2">
             {canCreatePackage && (
               <Button 
                 onClick={() => setIsPackageFormOpen(true)}

@@ -109,10 +109,12 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
             </Button>
             <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
           </div>
-          <Button variant="ghost" size="icon">
-            <Settings className="h-5 w-5" />
-            <span className="sr-only">Settings</span>
-          </Button>
+          <Link to="/settings">
+            <Button variant="ghost" size="icon">
+              <Settings className="h-5 w-5" />
+              <span className="sr-only">Settings</span>
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             size="icon"

@@ -261,6 +261,14 @@ export default function PackageManager() {
     return 0;
   });
 
+  // Group events by year
+  const eventsByYear = sortedEvents.reduce((acc, event) => {
+    const year = event.start_date ? new Date(event.start_date).getFullYear() : 'Unknown';
+    if (!acc[year]) acc[year] = [];
+    acc[year].push(event);
+    return acc;
+  }, {} as Record<string, typeof sortedEvents>);
+
   const getSportIcon = (sportName: string) => {
     const icons: { [key: string]: React.ReactNode } = {
       'Formula 1': <img src={f1Icon} alt="Formula 1" className="h-10 w-10 brightness-0 invert" />,
@@ -326,7 +334,7 @@ export default function PackageManager() {
       <div className="flex gap-8">
         {/* Left Column - Filters Card */}
         <div className="w-80 flex-shrink-0">
-          <Card className="bg-gradient-to-b from-[var(--card)]/95 to-[var(--card)]/20 border-[var(--border)] shadow-sm sticky top-6">
+          <Card className="bg-gradient-to-b from-[var(--card)]/95 to-[var(--card)]/20 border-[var(--border)] shadow-sm sticky top-16">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg font-semibold flex items-center gap-2 text-[var(--foreground)]">
                 <Filter className="h-4 w-4 text-[var(--primary)]" />
@@ -625,222 +633,216 @@ export default function PackageManager() {
                   </Card>
                 ))}
               </div>
-            ) : sortedEvents.length === 0 ? (
-              <Card className="bg-gradient-to-b h-full from-[var(--card)]/95 to-[var(--card)]/20 border-[var(--border)] shadow-sm">
-                <CardContent className="text-center py-16 h-full">
-                  <div className="h-16 w-16 rounded-full bg-[var(--muted)]/20 flex items-center justify-center mx-auto mb-4">
-                    <Package className="h-8 w-8 text-[var(--muted-foreground)]" />
+            ) : Object.entries(eventsByYear)
+              .sort(([a], [b]) => {
+                const aNum = Number(a) || 0;
+                const bNum = Number(b) || 0;
+                if (sortOption === 'date-asc') return aNum - bNum;
+                if (sortOption === 'date-desc') return bNum - aNum;
+                return 0;
+              })
+              .map(([year, events]) => (
+                <div key={year} className="mb-10">
+                  <div className="flex items-center mb-4">
+                    <div className="h-6 w-1 rounded bg-[var(--primary)] mr-2" />
+                    <h2 className="text-2xl font-extrabold tracking-tight px-3 py-1 rounded">
+                      {year}
+                    </h2>
                   </div>
-                  <h3 className="text-xl font-semibold text-[var(--foreground)] mb-2">No events found</h3>
-                  <p className="text-[var(--muted-foreground)] mb-6 max-w-md mx-auto">
-                    Create your first event to get started with package management and begin building travel experiences.
-                  </p>
-                  <Button 
-                    onClick={() => {
-                      setEditingEvent(null);
-                      setIsEventFormOpen(true);
-                    }}
-                    className="bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-[var(--primary-foreground)] shadow-sm"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Event
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 lg:gap-6">
-                <AnimatePresence>
-                  {sortedEvents.map((event) => (
-                    <motion.div
-                      key={event.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.3, ease: "easeOut" }}
-                      whileHover={{ y: -4 }}
-                      className="group"
-                    >
-                      <Card 
-                        className={`h-full relative overflow-hidden transition-all duration-300 cursor-pointer border-[var(--border)] hover:border-[var(--primary)]/40 hover:shadow-xl hover:shadow-[var(--primary)]/5 ${
-                          event.event_image 
-                            ? 'bg-cover bg-center bg-no-repeat min-h-[280px] sm:min-h-[320px]' 
-                            : 'bg-gradient-to-br from-[var(--card)] via-[var(--card)]/95 to-[var(--card)]/90 min-h-[280px] sm:min-h-[320px]'
-                        }`}
-                        style={event.event_image ? {
-                          backgroundImage: `linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0.7) 100%), url(${event.event_image.image_url || event.event_image.thumbnail_url})`
-                        } : undefined}
-                        onClick={() => setSelectedEvent(event)}
-                      >
-                        {/* Gradient Overlay for better text readability */}
-                        {event.event_image && (
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        )}
-                        
-                        {/* Status Badge */}
-                        <div className="absolute top-3 left-3 z-20">
-                          <Badge 
-                            variant={getEventStatus(event).status === 'ongoing' ? 'default' : 'secondary'}
-                            className={`transition-all duration-300 ${
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 lg:gap-6">
+                    <AnimatePresence>
+                      {events.map((event) => (
+                        <motion.div
+                          key={event.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          transition={{ duration: 0.3, ease: "easeOut" }}
+                          whileHover={{ y: -4 }}
+                          className="group"
+                        >
+                          <Card 
+                            className={`h-full relative overflow-hidden transition-all duration-300 cursor-pointer border-[var(--border)] hover:border-[var(--primary)]/40 hover:shadow-xl hover:shadow-[var(--primary)]/5 ${
                               event.event_image 
-                                ? 'bg-white/20 backdrop-blur-sm text-white border-white/30 hover:bg-white/30' 
-                                : 'bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 border-[var(--primary)]/20'
+                                ? 'bg-cover bg-center bg-no-repeat min-h-[280px] sm:min-h-[320px]' 
+                                : 'bg-gradient-to-br from-[var(--card)] via-[var(--card)]/95 to-[var(--card)]/90 min-h-[280px] sm:min-h-[320px]'
                             }`}
+                            style={event.event_image ? {
+                              backgroundImage: `linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0.7) 100%), url(${event.event_image.image_url || event.event_image.thumbnail_url})`
+                            } : undefined}
+                            onClick={() => setSelectedEvent(event)}
                           >
-                            {getEventStatus(event).label}
-                          </Badge>
-                        </div>
-
-                        {/* Action Menu */}
-                        <div className="absolute top-3 right-3 z-20">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                className={`opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 ${
+                            {/* Gradient Overlay for better text readability */}
+                            {event.event_image && (
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                            )}
+                            
+                            {/* Status Badge */}
+                            <div className="absolute top-3 left-3 z-20">
+                              <Badge 
+                                variant={getEventStatus(event).status === 'ongoing' ? 'default' : 'secondary'}
+                                className={`transition-all duration-300 ${
                                   event.event_image 
-                                    ? 'bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white' 
-                                    : 'hover:bg-[var(--muted)]'
+                                    ? 'bg-white/20 backdrop-blur-sm text-white border-white/30 hover:bg-white/30' 
+                                    : 'bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 border-[var(--primary)]/20'
                                 }`}
-                                onClick={(e) => e.stopPropagation()}
                               >
-                                <Settings className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="bg-[var(--card)] border-[var(--border)] shadow-lg">
-                              <DropdownMenuLabel className="text-[var(--foreground)]">Actions</DropdownMenuLabel>
+                                {getEventStatus(event).label}
+                              </Badge>
+                            </div>
+
+                            {/* Action Menu */}
+                            <div className="absolute top-3 right-3 z-20">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    className={`opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 ${
+                                      event.event_image 
+                                        ? 'bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white' 
+                                        : 'hover:bg-[var(--muted)]'
+                                    }`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Settings className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="bg-[var(--card)] border-[var(--border)] shadow-lg">
+                                  <DropdownMenuLabel className="text-[var(--foreground)]">Actions</DropdownMenuLabel>
                                                               <DropdownMenuItem 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedEvent(event);
-                                  }}
-                                  className="text-[var(--foreground)] hover:bg-[var(--muted)]"
-                                >
-                                <Eye className="h-4 w-4 mr-2" />
-                                View Packages
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator className="bg-[var(--border)]" />
-                                                              <DropdownMenuItem 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingEvent(event);
-                                    setIsEventFormOpen(true);
-                                  }}
-                                  className="text-[var(--foreground)] hover:bg-[var(--muted)]"
-                                >
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit Event
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedEvent(event);
+                                    }}
+                                    className="text-[var(--foreground)] hover:bg-[var(--muted)]"
+                                  >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Packages
                                 </DropdownMenuItem>
-                              <DropdownMenuItem className="text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete Event
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-
-                        <CardHeader className="pb-2 pt-16 relative z-10">
-                          <div className="space-y-3">
-                            {/* Sport Icon and Name */}
-                            <div className="flex items-center gap-3">
-                              <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-lg ${
-                                event.event_image 
-                                  ? 'bg-white/20 backdrop-blur-sm group-hover:bg-white/30 group-hover:scale-110' 
-                                  : 'bg-[var(--primary)]/10 group-hover:bg-[var(--primary)]/20 group-hover:scale-110'
-                              }`}>
-                                {getSportIcon(event.sport?.name || '')}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <CardTitle className={`text-lg font-bold transition-colors line-clamp-2 ${
-                                  event.event_image 
-                                    ? 'text-white group-hover:text-white/90' 
-                                    : 'text-[var(--foreground)] group-hover:text-[var(--primary)]'
-                                }`}>
-                                  {event.name}
-                                </CardTitle>
-                                <p className={`text-sm mt-1 font-medium ${
-                                  event.event_image 
-                                    ? 'text-white/80' 
-                                    : 'text-[var(--muted-foreground)]'
-                                }`}>
-                                  {event.sport?.name}
-                                </p>
-                              </div>
-                            </div>
+                                <DropdownMenuSeparator className="bg-[var(--border)]" />
+                                                              <DropdownMenuItem 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingEvent(event);
+                                      setIsEventFormOpen(true);
+                                    }}
+                                    className="text-[var(--foreground)] hover:bg-[var(--muted)]"
+                                  >
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit Event
+                                  </DropdownMenuItem>
+                                <DropdownMenuItem className="text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Event
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
-                        </CardHeader>
 
-                        <CardContent className="relative z-10 pt-0">
-                          <div className="space-y-4">
-                            {/* Venue Info */}
-                            <div className="flex items-start gap-2">
-                              <MapPin className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
-                                event.event_image ? 'text-white/80' : 'text-[var(--secondary)]'
-                              }`} />
-                              <span className={`text-sm line-clamp-2 ${
-                                event.event_image ? 'text-white/80' : 'text-[var(--muted-foreground)]'
-                              }`}>
-                                {event.venue?.name}
-                              </span>
+                          <CardHeader className="pb-2 pt-16 relative z-10">
+                            <div className="space-y-3">
+                              {/* Sport Icon and Name */}
+                              <div className="flex items-center gap-3">
+                                <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-lg ${
+                                  event.event_image 
+                                    ? 'bg-white/20 backdrop-blur-sm group-hover:bg-white/30 group-hover:scale-110' 
+                                    : 'bg-[var(--primary)]/10 group-hover:bg-[var(--primary)]/20 group-hover:scale-110'
+                                }`}>
+                                  {getSportIcon(event.sport?.name || '')}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <CardTitle className={`text-lg font-bold transition-colors line-clamp-2 ${
+                                    event.event_image 
+                                      ? 'text-white group-hover:text-white/90' 
+                                      : 'text-[var(--foreground)] group-hover:text-[var(--primary)]'
+                                  }`}>
+                                    {event.name}
+                                  </CardTitle>
+                                  <p className={`text-sm mt-1 font-medium ${
+                                    event.event_image 
+                                      ? 'text-white/80' 
+                                      : 'text-[var(--muted-foreground)]'
+                                  }`}>
+                                    {event.sport?.name}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
+                          </CardHeader>
 
-                            {/* Date Info */}
-                            <div className="flex items-start gap-2">
-                              <Calendar className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
-                                event.event_image ? 'text-white/80' : 'text-[var(--chart-4)]'
-                              }`} />
-                              <span className={`text-sm ${
-                                event.event_image ? 'text-white/80' : 'text-[var(--muted-foreground)]'
-                              }`}>
-                                {event.start_date && format(new Date(event.start_date), 'MMM dd, yyyy')}
-                                {event.end_date && event.end_date !== event.start_date && 
-                                  ` - ${format(new Date(event.end_date), 'MMM dd, yyyy')}`
-                                }
-                              </span>
-                            </div>
-
-                            {/* Bottom Section */}
-                            <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]/20">
-                              <div className="flex items-center gap-2">
-                                <Package className={`h-4 w-4 ${
-                                  event.event_image ? 'text-white/60' : 'text-[var(--muted-foreground)]'
+                          <CardContent className="relative z-10 pt-0">
+                            <div className="space-y-4">
+                              {/* Venue Info */}
+                              <div className="flex items-start gap-2">
+                                <MapPin className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
+                                  event.event_image ? 'text-white/80' : 'text-[var(--secondary)]'
                                 }`} />
+                                <span className={`text-sm line-clamp-2 ${
+                                  event.event_image ? 'text-white/80' : 'text-[var(--muted-foreground)]'
+                                }`}>
+                                  {event.venue?.name}
+                                </span>
+                              </div>
+
+                              {/* Date Info */}
+                              <div className="flex items-start gap-2">
+                                <Calendar className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
+                                  event.event_image ? 'text-white/80' : 'text-[var(--chart-4)]'
+                                }`} />
+                                <span className={`text-sm ${
+                                  event.event_image ? 'text-white/80' : 'text-[var(--muted-foreground)]'
+                                }`}>
+                                  {event.start_date && format(new Date(event.start_date), 'MMM dd, yyyy')}
+                                  {event.end_date && event.end_date !== event.start_date && 
+                                    ` - ${format(new Date(event.end_date), 'MMM dd, yyyy')}`
+                                  }
+                                </span>
+                              </div>
+
+                              {/* Bottom Section */}
+                              <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]/20">
+                                <div className="flex items-center gap-2">
+                                  <Package className={`h-4 w-4 ${
+                                    event.event_image ? 'text-white/60' : 'text-[var(--muted-foreground)]'
+                                  }`} />
                                                                  <span className={`text-xs font-medium ${
                                    event.event_image ? 'text-white/60' : 'text-[var(--muted-foreground)]'
                                  }`}>
                                    {allPackages?.filter(p => p.event_id === event.id).length || 0} packages
                                  </span>
+                                </div>
+                                
+                                {/* View Details Button */}
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  className={`opacity-0 group-hover:opacity-100 transition-all duration-300 text-xs ${
+                                    event.event_image 
+                                      ? 'text-white/80 hover:text-white hover:bg-white/20' 
+                                      : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]'
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedEvent(event);
+                                  }}
+                                >
+                                  View Details
+                                  <ChevronRight className="h-3 w-3 ml-1" />
+                                </Button>
                               </div>
-                              
-                              {/* View Details Button */}
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                className={`opacity-0 group-hover:opacity-100 transition-all duration-300 text-xs ${
-                                  event.event_image 
-                                    ? 'text-white/80 hover:text-white hover:bg-white/20' 
-                                    : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedEvent(event);
-                                }}
-                              >
-                                View Details
-                                <ChevronRight className="h-3 w-3 ml-1" />
-                              </Button>
                             </div>
-                          </div>
-                        </CardContent>
+                          </CardContent>
 
-                        {/* Hover Effect Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-[var(--primary)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                      </Card>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+                          {/* Hover Effect Overlay */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-[var(--primary)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
               </div>
-            )}
+            ))}
           </div>
         </div>
       </div>

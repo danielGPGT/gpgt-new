@@ -335,7 +335,6 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
       hotel_room: 0,
       circuit_transfer: 0,
       airport_transfer: 0,
-      flight: 0
     };
 
     // Count components by type
@@ -383,16 +382,6 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
         const basePrice = getComponentPrice(airportPrice.componentData, 'airport_transfer');
         const finalPrice = airportPrice.priceOverride !== undefined ? airportPrice.priceOverride : basePrice;
         totalForTwo += finalPrice; // 1 transfer
-      }
-    }
-
-    // Flights: 2 per person
-    if (componentCounts.flight > 0) {
-      const flightPrice = selectedComponents.find(c => c.componentType === 'flight');
-      if (flightPrice) {
-        const basePrice = getComponentPrice(flightPrice.componentData, 'flight');
-        const finalPrice = flightPrice.priceOverride !== undefined ? flightPrice.priceOverride : basePrice;
-        totalForTwo += finalPrice * 2; // 2 flights
       }
     }
 
@@ -607,7 +596,7 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
                       <div>
                         <p className="font-medium text-sm">Price for 2 People</p>
                         <p className="text-xs text-muted-foreground">
-                          2 tickets • 1 hotel room • 2 circuit transfers • 1 airport transfer • 2 flights
+                          2 tickets • 1 hotel room • 2 circuit transfers • 1 airport transfer
                         </p>
                       </div>
                       <div className="text-right">

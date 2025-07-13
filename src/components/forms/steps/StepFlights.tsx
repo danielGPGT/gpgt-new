@@ -242,193 +242,23 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
     }
   }, [source, eventId]);
 
-  // Update selected flights when database flights change
+  // Initialize selectedFlightIds from existing value when component mounts
   useEffect(() => {
-    if (source === 'database' && databaseFlights.length > 0 && selectedFlightIds.length > 0) {
-      const selectedFlights = databaseFlights
-        .filter(flight => selectedFlightIds.includes(flight.id))
-        .map(flight => ({
-          id: flight.id,
-          source: 'database' as FlightSource,
-          origin: flight.outbound_departure_airport_code,
-          destination: flight.outbound_arrival_airport_code,
-          departureDate: flight.outbound_departure_datetime,
-          returnDate: flight.inbound_departure_datetime || undefined,
-          price: flight.total_price_gbp * 1.1, // Add 10% markup
-          passengers: adults,
-        }));
-
-      // Only update if the selection actually changed
-      const currentFlightIds = value.map(f => f.id).sort();
-      const newFlightIds = selectedFlights.map(f => f.id).sort();
-      
-      if (JSON.stringify(currentFlightIds) !== JSON.stringify(newFlightIds)) {
-        onChange(selectedFlights);
-      }
-    } else if (source === 'database' && selectedFlightIds.length === 0 && value.length > 0) {
-      onChange([]);
+    if (value && value.length > 0) {
+      const flightIds = value.map(flight => flight.id);
+      setSelectedFlightIds(flightIds);
+    } else {
+      setSelectedFlightIds([]);
     }
-  }, [selectedFlightIds, databaseFlights, source, adults]);
+  }, [value]);
 
-  // Update selected flights when API flights change
-  useEffect(() => {
-    if (source === 'api' && apiFlights.length > 0 && selectedFlightIds.length > 0) {
-      const selectedFlights = apiFlights
-        .filter(flight => selectedFlightIds.includes(flight.id))
-        .map(flight => ({
-          id: flight.id,
-          source: 'api' as FlightSource,
-          origin: flight.origin,
-          destination: flight.destination,
-          departureDate: flight.departureDate,
-          returnDate: flight.returnDate,
-          price: flight.price * 1.1, // Add 10% markup
-          passengers: flight.passengers,
-          
-          // Map all the detailed flight information
-          // Outbound flight details
-          outboundFlightId: flight.outboundFlightId,
-          outboundMarketingAirlineId: flight.outboundMarketingAirlineId,
-          outboundOperatingAirlineId: flight.outboundOperatingAirlineId,
-          outboundMarketingAirlineName: flight.outboundMarketingAirlineName,
-          outboundOperatingAirlineName: flight.outboundOperatingAirlineName,
-          outboundDepartureAirportId: flight.outboundDepartureAirportId,
-          outboundDepartureAirportName: flight.outboundDepartureAirportName,
-          outboundArrivalAirportId: flight.outboundArrivalAirportId,
-          outboundArrivalAirportName: flight.outboundArrivalAirportName,
-          outboundDepartureDateTime: flight.outboundDepartureDateTime,
-          outboundDepartureDateTimeUtc: flight.outboundDepartureDateTimeUtc,
-          outboundArrivalDateTime: flight.outboundArrivalDateTime,
-          outboundArrivalDateTimeUtc: flight.outboundArrivalDateTimeUtc,
-          outboundFlightDuration: flight.outboundFlightDuration,
-          outboundAircraftType: flight.outboundAircraftType,
-          outboundDepartureTerminal: flight.outboundDepartureTerminal,
-          outboundArrivalTerminal: flight.outboundArrivalTerminal,
-          outboundCabinId: flight.outboundCabinId,
-          outboundCabinName: flight.outboundCabinName,
-          outboundFareBasisCode: flight.outboundFareBasisCode,
-          outboundFareTypeId: flight.outboundFareTypeId,
-          outboundFareTypeName: flight.outboundFareTypeName,
-          outboundFareSubTypeId: flight.outboundFareSubTypeId,
-          outboundFareSubTypeName: flight.outboundFareSubTypeName,
-          outboundBaggageAllowance: flight.outboundBaggageAllowance,
-          outboundCheckedBaggage: flight.outboundCheckedBaggage,
-          outboundCarryOnBaggage: flight.outboundCarryOnBaggage,
-          outboundStops: flight.outboundStops,
-          outboundLayoverInfo: flight.outboundLayoverInfo,
-          
-          // Flight segments for multi-segment flights
-          outboundFlightSegments: flight.outboundFlightSegments,
-          returnFlightSegments: flight.returnFlightSegments,
-          
-          // Inbound flight details (for return flights)
-          inboundFlightId: flight.inboundFlightId,
-          inboundMarketingAirlineId: flight.inboundMarketingAirlineId,
-          inboundOperatingAirlineId: flight.inboundOperatingAirlineId,
-          inboundMarketingAirlineName: flight.inboundMarketingAirlineName,
-          inboundOperatingAirlineName: flight.inboundOperatingAirlineName,
-          inboundDepartureAirportId: flight.inboundDepartureAirportId,
-          inboundDepartureAirportName: flight.inboundDepartureAirportName,
-          inboundArrivalAirportId: flight.inboundArrivalAirportId,
-          inboundArrivalAirportName: flight.inboundArrivalAirportName,
-          inboundDepartureDateTime: flight.inboundDepartureDateTime,
-          inboundDepartureDateTimeUtc: flight.inboundDepartureDateTimeUtc,
-          inboundArrivalDateTime: flight.inboundArrivalDateTime,
-          inboundArrivalDateTimeUtc: flight.inboundArrivalDateTimeUtc,
-          inboundFlightDuration: flight.inboundFlightDuration,
-          inboundAircraftType: flight.inboundAircraftType,
-          inboundDepartureTerminal: flight.inboundDepartureTerminal,
-          inboundArrivalTerminal: flight.inboundArrivalTerminal,
-          inboundCabinId: flight.inboundCabinId,
-          inboundCabinName: flight.inboundCabinName,
-          inboundFareBasisCode: flight.inboundFareBasisCode,
-          inboundFareTypeId: flight.inboundFareTypeId,
-          inboundFareTypeName: flight.inboundFareTypeName,
-          inboundFareSubTypeId: flight.inboundFareSubTypeId,
-          inboundFareSubTypeName: flight.inboundFareSubTypeName,
-          inboundBaggageAllowance: flight.inboundBaggageAllowance,
-          inboundCheckedBaggage: flight.inboundCheckedBaggage,
-          inboundCarryOnBaggage: flight.inboundCarryOnBaggage,
-          inboundStops: flight.inboundStops,
-          inboundLayoverInfo: flight.inboundLayoverInfo,
-          
-          // Fare and pricing details
-          fareTypeId: flight.fareTypeId,
-          fareTypeName: flight.fareTypeName,
-          fareSubTypeId: flight.fareSubTypeId,
-          fareSubTypeName: flight.fareSubTypeName,
-          revenueStreamId: flight.revenueStreamId,
-          revenueStreamName: flight.revenueStreamName,
-          passengerTypeId: flight.passengerTypeId,
-          passengerTypeName: flight.passengerTypeName,
-          baseFare: flight.baseFare,
-          taxes: flight.taxes,
-          fees: flight.fees,
-          totalFare: flight.totalFare,
-          currencyId: flight.currencyId,
-          currencyCode: flight.currencyCode,
-          currencyName: flight.currencyName,
-          currencySymbol: flight.currencySymbol,
-          decimalPlaces: flight.decimalPlaces,
-          
-          // Additional metadata
-          recommendationId: flight.recommendationId,
-          validatingAirlineId: flight.validatingAirlineId,
-          validatingAirlineName: flight.validatingAirlineName,
-          skytraxRating: flight.skytraxRating,
-          isPremium: flight.isPremium,
-          isCorporate: flight.isCorporate,
-          isInstantTicketing: flight.isInstantTicketing,
-          isSemiDeferred: flight.isSemiDeferred,
-          isBaggageOnly: flight.isBaggageOnly,
-          isAlternateRoute: flight.isAlternateRoute,
-          
-          // Original API response data for reference
-          originalApiData: flight.originalApiData,
-          
-          // Legacy fields for backward compatibility
-          airline: flight.airline,
-          cabin: flight.cabin,
-          refundable: flight.refundable,
-          baggageAllowance: flight.baggageAllowance,
-          flightNumber: flight.flightNumber,
-          returnFlightNumber: flight.returnFlightNumber,
-          duration: flight.duration,
-          returnDuration: flight.returnDuration,
-          stops: flight.stops,
-          returnStops: flight.returnStops,
-          departureTerminal: flight.departureTerminal,
-          arrivalTerminal: flight.arrivalTerminal,
-          returnDepartureTerminal: flight.returnDepartureTerminal,
-          returnArrivalTerminal: flight.returnArrivalTerminal,
-          aircraft: flight.aircraft,
-          returnAircraft: flight.returnAircraft,
-          ticketingDeadline: flight.ticketingDeadline,
-          fareType: flight.fareType,
-          currency: flight.currency,
-        }));
-
-      // Only update if the selection actually changed
-      const currentFlightIds = value.map(f => f.id).sort();
-      const newFlightIds = selectedFlights.map(f => f.id).sort();
-      
-      if (JSON.stringify(currentFlightIds) !== JSON.stringify(newFlightIds)) {
-        onChange(selectedFlights);
-      }
-    } else if (source === 'api' && selectedFlightIds.length === 0 && value.length > 0) {
-      onChange([]);
-    }
-  }, [selectedFlightIds, apiFlights, source]);
-
-  // Sync selectedFlightIds with value when source changes
+  // Handle source changes
   useEffect(() => {
     if (source === 'none') {
       setSelectedFlightIds([]);
-    } else {
-      const currentIds = value.map(f => f.id);
-      setSelectedFlightIds(currentIds);
+      onChange([]);
     }
-  }, [source, value]);
+  }, [source, onChange]);
 
   const fetchDatabaseFlights = async () => {
     if (!eventId) return;
@@ -456,10 +286,51 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
   const handleFlightSelection = (flightId: string, checked: boolean) => {
     if (checked) {
       if (selectedFlightIds.length < adults) {
-        setSelectedFlightIds(prev => [...prev, flightId]);
+        const newSelectedIds = [...selectedFlightIds, flightId];
+        setSelectedFlightIds(newSelectedIds);
+        
+        // Update flights directly based on source
+        if (source === 'database') {
+          const selectedFlight = databaseFlights.find(flight => flight.id === flightId);
+          if (selectedFlight) {
+            const newFlight: SelectedFlight = {
+              id: selectedFlight.id,
+              source: 'database' as FlightSource,
+              origin: selectedFlight.outbound_departure_airport_code,
+              destination: selectedFlight.outbound_arrival_airport_code,
+              departureDate: selectedFlight.outbound_departure_datetime,
+              returnDate: selectedFlight.inbound_departure_datetime || undefined,
+              price: selectedFlight.total_price_gbp * 1.1, // Add 10% markup
+              passengers: adults,
+            };
+            onChange([...value, newFlight]);
+          }
+        } else if (source === 'api') {
+          const selectedFlight = apiFlights.find(flight => flight.id === flightId);
+          if (selectedFlight) {
+            const newFlight: SelectedFlight = {
+              id: selectedFlight.id,
+              source: 'api' as FlightSource,
+              origin: selectedFlight.origin,
+              destination: selectedFlight.destination,
+              departureDate: selectedFlight.departureDate,
+              returnDate: selectedFlight.returnDate,
+              price: selectedFlight.price * 1.1, // Add 10% markup
+              passengers: selectedFlight.passengers,
+              // Include all the detailed flight information
+              ...selectedFlight,
+            };
+            onChange([...value, newFlight]);
+          }
+        }
       }
     } else {
-      setSelectedFlightIds(prev => prev.filter(id => id !== flightId));
+      const newSelectedIds = selectedFlightIds.filter(id => id !== flightId);
+      setSelectedFlightIds(newSelectedIds);
+      
+      // Remove flight from value
+      const updatedFlights = value.filter(flight => flight.id !== flightId);
+      onChange(updatedFlights);
     }
   };
 

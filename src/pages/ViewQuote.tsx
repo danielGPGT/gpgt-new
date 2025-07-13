@@ -56,7 +56,9 @@ import {
   CheckSquare,
   Square,
   AlertTriangle,
-  Info
+  Info,
+  PlaneTakeoff,
+  PlaneLanding
 } from 'lucide-react';
 import { QuoteService } from '@/lib/quoteService';
 import { downloadQuotePDF } from '@/lib/pdfService';
@@ -1170,124 +1172,208 @@ export function ViewQuote() {
                               <Plane className="h-4 w-4 text-green-600" />
                               <span className="font-medium text-sm">Outbound Flight</span>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">Flight Number:</span>
-                                <span className="ml-2 font-medium">
-                                  {FlightApiService.formatFlightNumber(
-                                    FlightApiService.getAirlineCode(flight),
-                                    flight.outboundFlightNumber || flight.flightNumber || ''
-                                  ) || 'TBD'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Route:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundDepartureAirportId || flight.origin} → {flight.outboundArrivalAirportId || flight.destination}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Airports:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundDepartureAirportName || flight.outboundDepartureAirportId || flight.origin} → {flight.outboundArrivalAirportName || flight.outboundArrivalAirportId || flight.destination}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Departure:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundDepartureDateTime ? new Date(flight.outboundDepartureDateTime).toLocaleString('en-GB', {
-                                    weekday: 'short',
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  }) : 'TBD'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Arrival:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundArrivalDateTime ? new Date(flight.outboundArrivalDateTime).toLocaleString('en-GB', {
-                                    weekday: 'short',
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  }) : 'TBD'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Duration:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundFlightDuration || flight.duration || 'TBD'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Airline:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundMarketingAirlineName || flight.outboundOperatingAirlineName || flight.airline || 'TBD'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Aircraft:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundAircraftType || flight.aircraft || 'TBD'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Class:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundCabinName || flight.outboundCabinId || flight.cabin || 'TBD'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Terminals:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundDepartureTerminal && flight.outboundArrivalTerminal ? 
-                                    `${flight.outboundDepartureTerminal} → ${flight.outboundArrivalTerminal}` : 
-                                    flight.departureTerminal && flight.arrivalTerminal ? 
-                                    `${flight.departureTerminal} → ${flight.arrivalTerminal}` : 'TBD'
-                                  }
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Stops:</span>
-                                <span className="ml-2 font-medium">
-                                  {flight.outboundStops?.length || flight.stops || 0} {flight.outboundStops?.length === 1 || flight.stops === 1 ? 'stop' : 'stops'}
-                                </span>
-                              </div>
-                            </div>
-
+                            
                             {/* Multi-segment outbound flight display */}
-                            {flight.outboundFlightSegments && flight.outboundFlightSegments.length > 0 && (
-                              <div className="mt-3 p-3 bg-primary/5 rounded-lg">
-                                <div className="text-sm font-medium mb-2">Flight Segments:</div>
+                            {flight.outboundFlightSegments && flight.outboundFlightSegments.length > 0 ? (
+                              <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
                                 {flight.outboundFlightSegments.map((segment: any, segmentIndex: number) => (
-                                  <div key={segmentIndex} className="text-xs space-y-1 mb-2 last:mb-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-medium">Segment {segment.segmentIndex || segmentIndex + 1}:</span>
-                                      <span>{FlightApiService.formatFlightNumber(segment.marketingAirlineId, segment.flightNumber)}</span>
+                                  <div key={segmentIndex} className="space-y-2">
+                                    {/* Flight Segment */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div className="space-y-1">
+                                        <div className="flex items-center gap-2 text-sm font-medium">
+                                          <PlaneTakeoff className="h-4 w-4" />
+                                          {segmentIndex === 0 ? 'Departure' : `Segment ${segmentIndex + 1}`}
+                                          <Badge variant="default" className="text-xs">
+                                            {segment.marketingAirlineId && segment.flightNumber ? 
+                                              `${segment.marketingAirlineId}${segment.flightNumber}` : 
+                                              'TBD'
+                                            }
+                                          </Badge>
+                                        </div>
+                                        <div className="text-sm">
+                                          <div className="font-mono">
+                                            {segment.departureAirportId}
+                                          </div>
+                                          <div className="text-muted-foreground">
+                                            {segment.departureDateTime ? 
+                                              new Date(segment.departureDateTime).toLocaleString('en-GB', {
+                                                weekday: 'short',
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                              }) : 'TBD'
+                                            }
+                                          </div>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {segment.departureDateTime ? 
+                                            new Date(segment.departureDateTime).toLocaleDateString('en-GB', {
+                                              year: 'numeric',
+                                              month: 'short',
+                                              day: 'numeric'
+                                            }) : 'TBD'
+                                          }
+                                          {segment.departureTerminal && ` • Terminal ${segment.departureTerminal}`}
+                                        </div>
+                                        {segment.departureAirportName && (
+                                          <div className="text-xs text-muted-foreground">
+                                            {segment.departureAirportName}
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="space-y-1">
+                                        <div className="flex items-center gap-2 text-sm font-medium">
+                                          <PlaneLanding className="h-4 w-4" />
+                                          {segment.isLastSegment ? 'Final Arrival' : 'Arrival'}
+                                        </div>
+                                        <div className="text-sm">
+                                          <div className="font-mono">
+                                            {segment.arrivalAirportId}
+                                          </div>
+                                          <div className="text-muted-foreground">
+                                            {segment.arrivalDateTime ? 
+                                              new Date(segment.arrivalDateTime).toLocaleString('en-GB', {
+                                                weekday: 'short',
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                              }) : 'TBD'
+                                            }
+                                          </div>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {segment.arrivalDateTime ? 
+                                            new Date(segment.arrivalDateTime).toLocaleDateString('en-GB', {
+                                              year: 'numeric',
+                                              month: 'short',
+                                              day: 'numeric'
+                                            }) : 'TBD'
+                                          }
+                                          {segment.arrivalTerminal && ` • Terminal ${segment.arrivalTerminal}`}
+                                        </div>
+                                        {segment.arrivalAirportName && (
+                                          <div className="text-xs text-muted-foreground">
+                                            {segment.arrivalAirportName}
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                    <div className="ml-4 text-muted-foreground">
-                                      {segment.departureAirportName || segment.departureAirportId} → {segment.arrivalAirportName || segment.arrivalAirportId}
-                                    </div>
-                                    <div className="ml-4 text-muted-foreground">
-                                      {segment.departureDateTime ? new Date(segment.departureDateTime).toLocaleString('en-GB', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      }) : ''} - {segment.arrivalDateTime ? new Date(segment.arrivalDateTime).toLocaleString('en-GB', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      }) : ''} ({segment.flightDuration})
-                                    </div>
+
+                                    {/* Layover information (if not the last segment) */}
+                                    {!segment.isLastSegment && flight.outboundLayoverInfo && flight.outboundLayoverInfo[segmentIndex] && (
+                                      <div className="bg-muted/30 p-2 rounded text-xs">
+                                        <div className="flex items-center justify-between">
+                                          <span className="font-medium">
+                                            Layover at {flight.outboundLayoverInfo[segmentIndex].airport}
+                                          </span>
+                                          <span className="text-muted-foreground">
+                                            {flight.outboundLayoverInfo[segmentIndex].duration}
+                                          </span>
+                                        </div>
+                                        {flight.outboundLayoverInfo[segmentIndex].terminal && (
+                                          <div className="text-muted-foreground">
+                                            Terminal {flight.outboundLayoverInfo[segmentIndex].terminal}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
+                              </div>
+                            ) : (
+                              /* Fallback to single segment display */
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Flight Number:</span>
+                                  <span className="ml-2 font-medium">
+                                    {FlightApiService.formatFlightNumber(
+                                      FlightApiService.getAirlineCode(flight),
+                                      flight.outboundFlightNumber || flight.flightNumber || ''
+                                    ) || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Route:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundDepartureAirportId || flight.origin} → {flight.outboundArrivalAirportId || flight.destination}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Airports:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundDepartureAirportName || flight.outboundDepartureAirportId || flight.origin} → {flight.outboundArrivalAirportName || flight.outboundArrivalAirportId || flight.destination}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Departure:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundDepartureDateTime ? new Date(flight.outboundDepartureDateTime).toLocaleString('en-GB', {
+                                      weekday: 'short',
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }) : 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Arrival:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundArrivalDateTime ? new Date(flight.outboundArrivalDateTime).toLocaleString('en-GB', {
+                                      weekday: 'short',
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }) : 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Duration:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundFlightDuration || flight.duration || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Airline:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundMarketingAirlineName || flight.outboundOperatingAirlineName || flight.airline || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Aircraft:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundAircraftType || flight.aircraft || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Class:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundCabinName || flight.outboundCabinId || flight.cabin || 'TBD'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Terminals:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundDepartureTerminal && flight.outboundArrivalTerminal ? 
+                                      `${flight.outboundDepartureTerminal} → ${flight.outboundArrivalTerminal}` : 
+                                      flight.departureTerminal && flight.arrivalTerminal ? 
+                                      `${flight.departureTerminal} → ${flight.arrivalTerminal}` : 'TBD'
+                                    }
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Stops:</span>
+                                  <span className="ml-2 font-medium">
+                                    {flight.outboundStops?.length || flight.stops || 0} {flight.outboundStops?.length === 1 || flight.stops === 1 ? 'stop' : 'stops'}
+                                  </span>
+                                </div>
                               </div>
                             )}
 
@@ -1302,7 +1388,7 @@ export function ViewQuote() {
                                       {flight.outboundCheckedBaggage.pieces && <span>{flight.outboundCheckedBaggage.pieces} piece{flight.outboundCheckedBaggage.pieces !== 1 ? 's' : ''}</span>}
                                       {flight.outboundCheckedBaggage.weight && <span>{flight.outboundCheckedBaggage.weight} {flight.outboundCheckedBaggage.weightUnit}</span>}
                                       {flight.outboundCheckedBaggage.dimensions && <span>({flight.outboundCheckedBaggage.dimensions})</span>}
-                          </div>
+                                    </div>
                                   )}
                                   {flight.outboundCarryOnBaggage && (
                                     <div className="flex items-center gap-1">
@@ -1346,130 +1432,214 @@ export function ViewQuote() {
                           </div>
 
                           {/* Inbound Flight Details (if return flight) */}
-                          {flight.returnDate && (flight.inboundFlightNumber || flight.returnFlightNumber) && (
+                          {flight.returnDate && (flight.inboundFlightNumber || flight.returnFlightNumber || flight.returnFlightSegments) && (
                             <div className="border-t border-border/30 pt-3">
                               <div className="flex items-center gap-2 mb-2">
                                 <Plane className="h-4 w-4 text-blue-600" />
                                 <span className="font-medium text-sm">Return Flight</span>
                               </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                                <div>
-                                  <span className="text-muted-foreground">Flight Number:</span>
-                                  <span className="ml-2 font-medium">
-                                    {FlightApiService.formatFlightNumber(
-                                      FlightApiService.getAirlineCode(flight),
-                                      flight.inboundFlightNumber || flight.returnFlightNumber || ''
-                                    ) || 'TBD'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Route:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundDepartureAirportId} → {flight.inboundArrivalAirportId}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Airports:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundDepartureAirportName || flight.inboundDepartureAirportId} → {flight.inboundArrivalAirportName || flight.inboundArrivalAirportId}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Departure:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundDepartureDateTime ? new Date(flight.inboundDepartureDateTime).toLocaleString('en-GB', {
-                                      weekday: 'short',
-                                      year: 'numeric',
-                                      month: 'short',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    }) : 'TBD'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Arrival:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundArrivalDateTime ? new Date(flight.inboundArrivalDateTime).toLocaleString('en-GB', {
-                                      weekday: 'short',
-                                      year: 'numeric',
-                                      month: 'short',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    }) : 'TBD'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Duration:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundFlightDuration || flight.returnDuration || 'TBD'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Airline:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundMarketingAirlineName || flight.inboundOperatingAirlineName || 'TBD'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Aircraft:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundAircraftType || flight.returnAircraft || 'TBD'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Class:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundCabinName || flight.inboundCabinId || 'TBD'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Terminals:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundDepartureTerminal && flight.inboundArrivalTerminal ? 
-                                      `${flight.inboundDepartureTerminal} → ${flight.inboundArrivalTerminal}` : 
-                                      flight.returnDepartureTerminal && flight.returnArrivalTerminal ? 
-                                      `${flight.returnDepartureTerminal} → ${flight.returnArrivalTerminal}` : 'TBD'
-                                    }
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Stops:</span>
-                                  <span className="ml-2 font-medium">
-                                    {flight.inboundStops?.length || flight.returnStops || 0} {flight.inboundStops?.length === 1 || flight.returnStops === 1 ? 'stop' : 'stops'}
-                                  </span>
-                                </div>
-                              </div>
-
+                              
                               {/* Multi-segment return flight display */}
-                              {flight.returnFlightSegments && flight.returnFlightSegments.length > 0 && (
-                                <div className="mt-3 p-3 bg-primary/5 rounded-lg">
-                                  <div className="text-sm font-medium mb-2">Flight Segments:</div>
+                              {flight.returnFlightSegments && flight.returnFlightSegments.length > 0 ? (
+                                <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
                                   {flight.returnFlightSegments.map((segment: any, segmentIndex: number) => (
-                                    <div key={segmentIndex} className="text-xs space-y-1 mb-2 last:mb-0">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium">Segment {segment.segmentIndex || segmentIndex + 1}:</span>
-                                        <span>{FlightApiService.formatFlightNumber(segment.marketingAirlineId, segment.flightNumber)}</span>
+                                    <div key={segmentIndex} className="space-y-2">
+                                      {/* Flight Segment */}
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-2 text-sm font-medium">
+                                            <PlaneTakeoff className="h-4 w-4" />
+                                            {segmentIndex === 0 ? 'Departure' : `Segment ${segmentIndex + 1}`}
+                                            <Badge variant="default" className="text-xs">
+                                              {segment.marketingAirlineId && segment.flightNumber ? 
+                                                `${segment.marketingAirlineId}${segment.flightNumber}` : 
+                                                'TBD'
+                                              }
+                                            </Badge>
+                                          </div>
+                                          <div className="text-sm">
+                                            <div className="font-mono">
+                                              {segment.departureAirportId}
+                                            </div>
+                                            <div className="text-muted-foreground">
+                                              {segment.departureDateTime ? 
+                                                new Date(segment.departureDateTime).toLocaleString('en-GB', {
+                                                  weekday: 'short',
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit'
+                                                }) : 'TBD'
+                                              }
+                                            </div>
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {segment.departureDateTime ? 
+                                              new Date(segment.departureDateTime).toLocaleDateString('en-GB', {
+                                                year: 'numeric',
+                                                month: 'short',
+                                                day: 'numeric'
+                                              }) : 'TBD'
+                                            }
+                                            {segment.departureTerminal && ` • Terminal ${segment.departureTerminal}`}
+                                          </div>
+                                          {segment.departureAirportName && (
+                                            <div className="text-xs text-muted-foreground">
+                                              {segment.departureAirportName}
+                                            </div>
+                                          )}
+                                        </div>
+                                        
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-2 text-sm font-medium">
+                                            <PlaneLanding className="h-4 w-4" />
+                                            {segment.isLastSegment ? 'Final Arrival' : 'Arrival'}
+                                          </div>
+                                          <div className="text-sm">
+                                            <div className="font-mono">
+                                              {segment.arrivalAirportId}
+                                            </div>
+                                            <div className="text-muted-foreground">
+                                              {segment.arrivalDateTime ? 
+                                                new Date(segment.arrivalDateTime).toLocaleString('en-GB', {
+                                                  weekday: 'short',
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit'
+                                                }) : 'TBD'
+                                              }
+                                            </div>
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {segment.arrivalDateTime ? 
+                                              new Date(segment.arrivalDateTime).toLocaleDateString('en-GB', {
+                                                year: 'numeric',
+                                                month: 'short',
+                                                day: 'numeric'
+                                              }) : 'TBD'
+                                            }
+                                            {segment.arrivalTerminal && ` • Terminal ${segment.arrivalTerminal}`}
+                                          </div>
+                                          {segment.arrivalAirportName && (
+                                            <div className="text-xs text-muted-foreground">
+                                              {segment.arrivalAirportName}
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
-                                      <div className="ml-4 text-muted-foreground">
-                                        {segment.departureAirportName || segment.departureAirportId} → {segment.arrivalAirportName || segment.arrivalAirportId}
-                                      </div>
-                                      <div className="ml-4 text-muted-foreground">
-                                        {segment.departureDateTime ? new Date(segment.departureDateTime).toLocaleString('en-GB', {
-                                          month: 'short',
-                                          day: 'numeric',
-                                          hour: '2-digit',
-                                          minute: '2-digit'
-                                        }) : ''} - {segment.arrivalDateTime ? new Date(segment.arrivalDateTime).toLocaleString('en-GB', {
-                                          month: 'short',
-                                          day: 'numeric',
-                                          hour: '2-digit',
-                                          minute: '2-digit'
-                                        }) : ''} ({segment.flightDuration})
-                                      </div>
+
+                                      {/* Layover information (if not the last segment) */}
+                                      {!segment.isLastSegment && flight.inboundLayoverInfo && flight.inboundLayoverInfo[segmentIndex] && (
+                                        <div className="bg-muted/30 p-2 rounded text-xs">
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-medium">
+                                              Layover at {flight.inboundLayoverInfo[segmentIndex].airport}
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                              {flight.inboundLayoverInfo[segmentIndex].duration}
+                                            </span>
+                                          </div>
+                                          {flight.inboundLayoverInfo[segmentIndex].terminal && (
+                                            <div className="text-muted-foreground">
+                                              Terminal {flight.inboundLayoverInfo[segmentIndex].terminal}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
+                                </div>
+                              ) : (
+                                /* Fallback to single segment display */
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                  <div>
+                                    <span className="text-muted-foreground">Flight Number:</span>
+                                    <span className="ml-2 font-medium">
+                                      {FlightApiService.formatFlightNumber(
+                                        FlightApiService.getAirlineCode(flight),
+                                        flight.inboundFlightNumber || flight.returnFlightNumber || ''
+                                      ) || 'TBD'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Route:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundDepartureAirportId} → {flight.inboundArrivalAirportId}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Airports:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundDepartureAirportName || flight.inboundDepartureAirportId} → {flight.inboundArrivalAirportName || flight.inboundArrivalAirportId}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Departure:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundDepartureDateTime ? new Date(flight.inboundDepartureDateTime).toLocaleString('en-GB', {
+                                        weekday: 'short',
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      }) : 'TBD'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Arrival:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundArrivalDateTime ? new Date(flight.inboundArrivalDateTime).toLocaleString('en-GB', {
+                                        weekday: 'short',
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      }) : 'TBD'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Duration:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundFlightDuration || flight.returnDuration || 'TBD'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Airline:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundMarketingAirlineName || flight.inboundOperatingAirlineName || 'TBD'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Aircraft:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundAircraftType || flight.returnAircraft || 'TBD'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Class:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundCabinName || flight.inboundCabinId || 'TBD'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Terminals:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundDepartureTerminal && flight.inboundArrivalTerminal ? 
+                                        `${flight.inboundDepartureTerminal} → ${flight.inboundArrivalTerminal}` : 
+                                        flight.returnDepartureTerminal && flight.returnArrivalTerminal ? 
+                                        `${flight.returnDepartureTerminal} → ${flight.returnArrivalTerminal}` : 'TBD'
+                                      }
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Stops:</span>
+                                    <span className="ml-2 font-medium">
+                                      {flight.inboundStops?.length || flight.returnStops || 0} {flight.inboundStops?.length === 1 || flight.returnStops === 1 ? 'stop' : 'stops'}
+                                    </span>
+                                  </div>
                                 </div>
                               )}
 

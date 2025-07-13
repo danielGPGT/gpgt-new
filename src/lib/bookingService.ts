@@ -493,13 +493,9 @@ export class BookingService {
         selectedComponents: quote.selected_components
       });
       
-      const enhancedComponents = this.mergeFormDataWithComponents(quote.selected_components, data.flights, data.loungePasses);
-      
-      console.log('🔍 DEBUG: Enhanced components after merge:', enhancedComponents);
-
-      // Create booking components
-      console.log('Creating booking components:', enhancedComponents);
-      await this.createBookingComponents(booking.id, enhancedComponents);
+      // Create booking components - pass form data directly for flights and lounge passes
+      console.log('Creating booking components:', quote.selected_components);
+      await this.createBookingComponents(booking.id, quote.selected_components, data.flights, data.loungePasses);
 
       // Create payment schedule
       await this.createPaymentSchedule(
@@ -569,18 +565,60 @@ export class BookingService {
   ): any {
     if (!selectedComponents) return selectedComponents;
 
-    const enhanced = { ...selectedComponents };
+    console.log('🔍 DEBUG: mergeFormDataWithComponents called with:', {
+      selectedComponents,
+      flights,
+      loungePasses,
+      isArray: Array.isArray(selectedComponents),
+      hasFlights: selectedComponents.flights,
+      flightsLength: selectedComponents.flights?.length,
+      formFlightsLength: flights?.length
+    });
 
     // Handle array format (new format)
     if (Array.isArray(selectedComponents)) {
-      return selectedComponents.map((component, index) => {
+      console.log('🔍 DEBUG: Processing array format components');
+      console.log('🔍 DEBUG: Array components:', selectedComponents.map((c, i) => ({
+        index: i,
+        type: c.type,
+        id: c.id,
+        name: c.name
+      })));
+      
+      const enhancedComponents = selectedComponents.map((component, index) => {
         const enhancedComponent = { ...component };
 
         if (component.type === 'flight' && flights && flights[index]) {
+          console.log('🔍 DEBUG: Enhancing flight component:', {
+            index,
+            componentId: component.id,
+            componentName: component.name,
+            formData: flights[index],
+            before: {
+              bookingRef: component.bookingRef,
+              ticketingDeadline: component.ticketingDeadline
+            }
+          });
+          
           enhancedComponent.bookingRef = flights[index].bookingRef;
           enhancedComponent.ticketingDeadline = flights[index].ticketingDeadline;
           enhancedComponent.flightStatus = flights[index].flightStatus;
           enhancedComponent.notes = flights[index].notes;
+          
+          console.log('🔍 DEBUG: After enhancement:', {
+            bookingRef: enhancedComponent.bookingRef,
+            ticketingDeadline: enhancedComponent.ticketingDeadline,
+            flightStatus: enhancedComponent.flightStatus,
+            notes: enhancedComponent.notes
+          });
+        } else if (component.type === 'flight') {
+          console.log('🔍 DEBUG: Flight component but no matching form data:', {
+            index,
+            componentId: component.id,
+            componentName: component.name,
+            flightsLength: flights?.length,
+            flightsData: flights
+          });
         }
 
         if (component.type === 'lounge_pass' && loungePasses && loungePasses[index]) {
@@ -590,17 +628,48 @@ export class BookingService {
 
         return enhancedComponent;
       });
+      
+      console.log('🔍 DEBUG: Final enhanced array components:', enhancedComponents);
+      return enhancedComponents;
     }
 
     // Handle object format (legacy support)
+    console.log('🔍 DEBUG: Processing object format components');
+    const enhanced = { ...selectedComponents };
+
     if (selectedComponents.flights && flights) {
-      enhanced.flights = selectedComponents.flights.map((flight: any, index: number) => ({
-        ...flight,
-        bookingRef: flights[index]?.bookingRef,
-        ticketingDeadline: flights[index]?.ticketingDeadline,
-        flightStatus: flights[index]?.flightStatus,
-        notes: flights[index]?.notes,
-      }));
+      console.log('🔍 DEBUG: Processing object format flights');
+      console.log('🔍 DEBUG: Original flights:', selectedComponents.flights);
+      console.log('🔍 DEBUG: Form flights:', flights);
+      
+      enhanced.flights = selectedComponents.flights.map((flight: any, index: number) => {
+        const enhancedFlight = {
+          ...flight,
+          bookingRef: flights[index]?.bookingRef,
+          ticketingDeadline: flights[index]?.ticketingDeadline,
+          flightStatus: flights[index]?.flightStatus,
+          notes: flights[index]?.notes,
+        };
+        
+        console.log('🔍 DEBUG: Enhanced flight:', {
+          index,
+          flightId: flight.id,
+          original: {
+            bookingRef: flight.bookingRef,
+            ticketingDeadline: flight.ticketingDeadline
+          },
+          formData: {
+            bookingRef: flights[index]?.bookingRef,
+            ticketingDeadline: flights[index]?.ticketingDeadline
+          },
+          enhanced: {
+            bookingRef: enhancedFlight.bookingRef,
+            ticketingDeadline: enhancedFlight.ticketingDeadline
+          }
+        });
+        
+        return enhancedFlight;
+      });
     }
 
     if (selectedComponents.lounge_passes && loungePasses) {
@@ -619,6 +688,7 @@ export class BookingService {
       };
     }
 
+    console.log('🔍 DEBUG: Final enhanced object components:', enhanced);
     return enhanced;
   }
 
@@ -786,19 +856,19 @@ export class BookingService {
   /**
    * Create booking components
    */
-  static async createBookingComponents(bookingId: string, selectedComponents: any): Promise<void> {
+  static async createBookingComponents(bookingId: string, selectedComponents: any, flights?: Array<{ bookingRef?: string; ticketingDeadline?: string; flightStatus?: string; notes?: string }>, loungePasses?: Array<{ bookingRef: string; notes?: string }>): Promise<void> {
     if (!selectedComponents) return;
 
-    console.log('Processing selected components:', selectedComponents);
+    // Reset counters for this booking
+    let flightCounter = 0;
+    let loungePassCounter = 0;
 
-    // Handle array format (as shown in your quote data)
+    // Handle array format (new format)
     if (Array.isArray(selectedComponents)) {
+      console.log('Processing array format components');
       const components: any[] = [];
 
       for (const component of selectedComponents) {
-        console.log('Processing component:', component);
-
-        // Validate UUID format for component_id
         const isValidUUID = (str: string) => {
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
           return uuidRegex.test(str);
@@ -822,9 +892,18 @@ export class BookingService {
         if (component.type === 'flight') {
           console.log('🔍 DEBUG: Processing flight component:', {
             component,
-            bookingRef: component.bookingRef,
-            dataBookingRef: component.data?.bookingRef,
-            finalBookingRef: component.bookingRef || component.data?.bookingRef
+            flightsData: flights,
+            flightsLength: flights?.length
+          });
+          
+          // Use a simple counter for flights since form data is a simple array
+          const formFlightData = flights && flights[flightCounter];
+          
+          console.log('🔍 DEBUG: Flight form data:', {
+            flightCounter,
+            formFlightData,
+            bookingRef: formFlightData?.bookingRef,
+            ticketingDeadline: formFlightData?.ticketingDeadline
           });
           
           try {
@@ -832,9 +911,9 @@ export class BookingService {
               booking_id: bookingId,
               source_flight_id: isValidUUID(component.id) ? component.id : null,
               api_source: component.data?.source || 'manual',
-              ticketing_deadline: component.ticketingDeadline || component.data?.ticketingDeadline,
-              booking_pnr: component.bookingRef || component.data?.bookingRef,
-              flight_status: component.flightStatus || 'Booked - Not Ticketed',
+              ticketing_deadline: formFlightData?.ticketingDeadline || component.ticketingDeadline || component.data?.ticketingDeadline,
+              booking_pnr: formFlightData?.bookingRef || component.bookingRef || component.data?.bookingRef,
+              flight_status: formFlightData?.flightStatus || component.flightStatus || 'Booked - Not Ticketed',
               flight_details: component.data || component,
               quantity: component.quantity,
               unit_price: component.unitPrice || component.data?.price || 0,
@@ -854,6 +933,8 @@ export class BookingService {
             } else {
               console.log('Flight booking created successfully');
             }
+            
+            flightCounter++; // Increment for next flight
           } catch (error) {
             console.error('Error creating flight booking:', error);
           }
@@ -864,16 +945,24 @@ export class BookingService {
         if (component.type === 'lounge_pass') {
           console.log('🔍 DEBUG: Processing lounge pass component:', {
             component,
-            bookingRef: component.bookingRef,
-            dataBookingRef: component.data?.bookingRef,
-            finalBookingRef: component.bookingRef || component.data?.bookingRef
+            loungePassesData: loungePasses,
+            loungePassesLength: loungePasses?.length
+          });
+          
+          // Use a simple counter for lounge passes since form data is a simple array
+          const formLoungePassData = loungePasses && loungePasses[loungePassCounter];
+          
+          console.log('🔍 DEBUG: Lounge pass form data:', {
+            loungePassCounter,
+            formLoungePassData,
+            bookingRef: formLoungePassData?.bookingRef
           });
           
           try {
             const loungeInsertData = {
               booking_id: bookingId,
               lounge_pass_id: isValidUUID(component.id) ? component.id : null,
-              booking_reference: component.bookingRef || component.data?.bookingRef,
+              booking_reference: formLoungePassData?.bookingRef || component.bookingRef || component.data?.bookingRef,
               quantity: component.quantity,
               unit_price: component.unitPrice || component.data?.price || 0,
               total_price: component.totalPrice || (component.unitPrice || component.data?.price || 0) * component.quantity
@@ -890,6 +979,8 @@ export class BookingService {
             } else {
               console.log('Lounge pass booking created successfully');
             }
+            
+            loungePassCounter++; // Increment for next lounge pass
           } catch (error) {
             console.error('Error creating lounge pass booking:', error);
           }
@@ -1036,29 +1127,48 @@ export class BookingService {
 
       // Process flights
       if (selectedComponents.flights) {
-        for (const flight of selectedComponents.flights) {
+        console.log('🔍 DEBUG: Processing object format flights:', selectedComponents.flights);
+        console.log('🔍 DEBUG: Form flights data:', flights);
+        
+        for (let i = 0; i < selectedComponents.flights.length; i++) {
+          const flight = selectedComponents.flights[i];
+          const formFlightData = flights && flights[i];
+          
+          console.log('🔍 DEBUG: Processing individual flight:', {
+            index: i,
+            flight,
+            formFlightData,
+            bookingRef: formFlightData?.bookingRef,
+            ticketingDeadline: formFlightData?.ticketingDeadline,
+            flightStatus: formFlightData?.flightStatus
+          });
+          
           try {
+            const flightInsertData = {
+              booking_id: bookingId,
+              source_flight_id: flight.id,
+              api_source: flight.source || 'manual',
+              ticketing_deadline: formFlightData?.ticketingDeadline || flight.ticketingDeadline,
+              booking_pnr: formFlightData?.bookingRef || flight.bookingRef,
+              flight_status: formFlightData?.flightStatus || flight.flightStatus || 'Booked - Not Ticketed',
+              flight_details: flight,
+              quantity: flight.passengers || 1,
+              unit_price: flight.price || 0,
+              total_price: (flight.price || 0) * (flight.passengers || 1),
+              currency: 'GBP',
+              refundable: flight.refundable || false
+            };
+            
+            console.log('🔍 DEBUG: Object format flight insert data:', flightInsertData);
+            
             const { error: flightError } = await supabase
               .from('bookings_flights')
-              .insert({
-                booking_id: bookingId,
-                source_flight_id: flight.id,
-                api_source: flight.source || 'manual',
-                ticketing_deadline: flight.ticketingDeadline,
-                booking_pnr: flight.bookingRef,
-                flight_status: flight.flightStatus || 'Booked - Not Ticketed',
-                flight_details: flight,
-                quantity: flight.passengers || 1,
-                unit_price: flight.price || 0,
-                total_price: (flight.price || 0) * (flight.passengers || 1),
-                currency: 'GBP',
-                refundable: flight.refundable || false
-              });
+              .insert(flightInsertData);
 
             if (flightError) {
               console.error('Failed to create flight booking:', flightError);
             } else {
-              console.log('Flight booking created successfully');
+              console.log('Flight booking created successfully (object format)');
             }
           } catch (error) {
             console.error('Error creating flight booking:', error);
@@ -1068,22 +1178,36 @@ export class BookingService {
 
       // Process lounge passes
       if (selectedComponents.loungePass) {
+        console.log('🔍 DEBUG: Processing object format lounge pass:', selectedComponents.loungePass);
+        console.log('🔍 DEBUG: Form lounge passes data:', loungePasses);
+        
+        const formLoungePassData = loungePasses && loungePasses[0];
+        
+        console.log('🔍 DEBUG: Lounge pass form data:', {
+          formLoungePassData,
+          bookingRef: formLoungePassData?.bookingRef
+        });
+        
         try {
+          const loungeInsertData = {
+            booking_id: bookingId,
+            lounge_pass_id: selectedComponents.loungePass.id,
+            booking_reference: formLoungePassData?.bookingRef || selectedComponents.loungePass.bookingRef,
+            quantity: selectedComponents.loungePass.quantity || 1,
+            unit_price: selectedComponents.loungePass.price || 0,
+            total_price: (selectedComponents.loungePass.price || 0) * (selectedComponents.loungePass.quantity || 1)
+          };
+          
+          console.log('🔍 DEBUG: Object format lounge pass insert data:', loungeInsertData);
+          
           const { error: loungeError } = await supabase
             .from('bookings_lounge_passes')
-            .insert({
-              booking_id: bookingId,
-              lounge_pass_id: selectedComponents.loungePass.id,
-              booking_reference: selectedComponents.loungePass.bookingRef,
-              quantity: selectedComponents.loungePass.quantity || 1,
-              unit_price: selectedComponents.loungePass.price || 0,
-              total_price: (selectedComponents.loungePass.price || 0) * (selectedComponents.loungePass.quantity || 1)
-            });
+            .insert(loungeInsertData);
 
           if (loungeError) {
             console.error('Failed to create lounge pass booking:', loungeError);
           } else {
-            console.log('Lounge pass booking created successfully');
+            console.log('Lounge pass booking created successfully (object format)');
           }
         } catch (error) {
           console.error('Error creating lounge pass booking:', error);

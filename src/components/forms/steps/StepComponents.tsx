@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -144,6 +144,15 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
 
   const [loungePasses, setLoungePasses] = useState<any[]>([]);
   const [loungeLoading, setLoungeLoading] = useState(false);
+
+  // Memoize callback functions to prevent infinite re-renders
+  const handleFlightSourceChange = useCallback((src: FlightSource) => {
+    setValue('components.flightsSource', src);
+  }, [setValue]);
+
+  const handleFlightChange = useCallback((flights: SelectedFlight[]) => {
+    setValue('components.flights', flights);
+  }, [setValue]);
 
   // Clear components when tier changes
   useEffect(() => {
@@ -843,8 +852,8 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
             eventId={selectedEvent?.id}
             value={components.flights || []}
             source={components.flightsSource || 'none'}
-            onSourceChange={src => setValue('components.flightsSource', src)}
-            onChange={flights => setValue('components.flights', flights)}
+            onSourceChange={handleFlightSourceChange}
+            onChange={handleFlightChange}
           />
         )}
 

@@ -58,6 +58,7 @@ interface BookingWithDetails extends Booking {
   flights?: Array<{
     id: string;
     booking_pnr?: string;
+    ticketing_deadline?: string;
     flight_status?: string;
     flight_details: any;
     quantity: number;
@@ -678,34 +679,399 @@ export default function ViewBooking() {
             </CardHeader>
             <CardContent>
               {booking.flights && booking.flights.length > 0 ? (
-                <div className="space-y-4">
-                  {booking.flights.map((flight) => (
-                    <Card key={flight.id} className="p-4">
-                      <div className="flex items-center justify-between">
+                <div className="space-y-6">
+                  {booking.flights.map((flight) => {
+                    const flightDetails = flight.flight_details;
+                    
+                    return (
+                      <Card key={flight.id} className="p-6 border border-border shadow-sm">
+                        {/* Flight Header */}
+                        <div className="flex items-center justify-between mb-4 pb-4 border-b border-[var(--color-border)]">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--color-primary-600)] to-[var(--color-primary-700)] flex items-center justify-center">
+                              <Plane className="h-5 w-5 text-white" />
+                            </div>
                         <div>
-                          <p className="font-medium">Flight Details</p>
-                          {flight.booking_pnr && (
-                            <p className="text-sm text-muted-foreground">
-                              PNR: {flight.booking_pnr}
+                              <h3 className="font-semibold text-lg text-[var(--color-foreground)]">
+                                {flightDetails?.origin || 'Unknown'} → {flightDetails?.destination || 'Unknown'}  → {flightDetails?.origin || 'Unknown'}
+                              </h3>
+                              <p className="text-sm text-[var(--color-muted-foreground)]">
+                                {flightDetails?.departureDate && new Date(flightDetails.departureDate).toLocaleDateString()}
+                                {flightDetails?.returnDate && (
+                                  <span> - {new Date(flightDetails.returnDate).toLocaleDateString()}</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="text-right">
+                            <p className="font-bold text-xl text-[var(--color-primary)]">
+                              {formatCurrency(flight.total_price, booking.currency)}
                             </p>
+                            <p className="text-sm text-[var(--color-muted-foreground)]">
+                              {flight.quantity} passenger{flight.quantity !== 1 ? 's' : ''} × {formatCurrency(flight.unit_price, booking.currency)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Booking Information */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                          {flight.booking_pnr && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono">
+                              PNR: {flight.booking_pnr}
+                              </Badge>
+                            </div>
+                          )}
+                          {flight.ticketing_deadline && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono">
+                              Ticketing Deadline: {flight.ticketing_deadline}
+                              </Badge>
+                            </div>
                           )}
                           {flight.flight_status && (
-                            <p className="text-sm text-muted-foreground">
-                              Status: {flight.flight_status}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={flight.flight_status === 'confirmed' ? 'default' : 'secondary'}>
+                                {flight.flight_status.toUpperCase()}
+                              </Badge>
+                            </div>
+                          )}
+                          {flightDetails?.source && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">
+                                Source: {flightDetails.source}
+                              </Badge>
+                            </div>
                           )}
                         </div>
+
+                        {/* Outbound Flight Details */}
+                        <div className="mb-6">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-6 h-6 rounded-full bg-[var(--color-primary-100)] flex items-center justify-center">
+                              <Plane className="h-3 w-3 text-[var(--color-primary-600)]" />
+                            </div>
+                            <h4 className="font-semibold text-base text-[var(--color-foreground)]">Outbound Flight</h4>
+                          </div>
+                          
+                          {/* Multi-segment outbound flight display */}
+                          {flightDetails?.outboundFlightSegments && flightDetails.outboundFlightSegments.length > 0 ? (
+                            <div className="space-y-3 border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-muted)]/10">
+                              {flightDetails.outboundFlightSegments.map((segment: any, segmentIndex: number) => (
+                                <div key={segmentIndex} className="space-y-2">
+                                  {/* Flight segment header */}
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium text-sm text-[var(--color-foreground)]">
+                                        {segment.marketingAirlineName || segment.airline} {segment.flightNumber}
+                                      </span>
+                                      {segment.operatingAirlineName && segment.operatingAirlineName !== segment.marketingAirlineName && (
+                                        <Badge variant="outline" className="text-xs">
+                                          Operated by {segment.operatingAirlineName}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <Badge variant="outline" className="text-xs">
+                                      {segment.cabinName || segment.cabin || 'Economy'}
+                                    </Badge>
+                                  </div>
+                                  
+                                  {/* Route and times */}
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                    <div>
+                                      <p className="font-medium text-[var(--color-foreground)]">{segment.departureAirportName} ({segment.departureAirportCode})</p>
+                                      <p className="text-[var(--color-muted-foreground)]">
+                                        {segment.departureDateTime && new Date(segment.departureDateTime).toLocaleString()}
+                                      </p>
+                                      {segment.departureTerminal && (
+                                        <p className="text-xs text-[var(--color-muted-foreground)]">Terminal {segment.departureTerminal}</p>
+                          )}
+                        </div>
+                                    
+                                    {/* Centered airplane with line */}
+                                    <div className="flex flex-col items-center justify-center h-full">
+                                      <div className="flex items-center w-full">
+                                        <div className="flex-1 border-t-2 border-[var(--color-muted-foreground)]"></div>
+                                        <Plane className="mx-2 h-5 w-5 text-[var(--color-muted-foreground)]" />
+                                        <div className="flex-1 border-t-2 border-[var(--color-muted-foreground)]"></div>
+                                      </div>
+                                      <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
+                                        {segment.flightDuration || segment.duration}
+                                      </p>
+                                    </div>
+                                    
                         <div className="text-right">
-                          <p className="font-medium">
-                            {formatCurrency(flight.total_price, booking.currency)}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {flight.quantity} x {formatCurrency(flight.unit_price, booking.currency)}
+                                      <p className="font-medium text-[var(--color-foreground)]">{segment.arrivalAirportName} ({segment.arrivalAirportCode})</p>
+                                      <p className="text-[var(--color-muted-foreground)]">
+                                        {segment.arrivalDateTime && new Date(segment.arrivalDateTime).toLocaleString()}
+                                      </p>
+                                      {segment.arrivalTerminal && (
+                                        <p className="text-xs text-[var(--color-muted-foreground)]">Terminal {segment.arrivalTerminal}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Aircraft and baggage info */}
+                                  <div className="flex flex-wrap gap-4 text-xs text-[var(--color-muted-foreground)]">
+                                    {segment.aircraftType && (
+                                      <span>Aircraft: {segment.aircraftType}</span>
+                                    )}
+                                    {segment.baggageAllowance && (
+                                      <span>Baggage: {segment.baggageAllowance}</span>
+                                    )}
+                                    {segment.checkedBaggage && (
+                                      <span>Checked: {segment.checkedBaggage.pieces || segment.checkedBaggage.weight}kg</span>
+                                    )}
+                                    {segment.carryOnBaggage && (
+                                      <span>Carry-on: {segment.carryOnBaggage.pieces || segment.carryOnBaggage.weight}kg</span>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Layover information */}
+
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            /* Single segment display for database flights */
+                            <div className="border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-muted)]/10">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-[var(--color-foreground)]">
+                                    {flightDetails?.outboundFlightNumber || flightDetails?.flightNumber || 'Flight'}
+                                  </span>
+                                  {flightDetails?.airline && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {flightDetails.airline}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <Badge variant="outline" className="text-xs">
+                                  {flightDetails?.cabin || 'Economy'}
+                                </Badge>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                <div>
+                                  <p className="font-medium text-[var(--color-foreground)]">
+                                    {flightDetails?.outboundDepartureAirportCode || flightDetails?.origin}
+                                  </p>
+                                  <p className="text-[var(--color-muted-foreground)]">
+                                    {flightDetails?.outboundDepartureDatetime && new Date(flightDetails.outboundDepartureDatetime).toLocaleString()}
                           </p>
                         </div>
+                                
+                                <div className="flex items-center justify-center">
+                                  <div className="text-center">
+                                    <div className="w-16 h-8 border-t-2 border-[var(--color-muted-foreground)] relative">
+                                      <Plane className="h-4 w-4 text-[var(--color-muted-foreground)] absolute -top-2 left-1/2 transform -translate-x-1/2" />
                       </div>
-                    </Card>
-                  ))}
+                                    <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
+                                      {flightDetails?.outboundFlightDuration || flightDetails?.duration || 'Duration'}
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <div className="text-right">
+                                  <p className="font-medium text-[var(--color-foreground)]">
+                                    {flightDetails?.outboundArrivalAirportCode || flightDetails?.destination}
+                                  </p>
+                                  <p className="text-[var(--color-muted-foreground)]">
+                                    {flightDetails?.outboundArrivalDatetime && new Date(flightDetails.outboundArrivalDatetime).toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {flightDetails?.baggageAllowance && (
+                                <div className="mt-3 text-xs text-[var(--color-muted-foreground)]">
+                                  Baggage: {flightDetails.baggageAllowance}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Return Flight Details (if applicable) */}
+                        {flightDetails?.returnDate && (flightDetails?.inboundFlightNumber || flightDetails?.returnFlightNumber || flightDetails?.returnFlightSegments) && (
+                          <div className="border-t border-[var(--color-border)] pt-6">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="w-6 h-6 rounded-full bg-[var(--color-secondary-100)] flex items-center justify-center">
+                                <Plane className="h-3 w-3 text-[var(--color-secondary-600)]" />
+                              </div>
+                              <h4 className="font-semibold text-base text-[var(--color-foreground)]">Return Flight</h4>
+                            </div>
+                            
+                            {/* Multi-segment return flight display */}
+                            {flightDetails?.returnFlightSegments && flightDetails.returnFlightSegments.length > 0 ? (
+                              <div className="space-y-3 border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-muted)]/10">
+                                {flightDetails.returnFlightSegments.map((segment: any, segmentIndex: number) => (
+                                  <div key={segmentIndex} className="space-y-2">
+                                    {/* Flight segment header */}
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium text-sm text-[var(--color-foreground)]">
+                                          {segment.marketingAirlineName || segment.airline} {segment.flightNumber}
+                                        </span>
+                                        {segment.operatingAirlineName && segment.operatingAirlineName !== segment.marketingAirlineName && (
+                                          <Badge variant="outline" className="text-xs">
+                                            Operated by {segment.operatingAirlineName}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <Badge variant="outline" className="text-xs">
+                                        {segment.cabinName || segment.cabin || 'Economy'}
+                                      </Badge>
+                                    </div>
+                                    
+                                    {/* Route and times */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                      <div>
+                                        <p className="font-medium text-[var(--color-foreground)]">{segment.departureAirportName} ({segment.departureAirportCode})</p>
+                                        <p className="text-[var(--color-muted-foreground)]">
+                                          {segment.departureDateTime && new Date(segment.departureDateTime).toLocaleString()}
+                                        </p>
+                                        {segment.departureTerminal && (
+                                          <p className="text-xs text-[var(--color-muted-foreground)]">Terminal {segment.departureTerminal}</p>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Centered airplane with line */}
+                                      <div className="flex flex-col items-center justify-center h-full">
+                                        <div className="flex items-center w-full">
+                                          <div className="flex-1 border-t-2 border-[var(--color-muted-foreground)]"></div>
+                                          <Plane className="mx-2 h-5 w-5 text-[var(--color-muted-foreground)]" />
+                                          <div className="flex-1 border-t-2 border-[var(--color-muted-foreground)]"></div>
+                                        </div>
+                                        <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
+                                          {segment.flightDuration || segment.duration}
+                                        </p>
+                                      </div>
+                                      
+                                      <div className="text-right">
+                                        <p className="font-medium text-[var(--color-foreground)]">{segment.arrivalAirportName} ({segment.arrivalAirportCode})</p>
+                                        <p className="text-[var(--color-muted-foreground)]">
+                                          {segment.arrivalDateTime && new Date(segment.arrivalDateTime).toLocaleString()}
+                                        </p>
+                                        {segment.arrivalTerminal && (
+                                          <p className="text-xs text-[var(--color-muted-foreground)]">Terminal {segment.arrivalTerminal}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Aircraft and baggage info */}
+                                    <div className="flex flex-wrap gap-4 text-xs text-[var(--color-muted-foreground)]">
+                                      {segment.aircraftType && (
+                                        <span>Aircraft: {segment.aircraftType}</span>
+                                      )}
+                                      {segment.baggageAllowance && (
+                                        <span>Baggage: {segment.baggageAllowance}</span>
+                                      )}
+                                      {segment.checkedBaggage && (
+                                        <span>Checked: {segment.checkedBaggage.pieces || segment.checkedBaggage.weight}kg</span>
+                                      )}
+                                      {segment.carryOnBaggage && (
+                                        <span>Carry-on: {segment.carryOnBaggage.pieces || segment.carryOnBaggage.weight}kg</span>
+                                      )}
+                                    </div>
+                                    
+
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              /* Single segment display for database return flights */
+                              <div className="border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-muted)]/10">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-[var(--color-foreground)]">
+                                      {flightDetails?.inboundFlightNumber || flightDetails?.returnFlightNumber || 'Return Flight'}
+                                    </span>
+                                    {flightDetails?.airline && (
+                                      <Badge variant="outline" className="text-xs">
+                                        {flightDetails.airline}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <Badge variant="outline" className="text-xs">
+                                    {flightDetails?.cabin || 'Economy'}
+                                  </Badge>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                  <div>
+                                    <p className="font-medium text-[var(--color-foreground)]">
+                                      {flightDetails?.inboundDepartureAirportCode || flightDetails?.destination}
+                                    </p>
+                                    <p className="text-[var(--color-muted-foreground)]">
+                                      {flightDetails?.inboundDepartureDatetime && new Date(flightDetails.inboundDepartureDatetime).toLocaleString()}
+                                    </p>
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-center">
+                                    <div className="text-center">
+                                      <div className="w-16 h-8 border-t-2 border-[var(--color-muted-foreground)] relative">
+                                        <Plane className="h-4 w-4 text-[var(--color-muted-foreground)] absolute -top-2 left-1/2 transform -translate-x-1/2" />
+                                      </div>
+                                      <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
+                                        {flightDetails?.inboundFlightDuration || flightDetails?.returnDuration || 'Duration'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="text-right">
+                                    <p className="font-medium text-[var(--color-foreground)]">
+                                      {flightDetails?.inboundArrivalAirportCode || flightDetails?.origin}
+                                    </p>
+                                    <p className="text-[var(--color-muted-foreground)]">
+                                      {flightDetails?.inboundArrivalDatetime && new Date(flightDetails.inboundArrivalDatetime).toLocaleString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                {flightDetails?.baggageAllowance && (
+                                  <div className="mt-3 text-xs text-[var(--color-muted-foreground)]">
+                                    Baggage: {flightDetails.baggageAllowance}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Additional Flight Information */}
+                        {(flightDetails?.fareTypeName || flightDetails?.refundable !== undefined || flightDetails?.ticketingDeadline) && (
+                          <div className="mt-6 pt-4 border-t border-[var(--color-border)]">
+                            <h5 className="font-medium text-sm mb-3 text-[var(--color-foreground)]">Additional Information</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                              {flightDetails?.fareTypeName && (
+                                <div>
+                                  <p className="text-[var(--color-muted-foreground)]">Fare Type</p>
+                                  <p className="font-medium text-[var(--color-foreground)]">{flightDetails.fareTypeName}</p>
+                                </div>
+                              )}
+                              {flightDetails?.refundable !== undefined && (
+                                <div>
+                                  <p className="text-[var(--color-muted-foreground)]">Refundable</p>
+                                  <Badge variant={flightDetails.refundable ? "default" : "secondary"}>
+                                    {flightDetails.refundable ? "Yes" : "No"}
+                                  </Badge>
+                                </div>
+                              )}
+                              {flightDetails?.ticketingDeadline && (
+                                <div>
+                                  <p className="text-[var(--color-muted-foreground)]">Ticketing Deadline</p>
+                                  <p className="font-medium text-[var(--color-foreground)]">
+                                    {new Date(flightDetails.ticketingDeadline).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-muted-foreground">No flights found for this booking.</p>

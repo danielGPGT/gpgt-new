@@ -28,7 +28,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
 const COLUMN_CONFIG = [
-  { key: 'event', label: 'Event' },
+  { key: 'event_id', label: 'Event' },
   { key: 'outbound_flight_number', label: 'Outbound Flight' },
   { key: 'outbound_departure_airport_code', label: 'From (Code)' },
   { key: 'outbound_departure_airport_name', label: 'From (Name)' },
@@ -50,12 +50,11 @@ const COLUMN_CONFIG = [
   { key: 'refundable', label: 'Refundable' },
   { key: 'baggage_allowance', label: 'Baggage' },
   { key: 'supplier', label: 'Supplier' },
-
   { key: 'notes', label: 'Notes' },
   { key: 'actions', label: 'Actions' },
 ];
 const DEFAULT_COLUMNS = [
-  'event',
+  'event_id',
   'outbound_flight_number',
   'outbound_departure_airport_code',
   'outbound_arrival_airport_code',
@@ -212,7 +211,7 @@ export default function FlightsManager() {
   const sortedFlights = useMemo(() => [...filteredFlights].sort((a, b) => {
     let aValue: any, bValue: any;
     switch (sortKey) {
-      case 'event':
+      case 'event_id':
         aValue = events.find(e => e.id === a.event_id)?.name || '';
         bValue = events.find(e => e.id === b.event_id)?.name || '';
         break;
@@ -262,7 +261,9 @@ export default function FlightsManager() {
   // Handle edit/create
   const handleEdit = (flight: Flight) => {
     setEditingFlight(flight);
-    setForm({ ...flight });
+    // Filter out the 'event' property since it doesn't exist in the database schema
+    const { event, ...flightData } = flight;
+    setForm(flightData);
     setDrawerOpen(true);
   };
   const handleCreate = () => {
@@ -304,7 +305,7 @@ export default function FlightsManager() {
   function getColumnValue(f: Flight, key: string) {
     const formatDate = (dt: string | null) => dt ? new Date(dt).toLocaleString() : '';
     switch (key) {
-      case 'event': return events.find(e => e.id === f.event_id)?.name || '';
+      case 'event_id': return events.find(e => e.id === f.event_id)?.name || '';
       case 'outbound_flight_number': return f.outbound_flight_number;
       case 'outbound_departure_airport_code': return f.outbound_departure_airport_code;
       case 'outbound_departure_airport_name': return f.outbound_departure_airport_name;
@@ -487,10 +488,10 @@ export default function FlightsManager() {
                 {COLUMN_CONFIG.filter(col => col.key !== 'actions' && visibleColumns.has(col.key)).map(col => (
                   <TableHead
                     key={col.key}
-                    className={['event', 'outbound_flight_number', 'outbound_departure_airport_code', 'outbound_arrival_airport_code', 'total_price_gbp', 'refundable', 'airline', 'cabin', 'supplier'].includes(col.key) ? 'cursor-pointer select-none' : ''}
+                    className={['event_id', 'outbound_flight_number', 'outbound_departure_airport_code', 'outbound_arrival_airport_code', 'total_price_gbp', 'refundable', 'airline', 'cabin', 'supplier'].includes(col.key) ? 'cursor-pointer select-none' : ''}
                     onClick={() => {
                       if ([
-                        'event', 'outbound_flight_number', 'outbound_departure_airport_code', 'outbound_arrival_airport_code', 'total_price_gbp', 'refundable', 'airline', 'cabin', 'supplier'
+                        'event_id', 'outbound_flight_number', 'outbound_departure_airport_code', 'outbound_arrival_airport_code', 'total_price_gbp', 'refundable', 'airline', 'cabin', 'supplier'
                       ].includes(col.key)) {
                         setSortKey(col.key);
                         setSortDir(sortKey === col.key && sortDir === 'asc' ? 'desc' : 'asc');

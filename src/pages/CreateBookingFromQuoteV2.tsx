@@ -327,6 +327,29 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
   const handleSubmit = async (data: CreateBookingFormData) => {
     console.log('🚀 Form submission started', { data, quote });
     
+    // Debug: Log the flights data specifically
+    console.log('🔍 DEBUG: Form flights data:', {
+      flights: data.flights,
+      flightsLength: data.flights?.length,
+      quoteFlights: quote?.selectedComponents?.flights,
+      quoteFlightsLength: quote?.selectedComponents?.flights?.length,
+      selectedComponents: quote?.selectedComponents,
+      isArray: Array.isArray(quote?.selectedComponents)
+    });
+    
+    // Debug: Log each flight in detail
+    if (data.flights && data.flights.length > 0) {
+      console.log('🔍 DEBUG: Individual flight form data:');
+      data.flights.forEach((flight, index) => {
+        console.log(`  Flight ${index}:`, {
+          bookingRef: flight.bookingRef,
+          ticketingDeadline: flight.ticketingDeadline,
+          flightStatus: flight.flightStatus,
+          notes: flight.notes
+        });
+      });
+    }
+    
     if (!quote) {
       toast.error('Quote data not available');
       return;
@@ -389,6 +412,16 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
         flights: data.flights,
         loungePasses: data.loungePasses,
       };
+
+      // Debug: Log the final booking data
+      console.log('🔍 DEBUG: Final booking data being sent:', {
+        flights: bookingData.flights,
+        flightsLength: bookingData.flights?.length,
+        quoteSelectedComponents: quote.selectedComponents,
+        quoteFlights: quote.selectedComponents?.flights,
+        selectedComponentsType: typeof quote.selectedComponents,
+        isArray: Array.isArray(quote.selectedComponents)
+      });
 
       // Create the booking
       const bookingId = await BookingService.createBookingFromQuote(bookingData);

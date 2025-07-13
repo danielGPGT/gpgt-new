@@ -612,7 +612,10 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
                                         <div className="flex items-center justify-between w-full">
                                           <span>{t.ticket_category?.category_name || 'General'}</span>
                                           <span className="text-[var(--color-muted-foreground)] ml-2">
-                                            £{t.price_with_markup.toFixed(2)}
+                                            £{t.price_with_markup.toFixed(2)} 
+                                          </span> 
+                                          <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
+                                             ({t.quantity_available || 0} available)
                                           </span>
                                         </div>
                                       </SelectItem>
@@ -697,7 +700,7 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
                                 +
                               </Button>
                               <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
-                                Max: {maxQuantity} <span className="text-[var(--color-border)]">
+                                Max: {maxQuantity} <span className="">
                                   {ticketData?.is_provisional ? (
                                     <TooltipProvider>
                                       <Tooltip>
@@ -1007,9 +1010,9 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
     const total = basePrice + extraNights * extraNightPrice;
     return (
       <Card className="mb-8 bg-[var(--color-card)]/95 py-0 border border-[var(--color-border)] shadow-lg rounded-2xl overflow-hidden min-h-[340px] h-full">
-        <div className="flex flex-col md:flex-row h-full min-h-[340px] items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-12 h-full min-h-[340px]">
           {/* Images Carousel */}
-          <div className="md:w-[340px] w-full flex-shrink-0 h-full min-h-[340px]">
+          <div className="col-span-4 w-full flex-shrink-0 h-full min-h-[340px]">
             <Carousel className="w-full h-full [&>div]:h-full [&_[data-slot=carousel-content]]:h-full [&_[data-slot=carousel-content]>div]:h-full [&_[data-slot=carousel-content]>div]:-ml-0">
               <CarouselContent className="h-full">
                 {images.map((img: string, idx: number) => (
@@ -1025,11 +1028,11 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
             </Carousel>
           </div>
           {/* Info & Controls */}
-          <div className="flex-1 p-6 flex flex-col gap-0 justify-between h-full min-h-[340px] str">
+          <div className="col-span-8 flex-1 p-6 flex flex-col gap-0 justify-between h-full min-h-[340px] str">
             {/* Top: Hotel Info */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
               <div className="flex items-center gap-3">
-                <Hotel className="h-6 w-6 text-[var(--color-primary-600)]" />
+      
                 <div>
                   <div className="font-bold text-xl text-[var(--color-foreground)] leading-tight">{hotel.name}</div>
                   <div className="text-xs text-[var(--color-muted-foreground)] font-medium">{hotel.brand} • {hotel.city}, {hotel.country}</div>

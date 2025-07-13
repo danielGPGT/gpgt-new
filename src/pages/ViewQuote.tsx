@@ -568,16 +568,6 @@ export function ViewQuote() {
               Download PDF
             </Button>
 
-            <Button variant="outline" className="flex items-center gap-2" onClick={handleCopyLink}>
-              <Copy className="h-4 w-4" />
-              Copy Link
-            </Button>
-
-            <Button variant="outline" className="flex items-center gap-2" onClick={handlePrint}>
-              <Printer className="h-4 w-4" />
-              Print
-            </Button>
-
             <Button variant="outline" className="flex items-center gap-2" onClick={handleEditQuote}>
               <Edit className="h-4 w-4" />
               Edit
@@ -1848,14 +1838,6 @@ export function ViewQuote() {
               <Button variant="outline" className="w-full justify-start" onClick={() => setEmailDialogOpen(true)}>
                 <Mail className="h-4 w-4 mr-2" />
                 Send Quote Email
-              </Button>
-              <Button variant="outline" className="w-full justify-start" onClick={handleCopyLink}>
-                <Copy className="h-4 w-4 mr-2" />
-                Copy Link
-              </Button>
-              <Button variant="outline" className="w-full justify-start" onClick={handlePrint}>
-                <Printer className="h-4 w-4 mr-2" />
-                Print Quote
               </Button>
             </CardContent>
           </Card>

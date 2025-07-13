@@ -186,10 +186,13 @@ export function StepClientSelection({ disabled }: StepClientSelectionProps) {
       });
 
       setSelectedClient(newClient);
-      setClient({
+      const updatedClientData = {
         ...clientData,
         id: newClient.id,
-      });
+      };
+      setClient(updatedClientData);
+      form.setValue('client', updatedClientData);
+      form.setValue('isNewClient', false);
       
       toast.success('Client created successfully!');
     } catch (error) {

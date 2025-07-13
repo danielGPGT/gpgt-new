@@ -58,7 +58,7 @@ export function CreateBookingFromQuote({ quote }: { quote: any }) {
         {
           paymentType: 'deposit',
           amount: Number(quote.paymentDeposit || quote.payment_deposit) || 0,
-          dueDate: quote.paymentDepositDate || quote.payment_deposit_date || '',
+          dueDate: quote.paymentDepositDate || quote.payment_deposit_date || format(new Date(), 'yyyy-MM-dd'),
         },
         {
           paymentType: 'second_payment',

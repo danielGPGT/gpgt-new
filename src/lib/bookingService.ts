@@ -502,23 +502,27 @@ export class BookingService {
       await this.createBookingComponents(booking.id, enhancedComponents);
 
       // Create payment schedule
-      await this.createPaymentSchedule(booking.id, data.adjustedPaymentSchedule || [
-        {
-          paymentType: 'deposit',
-          amount: quote.payment_deposit,
-          dueDate: quote.payment_deposit_date
-        },
-        {
-          paymentType: 'second_payment',
-          amount: quote.payment_second_payment,
-          dueDate: quote.payment_second_payment_date
-        },
-        {
-          paymentType: 'final_payment',
-          amount: quote.payment_final_payment,
-          dueDate: quote.payment_final_payment_date
-        }
-      ]);
+      await this.createPaymentSchedule(
+        booking.id,
+        data.adjustedPaymentSchedule || [
+          {
+            paymentType: 'deposit',
+            amount: quote.payment_deposit,
+            dueDate: quote.payment_deposit_date
+          },
+          {
+            paymentType: 'second_payment',
+            amount: quote.payment_second_payment,
+            dueDate: quote.payment_second_payment_date
+          },
+          {
+            paymentType: 'final_payment',
+            amount: quote.payment_final_payment,
+            dueDate: quote.payment_final_payment_date
+          }
+        ],
+        data.depositPaid // <-- pass depositPaid
+      );
 
       // Create traveler records
       await this.createTravelerRecords(booking.id, data.leadTraveler, data.guestTravelers);
@@ -1547,15 +1551,23 @@ export class BookingService {
   /**
    * Create payment schedule
    */
-  static async createPaymentSchedule(bookingId: string, payments: BookingPayment[]): Promise<void> {
-    const paymentRecords = payments.map((payment, index) => ({
-      booking_id: bookingId,
-      payment_type: payment.paymentType,
-      payment_number: index + 1,
-      amount: payment.amount,
-      due_date: payment.dueDate,
-      notes: payment.notes
-    }));
+  static async createPaymentSchedule(bookingId: string, payments: BookingPayment[], depositPaid?: boolean): Promise<void> {
+    const paymentRecords = payments.map((payment, index) => {
+      const isDeposit = payment.paymentType === 'deposit';
+      const record: any = {
+        booking_id: bookingId,
+        payment_type: payment.paymentType,
+        payment_number: index + 1,
+        amount: payment.amount,
+        due_date: payment.dueDate,
+        notes: payment.notes
+      };
+      if (isDeposit && depositPaid) {
+        record.paid = true;
+        record.paid_at = new Date().toISOString();
+      }
+      return record;
+    });
 
     const { error } = await supabase
       .from('booking_payments')
@@ -1830,13 +1842,25 @@ export class BookingService {
       // Now delete the booking and all related records
       console.log('🗑️ Deleting booking records...');
       
+      // First, clear the lead_traveler_id reference to avoid foreign key constraint violation
+      console.log('🔗 Clearing lead_traveler_id reference...');
+      const { error: clearError } = await supabase
+        .from('bookings')
+        .update({ lead_traveler_id: null })
+        .eq('id', bookingId);
+      
+      if (clearError) {
+        console.error('Error clearing lead_traveler_id:', clearError);
+        throw new Error(`Failed to clear lead_traveler_id reference: ${clearError.message}`);
+      }
+      
       // Delete in the correct order to respect foreign key constraints
       const deleteOperations = [
         // Delete booking components first
         supabase.from('booking_components').delete().eq('booking_id', bookingId),
         // Delete booking payments
         supabase.from('booking_payments').delete().eq('booking_id', bookingId),
-        // Delete booking travelers
+        // Delete booking travelers (now safe since lead_traveler_id is cleared)
         supabase.from('booking_travelers').delete().eq('booking_id', bookingId),
         // Delete booking flights
         supabase.from('bookings_flights').delete().eq('booking_id', bookingId),

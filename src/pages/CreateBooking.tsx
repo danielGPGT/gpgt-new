@@ -61,7 +61,7 @@ const createBookingSchema = z.object({
   })),
   
   // Payment information
-  depositPaid: z.boolean().default(false),
+  depositPaid: z.boolean().default(true),
   depositReference: z.string().optional(),
   
   // Payment schedule adjustments
@@ -147,7 +147,7 @@ export function CreateBooking() {
             address: '',
           },
           guestTravelers: [],
-          depositPaid: false,
+          depositPaid: true,
           depositReference: '',
           useOriginalPaymentSchedule: true,
           adjustedPayments: [
@@ -269,6 +269,15 @@ export function CreateBooking() {
       notes: 'Additional payment'
     };
     form.setValue('adjustedPayments', [...currentPayments, newPayment]);
+  };
+
+  const handlePaymentTypeChange = (index: number, newType: string) => {
+    // If payment type is changed to deposit, set due date to current date
+    if (newType === 'deposit') {
+      form.setValue(`adjustedPayments.${index}.dueDate`, format(new Date(), 'yyyy-MM-dd'));
+    }
+    // Update the payment type
+    form.setValue(`adjustedPayments.${index}.paymentType`, newType as any);
   };
 
   const removePayment = (index: number) => {
@@ -647,6 +656,7 @@ export function CreateBooking() {
                               <select
                                 {...form.register(`adjustedPayments.${index}.paymentType`)}
                                 className="w-full p-2 border rounded-md"
+                                onChange={(e) => handlePaymentTypeChange(index, e.target.value)}
                               >
                                 <option value="deposit">Deposit</option>
                                 <option value="second_payment">Second Payment</option>
@@ -692,7 +702,7 @@ export function CreateBooking() {
                           <span>Deposit</span>
                           <span className="font-medium">£{quote.paymentDeposit?.toLocaleString()}</span>
                           <span className="text-sm text-muted-foreground">
-                            {quote.paymentDepositDate ? format(new Date(quote.paymentDepositDate), 'MMM dd, yyyy') : 'TBD'}
+                            {quote.paymentDepositDate ? format(new Date(quote.paymentDepositDate), 'MMM dd, yyyy') : format(new Date(), 'MMM dd, yyyy')}
                           </span>
                         </div>
                         <div className="flex justify-between items-center p-3 bg-muted rounded-lg">

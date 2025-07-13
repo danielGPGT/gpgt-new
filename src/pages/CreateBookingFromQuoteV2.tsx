@@ -19,6 +19,7 @@ import { BookingService, CreateBookingData } from '@/lib/bookingService';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/lib/supabase';
 
 // Schema for booking creation form (extend as needed)
 const createBookingSchema = z.object({
@@ -39,7 +40,7 @@ const createBookingSchema = z.object({
     firstName: z.string().min(1, 'First name is required'),
     lastName: z.string().min(1, 'Last name is required'),
   })),
-  depositPaid: z.boolean().default(false),
+  depositPaid: z.boolean().default(true),
   depositReference: z.string().optional(),
   useOriginalPaymentSchedule: z.boolean().default(true),
   adjustedPayments: z.array(z.object({
@@ -88,7 +89,7 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
     defaultValues: {
       leadTraveler: { firstName: '', lastName: '', email: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: '' },
       guestTravelers: [],
-      depositPaid: false,
+      depositPaid: true,
       depositReference: '',
       useOriginalPaymentSchedule: true,
       adjustedPayments: [],
@@ -131,122 +132,195 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
   useEffect(() => {
     if (!quote) return;
     
-    // Debug: Log quote structure
-    console.log('🔍 Quote data structure:', {
-      selectedComponents: quote.selectedComponents,
-      isArray: Array.isArray(quote.selectedComponents),
-      loungePasses: quote.selectedComponents?.lounge_passes,
-      loungePass: quote.selectedComponents?.loungePass,
-      flights: quote.selectedComponents?.flights,
-      hasLoungePasses: quote.selectedComponents?.lounge_passes?.length > 0,
-      hasLoungePass: quote.selectedComponents?.loungePass?.length > 0,
-      hasFlights: quote.selectedComponents?.flights?.length > 0,
-      arrayLoungePasses: Array.isArray(quote.selectedComponents) ? quote.selectedComponents.filter((c: any) => c.type === 'lounge_pass') : []
-    });
-    
-    // Debug: Show all properties of selectedComponents object
-    if (!Array.isArray(quote.selectedComponents) && quote.selectedComponents) {
-      console.log('🔍 All properties in selectedComponents object:', Object.keys(quote.selectedComponents));
-      console.log('🔍 Full selectedComponents object:', quote.selectedComponents);
-      console.log('🔍 LoungePass property details:', {
-        exists: !!quote.selectedComponents.loungePass,
-        length: quote.selectedComponents.loungePass?.length,
-        value: quote.selectedComponents.loungePass
+    const resetFormWithQuoteData = async () => {
+      // Debug: Log quote structure
+      console.log('🔍 Quote data structure:', {
+        selectedComponents: quote.selectedComponents,
+        isArray: Array.isArray(quote.selectedComponents),
+        loungePasses: quote.selectedComponents?.lounge_passes,
+        loungePass: quote.selectedComponents?.loungePass,
+        flights: quote.selectedComponents?.flights,
+        hasLoungePasses: quote.selectedComponents?.lounge_passes?.length > 0,
+        hasLoungePass: quote.selectedComponents?.loungePass?.length > 0,
+        hasFlights: quote.selectedComponents?.flights?.length > 0,
+        arrayLoungePasses: Array.isArray(quote.selectedComponents) ? quote.selectedComponents.filter((c: any) => c.type === 'lounge_pass') : []
       });
-    }
-    
-    // Debug: Show all components and their types
-    if (Array.isArray(quote.selectedComponents)) {
-      console.log('🔍 All components in array:', quote.selectedComponents.map((c: any, i: number) => ({
-        index: i,
-        id: c.id,
-        type: c.type,
-        name: c.name,
-        data: c.data
-      })));
       
-      // TEMPORARY TEST: Add a lounge pass component for testing
-      if (!quote.selectedComponents.some((c: any) => c.type === 'lounge_pass')) {
-        console.log('🔍 No lounge pass found, adding test lounge pass component');
-        quote.selectedComponents.push({
-          id: 'test-lounge-pass',
-          type: 'lounge_pass',
-          name: 'Test Lounge Pass',
-          quantity: 1,
-          unitPrice: 50,
-          totalPrice: 50,
-          description: 'Test lounge pass for development',
-          data: {
-            name: 'Test Lounge Pass',
-            price: 50
-          }
+      // Debug: Show all properties of selectedComponents object
+      if (!Array.isArray(quote.selectedComponents) && quote.selectedComponents) {
+        console.log('🔍 All properties in selectedComponents object:', Object.keys(quote.selectedComponents));
+        console.log('🔍 Full selectedComponents object:', quote.selectedComponents);
+        console.log('🔍 LoungePass property details:', {
+          exists: !!quote.selectedComponents.loungePass,
+          length: quote.selectedComponents.loungePass?.length,
+          value: quote.selectedComponents.loungePass
         });
       }
-    }
-    // Lead traveler
-    const [firstName, ...lastNameParts] = (quote.clientName || quote.client_name || '').split(' ');
-    // Guest travelers
-    const guestCount = (quote.travelersAdults || quote.travelers_adults || 1) - 1;
-    // Payments
-    const adjustedPayments = [
-      {
-        paymentType: 'deposit' as const,
-        amount: Number(quote.paymentDeposit || quote.payment_deposit) || 0,
-        dueDate: quote.paymentDepositDate || quote.payment_deposit_date || '',
-        notes: 'Deposit payment',
-      },
-      {
-        paymentType: 'second_payment' as const,
-        amount: Number(quote.paymentSecondPayment || quote.payment_second_payment) || 0,
-        dueDate: quote.paymentSecondPaymentDate || quote.payment_second_payment_date || '',
-        notes: 'Second payment',
-      },
-      {
-        paymentType: 'final_payment' as const,
-        amount: Number(quote.paymentFinalPayment || quote.payment_final_payment) || 0,
-        dueDate: quote.paymentFinalPaymentDate || quote.payment_final_payment_date || '',
-        notes: 'Final payment',
-      },
-    ];
-    // Flights
-    let flights: any[] = [];
-    if (quote.selectedComponents?.flights) {
-      flights = quote.selectedComponents.flights.map((f: any) => ({
-        bookingRef: '',
-        ticketingDeadline: '',
-        flightStatus: 'Booked - Not Ticketed',
-        notes: '',
-      }));
-    }
-    // Lounge Passes
-    let loungePasses: any[] = [];
-    if (quote.selectedComponents?.lounge_passes) {
-      loungePasses = quote.selectedComponents.lounge_passes.map((l: any) => ({ bookingRef: '', notes: '' }));
-    }
-    form.reset({
-      leadTraveler: {
-        firstName: firstName || '',
-        lastName: lastNameParts.join(' ') || '',
-        email: quote.clientEmail || quote.client_email || '',
-        phone: quote.clientPhone || quote.client_phone || '',
-        addressLine1: quote.clientAddress?.addressLine1 || '',
-        addressLine2: quote.clientAddress?.addressLine2 || '',
-        city: quote.clientAddress?.city || '',
-        state: quote.clientAddress?.state || '',
-        postalCode: quote.clientAddress?.postalCode || '',
-        country: quote.clientAddress?.country || '',
-      },
-      guestTravelers: Array.from({ length: Math.max(guestCount, 0) }).map(() => ({ firstName: '', lastName: '' })),
-      depositPaid: false,
-      depositReference: '',
-      useOriginalPaymentSchedule: true,
-      adjustedPayments,
-      flights,
-      loungePasses,
-      bookingNotes: '',
-      internalNotes: '',
-      specialRequests: '',
-    });
+      
+      // Debug: Show all components and their types
+      if (Array.isArray(quote.selectedComponents)) {
+        console.log('🔍 All components in array:', quote.selectedComponents.map((c: any, i: number) => ({
+          index: i,
+          id: c.id,
+          type: c.type,
+          name: c.name,
+          data: c.data
+        })));
+        
+        // TEMPORARY TEST: Add a lounge pass component for testing
+        if (!quote.selectedComponents.some((c: any) => c.type === 'lounge_pass')) {
+          console.log('🔍 No lounge pass found, adding test lounge pass component');
+          quote.selectedComponents.push({
+            id: 'test-lounge-pass',
+            type: 'lounge_pass',
+            name: 'Test Lounge Pass',
+            quantity: 1,
+            unitPrice: 50,
+            totalPrice: 50,
+            description: 'Test lounge pass for development',
+            data: {
+              name: 'Test Lounge Pass',
+              price: 50
+            }
+          });
+        }
+      }
+
+      // Lead traveler
+      const [firstName, ...lastNameParts] = (quote.clientName || quote.client_name || '').split(' ');
+      // Guest travelers
+      const guestCount = (quote.travelersAdults || quote.travelers_adults || 1) - 1;
+      // Payments
+      const adjustedPayments = [
+        {
+          paymentType: 'deposit' as 'deposit',
+          amount: Number(quote.paymentDeposit || quote.payment_deposit) || 0,
+          dueDate: format(new Date(), 'yyyy-MM-dd'), // Set deposit date to current date as default
+          notes: 'Deposit payment',
+        },
+        {
+          paymentType: 'second_payment' as 'second_payment',
+          amount: Number(quote.paymentSecondPayment || quote.payment_second_payment) || 0,
+          dueDate: quote.paymentSecondPaymentDate || quote.payment_second_payment_date || '',
+          notes: 'Second payment',
+        },
+        {
+          paymentType: 'final_payment' as 'final_payment',
+          amount: Number(quote.paymentFinalPayment || quote.payment_final_payment) || 0,
+          dueDate: quote.paymentFinalPaymentDate || quote.payment_final_payment_date || '',
+          notes: 'Final payment',
+        },
+      ];
+      // Flights
+      let flights: any[] = [];
+      if (quote.selectedComponents?.flights) {
+        flights = quote.selectedComponents.flights.map((f: any) => ({
+          bookingRef: '',
+          ticketingDeadline: '',
+          flightStatus: 'Booked - Not Ticketed',
+          notes: '',
+        }));
+      }
+      // Lounge Passes
+      let loungePasses: any[] = [];
+      if (quote.selectedComponents?.lounge_passes) {
+        loungePasses = quote.selectedComponents.lounge_passes.map((l: any) => ({ bookingRef: '', notes: '' }));
+      }
+
+      // Fetch client address from database if client_id exists
+      let clientAddress = {
+        street: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: '',
+      };
+
+      console.log('🔍 Starting address fetch...');
+      console.log('🔍 Quote object keys:', Object.keys(quote));
+      console.log('🔍 Quote client_id:', quote.client_id);
+      console.log('🔍 Quote clientId:', quote.clientId);
+      console.log('🔍 Full quote object:', quote);
+
+      const clientId = quote.client_id || quote.clientId;
+      console.log('🔍 Using clientId:', clientId);
+      
+      if (clientId) {
+        try {
+          console.log('🔍 Fetching client address from database...');
+          const { data: clientData, error } = await supabase
+            .from('clients')
+            .select('address')
+            .eq('id', clientId)
+            .single();
+
+          console.log('🔍 Database response:', { clientData, error });
+
+          if (clientData?.address) {
+            // The address field is JSONB, so we can access it directly
+            const address = clientData.address;
+            console.log('🔍 Raw address from database:', address);
+            
+            clientAddress = {
+              street: address.street || address.street_address || '',
+              city: address.city || '',
+              state: address.state || address.state_province || '',
+              zipCode: address.zipCode || address.postal_code || address.zip_code || '',
+              country: address.country || '',
+            };
+            console.log('📍 Fetched client address from database:', clientAddress);
+          } else {
+            console.log('🔍 No address found in client data');
+          }
+        } catch (error) {
+          console.error('❌ Error fetching client address:', error);
+        }
+      } else {
+        console.log('🔍 No client_id found in quote');
+      }
+
+      console.log('🔍 Final clientAddress before form reset:', clientAddress);
+
+      // Now reset the form with the fetched address data
+      const formData = {
+        leadTraveler: {
+          firstName: firstName || '',
+          lastName: lastNameParts.join(' ') || '',
+          email: quote.clientEmail || quote.client_email || '',
+          phone: quote.clientPhone || quote.client_phone || '',
+          addressLine1: clientAddress.street || '',
+          addressLine2: '',
+          city: clientAddress.city || '',
+          state: clientAddress.state || '',
+          postalCode: clientAddress.zipCode || '',
+          country: clientAddress.country || '',
+        },
+        guestTravelers: Array.from({ length: Math.max(guestCount, 0) }).map(() => ({ firstName: '', lastName: '' })),
+        depositPaid: true,
+        depositReference: '',
+        useOriginalPaymentSchedule: true,
+        adjustedPayments,
+        flights,
+        loungePasses,
+        bookingNotes: '',
+        internalNotes: '',
+        specialRequests: '',
+      };
+
+      console.log('🔍 Form data being reset:', formData);
+      console.log('🔍 Lead traveler address fields:', {
+        addressLine1: formData.leadTraveler.addressLine1,
+        city: formData.leadTraveler.city,
+        state: formData.leadTraveler.state,
+        postalCode: formData.leadTraveler.postalCode,
+        country: formData.leadTraveler.country,
+      });
+
+      form.reset(formData);
+    };
+
+    // Call the async function to reset form with fetched data
+    resetFormWithQuoteData();
   }, [quote]);
 
   // Handle form submission to create booking
@@ -667,7 +741,15 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <h4 className="font-medium">Payment Schedule</h4>
-                        <Button type="button" variant="outline" size="sm" onClick={() => form.setValue('adjustedPayments', [...form.getValues('adjustedPayments'), { paymentType: 'additional', amount: 0, dueDate: format(addDays(new Date(), 90), 'yyyy-MM-dd'), notes: 'Additional payment' }])} className="flex items-center gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => {
+                          const newPayment = { 
+                            paymentType: 'additional' as 'additional', 
+                            amount: 0, 
+                            dueDate: format(addDays(new Date(), 90), 'yyyy-MM-dd'), 
+                            notes: 'Additional payment' 
+                          };
+                          form.setValue('adjustedPayments', [...form.getValues('adjustedPayments'), newPayment]);
+                        }} className="flex items-center gap-2">
                           <Plus className="h-4 w-4" /> Add Payment
                         </Button>
                       </div>
@@ -682,7 +764,19 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="space-y-2">
                               <Label>Type</Label>
-                              <select {...form.register(`adjustedPayments.${index}.paymentType`)} className="w-full p-2 border rounded-md">
+                              <select 
+                                {...form.register(`adjustedPayments.${index}.paymentType`)} 
+                                className="w-full p-2 border rounded-md"
+                                onChange={(e) => {
+                                  const newType = e.target.value;
+                                  // If payment type is changed to deposit, set due date to current date
+                                  if (newType === 'deposit') {
+                                    form.setValue(`adjustedPayments.${index}.dueDate`, format(new Date(), 'yyyy-MM-dd'));
+                                  }
+                                  // Update the payment type
+                                  form.setValue(`adjustedPayments.${index}.paymentType`, newType as any);
+                                }}
+                              >
                                 <option value="deposit">Deposit</option>
                                 <option value="second_payment">Second Payment</option>
                                 <option value="final_payment">Final Payment</option>
@@ -713,7 +807,7 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
                         <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
                           <span>Deposit</span>
                           <span className="font-medium">£{quote.paymentDeposit?.toLocaleString()}</span>
-                          <span className="text-sm text-muted-foreground">{quote.paymentDepositDate ? format(new Date(quote.paymentDepositDate), 'MMM dd, yyyy') : 'TBD'}</span>
+                          <span className="text-sm text-muted-foreground">{quote.paymentDepositDate ? format(new Date(quote.paymentDepositDate), 'MMM dd, yyyy') : format(new Date(), 'MMM dd, yyyy')}</span>
                         </div>
                         <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
                           <span>Second Payment</span>

@@ -70,6 +70,28 @@ interface BookingWithDetails {
     unit_price: number;
     total_price: number;
   }>;
+  flights?: Array<{
+    id: string;
+    source_flight_id?: string;
+    api_source?: string;
+    ticketing_deadline?: string;
+    booking_pnr?: string;
+    flight_status?: string;
+    flight_details: any;
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+    currency: string;
+    refundable: boolean;
+  }>;
+  lounge_passes?: Array<{
+    id: string;
+    lounge_pass_id?: string;
+    booking_reference?: string;
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+  }>;
 }
 
 export default function Bookings() {
@@ -130,6 +152,28 @@ export default function Bookings() {
           components:booking_components!booking_components_booking_id_fkey(
             component_type,
             component_name,
+            quantity,
+            unit_price,
+            total_price
+          ),
+          flights:bookings_flights!bookings_flights_booking_id_fkey(
+            id,
+            source_flight_id,
+            api_source,
+            ticketing_deadline,
+            booking_pnr,
+            flight_status,
+            flight_details,
+            quantity,
+            unit_price,
+            total_price,
+            currency,
+            refundable
+          ),
+          lounge_passes:bookings_lounge_passes!bookings_lounge_passes_booking_id_fkey(
+            id,
+            lounge_pass_id,
+            booking_reference,
             quantity,
             unit_price,
             total_price
@@ -417,10 +461,51 @@ export default function Bookings() {
         ]);
       });
     }
-    // Components
-    if (booking.components && booking.components.length > 0) {
+    // Flights from bookings_flights table
+    if (booking.flights && booking.flights.length > 0) {
+      rows.push(['Flights']);
+      booking.flights.forEach((flight, i) => {
+        const flightDetails = flight.flight_details || {};
+        rows.push([
+          `Flight ${i + 1}`,
+          flightDetails.airline || '',
+          flightDetails.outbound_flight_number || '',
+          flightDetails.outbound_departure_airport_code || '',
+          flightDetails.outbound_arrival_airport_code || '',
+          flightDetails.outbound_departure_datetime || '',
+          flightDetails.inbound_flight_number || '',
+          flightDetails.inbound_departure_airport_code || '',
+          flightDetails.inbound_arrival_airport_code || '',
+          flightDetails.inbound_departure_datetime || '',
+          flight.quantity,
+          flight.unit_price,
+          flight.total_price,
+          flight.currency,
+          flight.flight_status || '',
+          flight.booking_pnr || '',
+          flight.ticketing_deadline || '',
+          flight.refundable ? 'Yes' : 'No'
+        ]);
+      });
+    }
+    // Lounge Passes from bookings_lounge_passes table
+    if (booking.lounge_passes && booking.lounge_passes.length > 0) {
+      rows.push(['Lounge Passes']);
+      booking.lounge_passes.forEach((lp, i) => {
+        rows.push([
+          `Lounge Pass ${i + 1}`,
+          lp.booking_reference || '',
+          lp.quantity,
+          lp.unit_price,
+          lp.total_price
+        ]);
+      });
+    }
+    // Other Components
+    const otherComponents = (booking.components || []).filter(c => c.component_type !== 'flight' && c.component_type !== 'lounge_pass');
+    if (otherComponents.length > 0) {
       rows.push(['Components']);
-      booking.components.forEach((comp, i) => {
+      otherComponents.forEach((comp, i) => {
         rows.push([
           `Component ${i + 1}`,
           comp.component_type,
@@ -436,7 +521,7 @@ export default function Bookings() {
     if (booking.internal_notes) rows.push(['Internal Notes', booking.internal_notes]);
     if (booking.special_requests) rows.push(['Special Requests', booking.special_requests]);
     // Convert to CSV string
-    const csv = rows.map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const csv = rows.map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"` ).join(',')).join('\r\n');
     // Download
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

@@ -69,8 +69,8 @@ export default function Login() {
           </div>
           {/* Tagline bottom-left */}
           <div className="relative z-10 p-8 pb-12 mt-auto">
-            <h2 className="text-3xl font-bold text-card mb-2 drop-shadow" style={{fontFamily: 'var(--font-sans)'}}>Tailor-Made Motorsport Travel</h2>
-            <p className="text-base text-card/90 max-w-md drop-shadow">
+            <h2 className="text-3xl text-white font-bold mb-2 drop-shadow" style={{fontFamily: 'var(--font-sans)'}}>Tailor-Made Motorsport Travel</h2>
+            <p className="text-base text-white max-w-md drop-shadow">
             Welcome to the Grand Prix Grand Tours Portal — your gateway to exclusive F1, MotoGP, and motorsport travel experiences.
             </p>
           </div>

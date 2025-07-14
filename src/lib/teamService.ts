@@ -412,7 +412,7 @@ export class TeamService {
       .from('event_consultants')
       .select(`
         *,
-        consultant:team_members(*),
+        team_member:consultant_id(*),
         event:events(id, name, location, start_date, end_date)
       `)
       .eq('event_id', eventId)

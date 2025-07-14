@@ -66,6 +66,8 @@ import { StepFlights, FlightSource, SelectedFlight } from '@/components/forms/st
 import { QuoteService } from '@/lib/quoteService';
 import { CurrencyService } from '@/lib/currencyService';
 import { FlightApiService } from '@/lib/flightApiService';
+import { hasTeamFeature } from '@/lib/teamUtils';
+import { ConsultantDetailsCard } from '@/components/ConsultantDetailsCard';
 
 // Package Intake Schema
 const packageIntakeSchema = z.object({
@@ -123,6 +125,7 @@ const packageIntakeSchema = z.object({
       roomType: z.string().optional(),
       checkIn: z.string().optional(),
       checkOut: z.string().optional(),
+      bed_type: z.string().optional(),
     })).default([]),
     circuitTransfers: z.array(z.object({
       id: z.string(),
@@ -869,21 +872,28 @@ export function PackageIntakeTest() {
   const currentStepConfig = stepConfig[displayStep - 1];
   const currentProTips = proTips[displayStep - 1];
 
+  const [showPrices, setShowPrices] = useState(false);
+  useEffect(() => {
+    (async () => {
+      setShowPrices(await hasTeamFeature('show_prices'));
+    })();
+  }, []);
+
   const renderStep = () => {
     switch (currentStep) {
       case 0:
-        return <StepClientSelection />;
+        return <StepClientSelection showPrices={showPrices} />;
       case 1:
-        return <StepTravelerCount />;
+        return <StepTravelerCount showPrices={showPrices} />;
       case 2:
-        return <StepEventSelection setCurrentStep={setCurrentStep} currentStep={currentStep} />;
+        return <StepEventSelection setCurrentStep={setCurrentStep} currentStep={currentStep} showPrices={showPrices} />;
       case 3:
-        return <StepPackageAndTierSelection setCurrentStep={setCurrentStep} currentStep={currentStep} />;
+        return <StepPackageAndTierSelection setCurrentStep={setCurrentStep} currentStep={currentStep} showPrices={showPrices} />;
       case 4:
-        return <StepComponents setCurrentStep={setCurrentStep} currentStep={currentStep} />;
+        return <StepComponents setCurrentStep={setCurrentStep} currentStep={currentStep} showPrices={showPrices} />;
       case 5:
         // --- SUMMARY STEP ---
-        return <SummaryStep form={form} isGenerating={isGenerating} />;
+        return <SummaryStep form={form} isGenerating={isGenerating} showPrices={showPrices} />;
       default:
         return <div className="p-6 text-center">
           <h3 className="text-lg font-semibold mb-2">Step Not Found</h3>
@@ -975,9 +985,11 @@ export function PackageIntakeTest() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Price Summary - only show during components step */}
+            {/* Price Summary - only show during components step and when showPrices is enabled */}
             {currentStep === 4 && (
-              <PriceSummaryCardContent />
+              showPrices
+                ? <PriceSummaryCardContent />
+                : <ConsultantDetailsCard eventId={form.getValues('selectedEvent')?.id} />
             )}
 
             {/* Pro Tips Card */}
@@ -1074,10 +1086,8 @@ export function PackageIntakeTest() {
   );
 }
 
-export function SummaryStep({ form, isGenerating }: { form: any, isGenerating: boolean }) {
+export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isGenerating: boolean, showPrices: boolean }) {
   const data = form.getValues();
-  console.log('[SUMMARY_STEP] Form data:', data);
-  console.log('[SUMMARY_STEP] Components data:', data.components);
   const { client, travelers, selectedEvent, selectedPackage, selectedTier, components } = data;
   // --- Fetch hotel, room, and transfer details for display ---
   const [hotels, setHotels] = useState<any[]>([]);
@@ -1307,6 +1317,124 @@ export function SummaryStep({ form, isGenerating }: { form: any, isGenerating: b
     // which will update summary.convertedPrice and summary.exchangeRate
   }
   
+  // --- Request Button Logic ---
+  const [requesting, setRequesting] = useState(false);
+  const handleRequest = async () => {
+    // Fetch consultant email from event
+    const { data, error } = await supabase
+      .from('events')
+      .select('*, team_member:primary_consultant_id(*)')
+      .eq('id', selectedEvent.id)
+      .single();
+    const consultantEmail = data?.team_member?.email;
+    const consultantName = data?.team_member?.name || '';
+    if (!consultantEmail) {
+      toast.error('No consultant assigned to this event.');
+      return;
+    }
+    // Get current user info
+    const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null;
+    const currentUser = {
+      name: user?.user_metadata?.name || user?.email || 'A user',
+      email: user?.email || '',
+    };
+    const formValues = form.getValues();
+    const client = formValues.client || {};
+    const event = formValues.selectedEvent || {};
+    const travelers = formValues.travelers || {};
+    const pkg = formValues.selectedPackage || {};
+    const tier = formValues.selectedTier || {};
+    const components = formValues.components || {};
+    // --- Build concise component summary strings ---
+    // Tickets
+    const ticketsSummary = (components.tickets || []).length > 0
+      ? 'Tickets: ' + components.tickets.map((t: any) => `${t.quantity}x ${t.category}`).join(', ')
+      : null;
+    // Hotels
+    const hotelsSummary = (components.hotels || []).length > 0
+      ? 'Hotels: ' + components.hotels.map((h: any) => {
+          // Try to get hotel name from h, or from hotels state
+          let hotelName = h.hotelName || (hotels && h.hotelId ? (hotels.find((ht: any) => ht.id === h.hotelId)?.name) : undefined) || h.hotelId || 'Hotel';
+          // Try to get room type from h, or from hotelRooms state
+          let roomType = h.roomType || h.room_type_id || (hotelRooms && h.roomId ? (hotelRooms.find((rm: any) => rm.id === h.roomId)?.room_type_id) : undefined) || '';
+          // Try to get bed type from h, or from hotelRooms state
+          let bedType = h.bed_type || (hotelRooms && h.roomId ? (hotelRooms.find((rm: any) => rm.id === h.roomId)?.bed_type) : undefined) || '';
+          let checkIn = h.checkIn || '';
+          let checkOut = h.checkOut || '';
+          let details = [roomType, bedType, checkIn && checkOut ? `${checkIn} to ${checkOut}` : null].filter(Boolean).join(', ');
+          return `${h.quantity || 1}x ${hotelName}${details ? ` (${details})` : ''}`;
+        }).join(', ')
+      : null;
+    // Circuit Transfers
+    const circuitTransfersSummary = (components.circuitTransfers || []).length > 0
+      ? 'Circuit Transfers: ' + components.circuitTransfers.map((c: any) => `${c.quantity}x ${c.transferType || c.transfer_type || 'Transfer'}`).join(', ')
+      : null;
+    // Airport Transfers
+    const airportTransfersSummary = (components.airportTransfers || []).length > 0
+      ? 'Airport Transfers: ' + components.airportTransfers.map((a: any) => `${a.quantity}x ${a.transportType || a.transport_type || 'Transfer'} (${a.transferDirection || ''})`).join(', ')
+      : null;
+    // Flights
+    const flightsSummary = (components.flights || []).length > 0
+      ? 'Flights: ' + components.flights.map((f: any) => {
+          const currency = formValues.summary?.currency || 'GBP';
+          function formatMoney(amount: number) {
+            return currency === 'GBP' ? `£${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+          }
+          const route = `${f.origin}→${f.destination}`;
+          const pax = `${f.passengers} pax${f.returnDate ? ', RT' : ''}`;
+          const airline = f.airline ? `Airline: ${f.airline}` : '';
+          const flightNum = f.outboundFlightNumber || f.flightNumber ? `Flight: ${f.outboundFlightNumber || f.flightNumber}` : '';
+          const outDate = f.departureDate ? `Out: ${f.departureDate}` : '';
+          const backDate = f.returnDate ? `Back: ${f.returnDate}` : '';
+          const price = f.price ? `Price: ${formatMoney(f.price)}/pp` : '';
+          // Compose details, omitting empty
+          const details = [airline, flightNum, outDate, backDate, price].filter(Boolean).join(' | ');
+          return `${route} (${pax})${details ? ' | ' + details : ''}`;
+        }).join('; ')
+      : null;
+    // Lounge Pass
+    const loungePass = components.loungePass;
+    const loungePassSummary = loungePass && loungePass.id
+      ? `Lounge Pass: ${loungePass.variant || ''} x${loungePass.quantity || 1}`
+      : null;
+    // Combine all summaries, skipping nulls
+    const componentLines = [ticketsSummary, hotelsSummary, circuitTransfersSummary, airportTransfersSummary, flightsSummary, loungePassSummary].filter(Boolean);
+    // --- Payment summary ---
+    const currency = formValues.summary?.currency || 'GBP';
+    const total = formValues.payments?.total || 0;
+    const deposit = formValues.payments?.deposit || 0;
+    const secondPayment = formValues.payments?.secondPayment || 0;
+    const finalPayment = formValues.payments?.finalPayment || 0;
+    const depositDate = formValues.payments?.depositDate;
+    const secondPaymentDate = formValues.payments?.secondPaymentDate;
+    const finalPaymentDate = formValues.payments?.finalPaymentDate;
+    function formatMoney(amount: number) {
+      return currency === 'GBP' ? `£${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+    }
+    const paymentLines = [
+      `Total Price: ${formatMoney(total)}`,
+      `Deposit: ${formatMoney(deposit)}${depositDate ? ` (Due: ${depositDate})` : ''}`,
+      `Second Payment: ${formatMoney(secondPayment)}${secondPaymentDate ? ` (Due: ${secondPaymentDate})` : ''}`,
+      `Final Payment: ${formatMoney(finalPayment)}${finalPaymentDate ? ` (Due: ${finalPaymentDate})` : ''}`
+    ];
+    const subject = encodeURIComponent('New Package Request');
+    const body = encodeURIComponent(
+      `Hi ${consultantName},\n\n` +
+      `A new package request has been submitted by ${currentUser.name} (${currentUser.email}):\n\n` +
+      `Client: ${client.firstName || ''} ${client.lastName || ''}\n` +
+      `Client Email: ${client.email || ''}\n` +
+      `Event: ${event.name || ''}\n` +
+      `Event Dates: ${event.startDate || ''} to ${event.endDate || ''}\n` +
+      `Travelers: ${travelers.adults || 0} adults, ${travelers.children || 0} children\n` +
+      `Package: ${pkg.name || ''}\n` +
+      `Tier: ${tier.name || ''}\n` +
+      (componentLines.length > 0 ? `\n${componentLines.join('\n')}` : '') +
+      `\n\n${paymentLines.join('\n')}`
+    );
+    const mailtoLink = `mailto:${consultantEmail}?subject=${subject}&body=${body}`;
+    window.location.href = mailtoLink;
+  };
+
   // --- UI ---
   return (
     <div className="space-y-8">
@@ -1381,7 +1509,7 @@ export function SummaryStep({ form, isGenerating }: { form: any, isGenerating: b
                     <span className="font-medium">{t.category}</span>
                     {t.ticket_type && <> • {t.ticket_type}</>}
                     {t.ticket_days && <> • <Calendar className="inline h-3 w-3" /> {t.ticket_days}</>}
-                    <span className="ml-2">× {t.quantity} <span className="text-muted-foreground">(@ £{Number(t.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each)</span></span>
+                    <span className="ml-2">× {t.quantity} {showPrices ? <span className="text-muted-foreground">(@ £{Number(t.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each)</span> : <span className="text-muted-foreground">(Included)</span>}</span>
                   </li>
                 ))}
               </ul>
@@ -1406,6 +1534,7 @@ export function SummaryStep({ form, isGenerating }: { form: any, isGenerating: b
                         <Calendar className="inline h-3 w-3" /> {h.checkIn} to {h.checkOut}
                       </span>
                       {hotel?.city && <> • {hotel.city}, {hotel.country}</>}
+                      {!showPrices && <span className="ml-2 text-muted-foreground">(Included)</span>}
                     </li>
                   );
                 })}
@@ -1427,7 +1556,7 @@ export function SummaryStep({ form, isGenerating }: { form: any, isGenerating: b
                       <span className="font-medium">{transfer?.transfer_type || 'Transfer'}</span>
                       {hotel && <> • {hotel.name}</>}
                       <span className="ml-2">× {c.quantity}</span>
-                      <span className="ml-2">@ £{Number(c.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per seat</span>
+                      {showPrices ? <span className="ml-2">@ £{Number(c.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per seat</span> : <span className="ml-2 text-muted-foreground">(Included)</span>}
                     </li>
                   );
                 })}
@@ -1450,7 +1579,7 @@ export function SummaryStep({ form, isGenerating }: { form: any, isGenerating: b
                       {hotel && <> • {hotel.name}</>}
                       <span className="ml-2">× {a.quantity}</span>
                       <span className="ml-2">{a.transferDirection}</span>
-                      <span className="ml-2">@ £{Number(a.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per vehicle</span>
+                      {showPrices ? <span className="ml-2">@ £{Number(a.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per vehicle</span> : <span className="ml-2 text-muted-foreground">(Included)</span>}
                     </li>
                   );
                 })}
@@ -2214,6 +2343,17 @@ export function SummaryStep({ form, isGenerating }: { form: any, isGenerating: b
       </Card>
       {/* Price Summary */}
 
+      <div className="flex justify-end mt-8">
+        {showPrices ? (
+          <Button onClick={() => handleGenerateQuote(form.getValues())} disabled={isGenerating}>
+            Generate Quote
+          </Button>
+        ) : (
+          <Button onClick={handleRequest} disabled={isGenerating || requesting}>
+            {requesting ? 'Sending...' : 'Send Request'}
+          </Button>
+        )}
+      </div>
     </div>
   );
 } 

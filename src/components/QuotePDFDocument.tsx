@@ -80,6 +80,12 @@ const styles = StyleSheet.create({
     borderBottom: '0.5 solid #e5e7eb',
     paddingBottom: 2,
   },
+  sectionSubtitle: {
+    fontWeight: 'bold',
+    fontSize: 8,
+    color: '#22223b',
+    marginBottom: 4,
+  },
   
   // Two column layout
   twoColumn: {
@@ -390,52 +396,146 @@ const extractComponentInfo = (component: any) => {
   };
 };
 
-// Helper function to extract flight information
+// Enhanced extractFlightInfo to show as many details as possible
 const extractFlightInfo = (component: any) => {
-  if (!component) return { route: 'N/A', details: 'N/A', class: 'Economy' };
-  
-  // Check if flight data is nested in component.data
+  if (!component) return {
+    route: 'N/A',
+    airline: 'N/A',
+    flightNumbers: 'N/A',
+    departure: 'N/A',
+    returnDate: 'N/A',
+    class: 'N/A',
+    passengers: 'N/A',
+    totalPrice: 'N/A',
+    currency: 'N/A',
+    fareType: 'N/A',
+    baggage: 'N/A',
+    aircraft: 'N/A',
+    refundable: 'N/A',
+    layovers: 'N/A',
+    details: '',
+  };
   const flightData = component.data || component;
-  
-  // Check if this is a flight component with the correct structure
   const origin = flightData.originAirport || flightData.origin || component.originAirport || component.origin || 'N/A';
   const destination = flightData.destinationAirport || flightData.destination || component.destinationAirport || component.destination || 'N/A';
   const route = `${origin} → ${destination}`;
-  
-  let details = '';
-  if (flightData.airline || component.airline) {
-    details += `${flightData.airline || component.airline} `;
+  const airline = flightData.airline || component.airline || flightData.validatingAirlineName || 'N/A';
+  // Flight numbers: try to get all segments
+  let flightNumbers = [];
+  if (flightData.outboundFlightNumber) flightNumbers.push(flightData.outboundFlightNumber);
+  if (flightData.inboundFlightNumber) flightNumbers.push(flightData.inboundFlightNumber);
+  if (flightData.flightNumber) flightNumbers.push(flightData.flightNumber);
+  if (flightData.outboundFlightSegments && Array.isArray(flightData.outboundFlightSegments)) {
+    flightNumbers.push(...flightData.outboundFlightSegments.map((seg: any) => seg.flightNumber || '').filter(Boolean));
   }
-  if (flightData.flightNumber || component.flightNumber) {
-    details += `Flight ${flightData.flightNumber || component.flightNumber}`;
+  if (flightData.returnFlightSegments && Array.isArray(flightData.returnFlightSegments)) {
+    flightNumbers.push(...flightData.returnFlightSegments.map((seg: any) => seg.flightNumber || '').filter(Boolean));
   }
-  
-  // Handle departure and return dates
+  if (flightNumbers.length === 0) flightNumbers.push('N/A');
+  // Departure/return
+  let departure = 'N/A';
   if (flightData.departureDate) {
-    const departureDate = new Date(flightData.departureDate).toLocaleDateString();
-    details += ` (${departureDate}`;
-    
-    if (flightData.returnDate) {
-      const returnDate = new Date(flightData.returnDate).toLocaleDateString();
-      details += ` - ${returnDate}`;
-    }
-    details += ')';
-  } else if (flightData.departureTime && flightData.arrivalTime) {
-    details += ` (${flightData.departureTime} - ${flightData.arrivalTime})`;
+    departure = new Date(flightData.departureDate).toLocaleString();
+  } else if (flightData.outboundDepartureDateTime) {
+    departure = new Date(flightData.outboundDepartureDateTime).toLocaleString();
   }
-  
-  // Add duration if available
-  if (flightData.duration) {
-    details += ` - ${flightData.duration}`;
+  let returnDate = 'N/A';
+  if (flightData.returnDate) {
+    returnDate = new Date(flightData.returnDate).toLocaleString();
+  } else if (flightData.inboundDepartureDateTime) {
+    returnDate = new Date(flightData.inboundDepartureDateTime).toLocaleString();
   }
-  
-  const flightClass = flightData.cabin || flightData.class || flightData.cabinClass || component.cabin || component.class || component.cabinClass || 'Economy';
-  
+  // Class/cabin
+  const flightClass = flightData.cabin || flightData.class || flightData.cabinClass || component.cabin || component.class || component.cabinClass || 'N/A';
+  // Passengers
+  const passengers = flightData.passengers || component.passengers || flightData.quantity || component.quantity || 'N/A';
+  // Price
+  const totalPrice = (typeof flightData.total === 'number' && !isNaN(flightData.total) && flightData.total > 0)
+    ? flightData.total
+    : (typeof flightData.price === 'number' && !isNaN(flightData.price) && flightData.price > 0)
+      ? flightData.price
+      : 'N/A';
+  const currency = flightData.currency || flightData.currencyId || flightData.currencyCode || flightData.currencySymbol || 'N/A';
+  // Fare type
+  const fareType = flightData.fareTypeName || flightData.fareTypeId || (flightData.fareType && (flightData.fareType.FareTypeName || flightData.fareType.FareTypeId)) || 'N/A';
+  // Baggage
+  let baggage = 'N/A';
+  if (flightData.baggageAllowance && typeof flightData.baggageAllowance === 'object') {
+    if (flightData.baggageAllowance.NumberOfPieces) baggage = `${flightData.baggageAllowance.NumberOfPieces} pcs`;
+  } else if (flightData.baggageAllowance) {
+    baggage = String(flightData.baggageAllowance);
+  }
+  // Aircraft
+  let aircraft = [];
+  if (flightData.outboundAircraftType) aircraft.push(flightData.outboundAircraftType);
+  if (flightData.inboundAircraftType) aircraft.push(flightData.inboundAircraftType);
+  if (flightData.outboundFlightSegments && Array.isArray(flightData.outboundFlightSegments)) {
+    aircraft.push(...flightData.outboundFlightSegments.map((seg: any) => seg.aircraftType || '').filter(Boolean));
+  }
+  if (flightData.returnFlightSegments && Array.isArray(flightData.returnFlightSegments)) {
+    aircraft.push(...flightData.returnFlightSegments.map((seg: any) => seg.aircraftType || '').filter(Boolean));
+  }
+  if (aircraft.length === 0) aircraft.push('N/A');
+  // Refundable
+  const refundable = typeof flightData.refundable === 'boolean' ? (flightData.refundable ? 'Yes' : 'No') : 'N/A';
+  // Layovers
+  let layovers = [];
+  if (flightData.outboundLayoverInfo && Array.isArray(flightData.outboundLayoverInfo)) {
+    layovers.push(...flightData.outboundLayoverInfo.map((l: any) => `${l.airport || l.airportCode || ''} (${l.duration || ''})`).filter(Boolean));
+  }
+  if (flightData.inboundLayoverInfo && Array.isArray(flightData.inboundLayoverInfo)) {
+    layovers.push(...flightData.inboundLayoverInfo.map((l: any) => `${l.airport || l.airportCode || ''} (${l.duration || ''})`).filter(Boolean));
+  }
+  // Details block (for multi-line cell)
+  let details = '';
+  if (fareType !== 'N/A') details += `Fare: ${fareType}\n`;
+  if (baggage !== 'N/A') details += `Baggage: ${baggage}\n`;
+  if (aircraft.length && aircraft[0] !== 'N/A') details += `Aircraft: ${aircraft.join(', ')}\n`;
+  if (layovers.length) details += `Layovers: ${layovers.join(', ')}\n`;
+  if (refundable !== 'N/A') details += `Refundable: ${refundable}\n`;
+  // Add any other interesting fields
+  if (flightData.skytraxRating) details += `Skytrax: ${flightData.skytraxRating}\n`;
+  if (flightData.isCorporate) details += `Corporate Fare\n`;
+  if (flightData.isPremium) details += `Premium Fare\n`;
+  if (flightData.isBaggageOnly) details += `Baggage Only\n`;
+  if (flightData.isSemiDeferred) details += `Semi-Deferred\n`;
   return {
     route,
-    details: details.trim() || 'Flight service',
-    class: flightClass
+    airline,
+    flightNumbers: flightNumbers.join(', '),
+    departure,
+    returnDate,
+    class: flightClass,
+    passengers,
+    totalPrice,
+    currency,
+    fareType,
+    baggage,
+    aircraft: aircraft.join(', '),
+    refundable,
+    layovers: layovers.join(', '),
+    details: details.trim(),
   };
+};
+
+// Helper function to robustly detect if a component is a flight
+const isFlightComponent = (component: any) => {
+  if (!component || typeof component !== 'object') return false;
+  // Check top-level type
+  if (component.type === 'flight') return true;
+  // Check top-level flight-like properties
+  if (component.origin || component.destination || component.originAirport || component.destinationAirport) return true;
+  // Check nested data object for flight-like properties
+  const data = component.data || {};
+  if (
+    data.type === 'flight' ||
+    data.origin || data.destination ||
+    data.originAirport || data.destinationAirport ||
+    data.airline || data.flightNumber || data.cabin || data.class || data.cabinClass
+  ) {
+    return true;
+  }
+  return false;
 };
 
 const QuotePDFDocument: React.FC<QuotePDFDocumentProps> = ({ quoteData }) => {
@@ -505,8 +605,20 @@ const QuotePDFDocument: React.FC<QuotePDFDocumentProps> = ({ quoteData }) => {
           </View>
         </View>
 
-        <View style={styles.column}>
-          <Text style={styles.sectionTitle}>EVENT INFORMATION</Text>
+        {/* Travelers */}
+      <View style={styles.column}>
+        <Text style={styles.sectionTitle}>TRAVELERS</Text>
+        <Text style={styles.value}>Total Travelers: {quoteData.travelers_total || 0}</Text>
+      </View>
+
+        
+          
+        </View>
+
+      {/* Package Details */}
+      <View style={styles.twoColumn}>
+      <View style={styles.column}>
+        <Text style={styles.sectionTitle}>EVENT INFORMATION</Text>
           <View style={styles.infoRow}>
             <Text style={styles.label}>Event:</Text>
             <Text style={styles.value}>{quoteData.event_name || 'N/A'}</Text>
@@ -524,10 +636,8 @@ const QuotePDFDocument: React.FC<QuotePDFDocumentProps> = ({ quoteData }) => {
             </Text>
           </View>
         </View>
-      </View>
 
-      {/* Package Details */}
-      <View style={styles.section}>
+        <View style={styles.column}>
         <Text style={styles.sectionTitle}>PACKAGE DETAILS</Text>
         <View style={styles.infoRow}>
           <Text style={styles.label}>Package:</Text>
@@ -539,78 +649,16 @@ const QuotePDFDocument: React.FC<QuotePDFDocumentProps> = ({ quoteData }) => {
         </View>
       </View>
 
-      {/* Travelers */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>TRAVELERS</Text>
-        <Text style={styles.value}>Total Travelers: {quoteData.travelers_total || 0}</Text>
+      
       </View>
 
-      {/* Flights Section */}
-      {(() => {
-        const hasFlights = quoteData.selected_components?.some((component: any) => 
-          component && typeof component === 'object' && 
-          (component.type === 'flight' || 
-           component.originAirport || 
-           component.destinationAirport ||
-           (component.data && (component.data.originAirport || component.data.destinationAirport)) ||
-           (component.data && (component.data.origin || component.data.destination || component.data.airline || component.data.flightNumber)))
-        ) || false;
-        console.log('Has flights:', hasFlights);
-        return hasFlights;
-      })() && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>FLIGHTS</Text>
-          <View style={styles.table}>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderCell, { width: '40%' }]}>Route</Text>
-              <Text style={[styles.tableHeaderCell, { width: '40%' }]}>Details</Text>
-              <Text style={[styles.tableHeaderCell, { width: '20%' }]}>Class</Text>
-            </View>
-            {quoteData.selected_components
-              ?.filter((component: any) => {
-                const isFlight = component && typeof component === 'object' && 
-                  (component.type === 'flight' || 
-                   component.originAirport || 
-                   component.destinationAirport ||
-                   (component.data && (component.data.originAirport || component.data.destinationAirport)) ||
-                   (component.data && (component.data.origin || component.data.destination || component.data.airline || component.data.flightNumber)));
-                console.log('Component flight check:', { 
-                  type: component?.type, 
-                  originAirport: component?.originAirport, 
-                  destinationAirport: component?.destinationAirport,
-                  data: component?.data,
-                  isFlight 
-                });
-                return isFlight;
-              })
-              .map((component: any, index: number) => {
-                const flightInfo = extractFlightInfo(component);
-                return (
-                  <View key={index} style={index % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
-                    <Text style={[styles.tableCell, { width: '40%' }]}>
-                      {flightInfo.route}
-                    </Text>
-                    <Text style={[styles.tableCell, { width: '40%' }]}>
-                      {flightInfo.details}
-                    </Text>
-                    <Text style={[styles.tableCell, { width: '20%' }]}>
-                      {flightInfo.class}
-                    </Text>
-                  </View>
-                );
-              })}
-          </View>
-        </View>
-      )}
+      
+
+      
 
       {/* Components Table (excluding flights) */}
       {quoteData.selected_components && quoteData.selected_components.filter((component: any) => 
-        component && typeof component === 'object' && 
-        !(component.type === 'flight' || 
-          component.originAirport || 
-          component.destinationAirport ||
-          (component.data && (component.data.originAirport || component.data.destinationAirport)) ||
-          (component.data && (component.data.origin || component.data.destination || component.data.airline || component.data.flightNumber)))
+        component && typeof component === 'object' && !isFlightComponent(component)
       ).length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>INCLUDED IN THE PACKAGE</Text>
@@ -621,32 +669,122 @@ const QuotePDFDocument: React.FC<QuotePDFDocumentProps> = ({ quoteData }) => {
               <Text style={[styles.tableHeaderCell, { width: '20%' }]}>Quantity</Text>
             </View>
             {quoteData.selected_components
-              ?.filter((component: any) => component && typeof component === 'object' && 
-                !(component.type === 'flight' || 
-                  component.originAirport || 
-                  component.destinationAirport ||
-                  (component.data && (component.data.originAirport || component.data.destinationAirport)) ||
-                  (component.data && (component.data.origin || component.data.destination || component.data.airline || component.data.flightNumber))))
+              ?.filter((component: any) => component && typeof component === 'object' && !isFlightComponent(component))
               .map((component: any, index: number) => {
-                // Debug: Log each component
-                console.log(`Component ${index}:`, component);
                 const componentInfo = extractComponentInfo(component);
-                console.log(`Component ${index} info:`, componentInfo);
                 return (
                   <View key={index} style={index % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
-                    <Text style={[styles.tableCell, { width: '30%' }]}>
-                      {componentInfo.name}
-                    </Text>
-                    <Text style={[styles.tableCell, { width: '50%' }]}>
-                      {componentInfo.details}
-                    </Text>
-                    <Text style={[styles.tableCell, { width: '20%' }]}>
-                      {componentInfo.quantity}
-                    </Text>
+                    <Text style={[styles.tableCell, { width: '30%' }]}> {componentInfo.name} </Text>
+                    <Text style={[styles.tableCell, { width: '50%' }]}> {componentInfo.details} </Text>
+                    <Text style={[styles.tableCell, { width: '20%' }]}> {componentInfo.quantity} </Text>
                   </View>
                 );
               })}
           </View>
+        </View>
+      )}
+
+      {/* Flights Section */}
+      {quoteData.selected_components?.some(isFlightComponent) && (
+        <View style={styles.section}> {/* extra spacing for section */}
+          <Text style={styles.sectionTitle}>FLIGHTS</Text>
+          {quoteData.selected_components.filter(isFlightComponent).map((component: any, idx: number) => {
+            const flightData = component.data || component;
+            const formatDateTime = (dt: string) => dt ? new Date(dt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A';
+            const getBaggage = (seg: any) => seg?.BaggageAllowance?.NumberOfPieces || seg?.baggageAllowance?.NumberOfPieces || flightData.baggageAllowance?.NumberOfPieces || 'N/A';
+            const outboundSegments = flightData.outboundFlightSegments || (flightData.outboundFlight ? [flightData.outboundFlight] : []);
+            const returnSegments = flightData.returnFlightSegments || (flightData.inboundFlight ? [flightData.inboundFlight] : []);
+            const passengers = flightData.passengers || flightData.Passengers || flightData.recommendation?.Passengers?.length || 'N/A';
+            const totalPrice = flightData.total || flightData.totalFare || flightData.price || (flightData.recommendation?.Total) || 'N/A';
+            // Remove all currency symbol logic, just use the code
+            const currencyCode = (flightData.currencyCode || flightData.currencyId || 'GBP').toUpperCase();
+            let displayPrice = totalPrice;
+            if (typeof displayPrice === 'string') displayPrice = displayPrice.replace(/[^\d.,-]/g, '');
+            // Table column headers (only segment-specific fields)
+            const tableHeaders = [
+              'From', 'To', 'Departure', 'Arrival', 'Duration'
+            ];
+            // Helper to render a table row for a segment
+            const renderTableRow = (seg: any, i: number) => (
+              <View key={i} style={[styles.tableRow, {flexDirection: 'row', borderBottomWidth: 1, borderColor: '#eee', paddingVertical: 6, width: '100%'}]}>
+                <Text style={[styles.tableCell, { flex: 2 }]}>{seg.departureAirportName || seg.DepartureAirportName || 'N/A'} ({seg.departureAirportId || 'N/A'})</Text>
+                <Text style={[styles.tableCell, { flex: 2 }]}>{seg.arrivalAirportName || seg.ArrivalAirportName || 'N/A'} ({seg.arrivalAirportId || 'N/A'})</Text>
+                <Text style={[styles.tableCell, { flex: 2 }]}>{formatDateTime(seg.departureDateTime)}</Text>
+                <Text style={[styles.tableCell, { flex: 2 }]}>{formatDateTime(seg.arrivalDateTime)}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>{seg.flightDuration || 'N/A'}</Text>
+              </View>
+            );
+            // Helper to render table header
+            const renderTableHeader = () => (
+              <View style={[styles.tableHeader, {flexDirection: 'row', borderBottomWidth: 1, borderColor: '#bbb', backgroundColor: '#f3f4f6', paddingVertical: 3, borderRadius: 4, width: '100%'}]}>
+                {tableHeaders.map((header, i) => (
+                  <Text key={i} style={[styles.tableHeaderCell, { flex: i === 4 ? 1 : 2, color: '#22223b', fontWeight: 'bold'}]}>{header}</Text>
+                ))}
+              </View>
+            );
+            // Helper to get shared info from first segment
+            const getSharedInfo = (segments: any[]) => {
+              const seg = segments[0] || {};
+              return {
+                airline: seg.marketingAirlineName || seg.operatingAirlineName || flightData.airline || 'N/A',
+                class: seg.cabin || seg.CabinId || flightData.cabin || 'N/A',
+                baggage: seg.BaggageAllowance?.NumberOfPieces || seg.baggageAllowance?.NumberOfPieces || flightData.baggageAllowance?.NumberOfPieces || 'N/A',
+              };
+            };
+            return (
+              <View key={idx}>
+                {/* Outbound Flight Table */}
+                <Text style={[styles.sectionSubtitle, {marginBottom: 8}]}>Outbound Flight</Text>
+                {outboundSegments.length > 0 ? (
+                  <View style={{ marginBottom: 16 }}>
+                    {/* Shared info row */}
+                    {(() => { const info = getSharedInfo(outboundSegments); return (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 4, paddingVertical: 6, marginBottom: 4, paddingHorizontal: 6 }}>
+                        <Text style={[styles.value, { fontWeight: 'bold', marginRight: 12 }]}>Airline</Text>
+                        <Text style={[styles.value, { marginRight: 24 }]}>{info.airline}</Text>
+                        <Text style={[styles.value, { fontWeight: 'bold', marginRight: 12 }]}>Class</Text>
+                        <Text style={[styles.value, { marginRight: 24 }]}>{info.class}</Text>
+                        <Text style={[styles.value, { fontWeight: 'bold', marginRight: 12 }]}>Baggage</Text>
+                        <Text style={styles.value}>{info.baggage}</Text>
+                      </View>
+                    ); })()}
+                    {renderTableHeader()}
+                    {outboundSegments.map(renderTableRow)}
+                  </View>
+                ) : <Text style={[styles.value, { marginLeft: 10 }]}>N/A</Text>}
+                {/* Return Flight Table */}
+                <Text style={[styles.sectionSubtitle, {marginTop: 8, marginBottom: 8}]}>Return Flight</Text>
+                {returnSegments.length > 0 ? (
+                  <View style={{ marginBottom: 16 }}>
+                    {/* Shared info row */}
+                    {(() => { const info = getSharedInfo(returnSegments); return (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 4, paddingVertical: 6, marginBottom: 4, paddingHorizontal: 6 }}>
+                        <Text style={[styles.value, { fontWeight: 'bold', marginRight: 12 }]}>Airline</Text>
+                        <Text style={[styles.value, { marginRight: 24 }]}>{info.airline}</Text>
+                        <Text style={[styles.value, { fontWeight: 'bold', marginRight: 12 }]}>Class</Text>
+                        <Text style={[styles.value, { marginRight: 24 }]}>{info.class}</Text>
+                        <Text style={[styles.value, { fontWeight: 'bold', marginRight: 12 }]}>Baggage</Text>
+                        <Text style={styles.value}>{info.baggage}</Text>
+                      </View>
+                    ); })()}
+                    {renderTableHeader()}
+                    {returnSegments.map(renderTableRow)}
+                  </View>
+                ) : <Text style={[styles.value, { marginLeft: 10 }]}>N/A</Text>}
+                {/* Summary Row */}
+                <View style={{ marginTop: 14, borderTopWidth: 1, borderColor: '#eee', paddingTop: 8 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={[styles.value, { fontWeight: 'bold' }]}>Passengers</Text>
+                    <Text style={styles.value}>{passengers}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={[styles.value, { fontWeight: 'bold' }]}>Total Price</Text>
+                    <Text style={styles.value}>{currencyCode} {displayPrice} per person</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
         </View>
       )}
 

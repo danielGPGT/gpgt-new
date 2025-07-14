@@ -121,7 +121,7 @@ const COMPONENT_CONFIG: ComponentConfig[] = [
   },
 ];
 
-export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep: (step: number) => void; currentStep: number }) {
+export function StepComponents({ setCurrentStep, currentStep, showPrices }: { setCurrentStep: (step: number) => void; currentStep: number; showPrices: boolean }) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _unused = { setCurrentStep, currentStep };
   const { watch, setValue } = useFormContext();
@@ -620,12 +620,8 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
                                       <SelectItem key={t.id} value={t.id}>
                                         <div className="flex items-center justify-between w-full">
                                           <span>{t.ticket_category?.category_name || 'General'}</span>
-                                          <span className="text-[var(--color-muted-foreground)] ml-2">
-                                            £{t.price_with_markup.toFixed(2)} 
-                                          </span> 
-                                          <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
-                                             ({t.quantity_available || 0} available)
-                                          </span>
+                                          {showPrices && <span className="text-[var(--color-muted-foreground)] ml-2">£{t.price_with_markup.toFixed(2)}</span>}
+                                          {showPrices && <span className="text-xs text-[var(--color-muted-foreground)] ml-2">({t.quantity_available || 0} available)</span>}
                                         </div>
                                       </SelectItem>
                                     ))}
@@ -635,12 +631,8 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
                             {/* Price (top right) */}
                             <div className="flex flex-col items-end flex-shrink-0 min-w-[120px]">
                               <span className="text-xs font-semibold text-[var(--color-muted-foreground)] mb-1">Price</span>
-                              <span className="text-2xl font-extrabold text-[var(--color-primary)]">
-                                £{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                              <span className="text-xs text-[var(--color-muted-foreground)]">
-                                £{priceEach.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each
-                              </span>
+                              {showPrices && <span className="text-2xl font-extrabold text-[var(--color-primary)]">£{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                              {showPrices && <span className="text-xs text-[var(--color-muted-foreground)]">£{priceEach.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</span>}
                             </div>
                           </div>
 
@@ -821,6 +813,7 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
             adults={adults}
             selectedEvent={selectedEvent}
             setValue={setValue}
+            showPrices={showPrices}
           />
         )}
 
@@ -832,6 +825,7 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
             setValue={setValue}
             enabled={circuitTransfersEnabled}
             onToggle={handleCircuitTransfersToggle}
+            showPrices={showPrices}
           />
         )}
 
@@ -843,6 +837,7 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
             setValue={setValue}
             enabled={airportTransfersEnabled}
             onToggle={handleAirportTransfersToggle}
+            showPrices={showPrices}
           />
         )}
 
@@ -863,6 +858,7 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
             loading={loungeLoading}
             selected={loungePass}
             setValue={setValue}
+            showPrices={showPrices}
           />
         )}
 
@@ -887,7 +883,7 @@ export function StepComponents({ setCurrentStep, currentStep }: { setCurrentStep
   );
 }
 
-function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, selectedEvent: any, setValue: any }) {
+function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults: number, selectedEvent: any, setValue: any, showPrices: boolean }) {
   const [hotels, setHotels] = useState<any[]>([]);
   const [hotelRooms, setHotelRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -964,7 +960,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
   }
 
   // UI for each hotel room card
-  function RoomCard({ hotel, room, selected, onChange }: any) {
+  function RoomCard({ hotel, room, selected, onChange, showPrices }: any) {
     const [calendarKey, setCalendarKey] = useState(0);
 
     // Helper: Parse as local date (no UTC)
@@ -1184,14 +1180,14 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mt-2 border-t border-[var(--color-border)] pt-4">
               <div className="flex-1">
                 <div className="text-xs text-[var(--color-muted-foreground)]">Base stay <span className="font-semibold">({baseNights} night{baseNights !== 1 ? 's' : ''})</span>:</div>
-                <div className="font-bold text-lg text-[var(--color-primary)]">£{basePrice.toLocaleString()}</div>
+                {showPrices && <div className="font-bold text-lg text-[var(--color-primary)]">£{basePrice.toLocaleString()}</div>}
                 {extraNights > 0 && (
                   <div className="text-xs text-[var(--color-muted-foreground)]">Extra nights ({extraNights}): <span className="font-semibold">£{(extraNightPrice * extraNights).toLocaleString()}</span></div>
                 )}
               </div>
               <div className="flex flex-col items-end">
                 <div className="text-xs text-[var(--color-muted-foreground)]">Total for this room</div>
-                <div className="text-2xl font-extrabold text-[var(--color-primary)]">£{total.toLocaleString()}</div>
+                {showPrices && <div className="text-2xl font-extrabold text-[var(--color-primary)]">£{total.toLocaleString()}</div>}
               </div>
             </div>
           </div>
@@ -1279,6 +1275,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
                 newRooms[idx] = updated;
                 setValue('components.hotels', newRooms);
               }}
+              showPrices={showPrices}
             />
           </div>
         );
@@ -1297,13 +1294,14 @@ function HotelRoomsTab({ adults, selectedEvent, setValue }: { adults: number, se
   );
 }
 
-function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, enabled, onToggle }: { 
+function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, enabled, onToggle, showPrices }: { 
   adults: number, 
   selectedEvent: any, 
   selectedTier: any,
   setValue: any,
   enabled: boolean,
-  onToggle: (enabled: boolean) => void
+  onToggle: (enabled: boolean) => void,
+  showPrices: boolean
 }) {
   const [circuitTransfers, setCircuitTransfers] = useState<any[]>([]);
   const [availableTransfers, setAvailableTransfers] = useState<any[]>([]);
@@ -1508,7 +1506,7 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
   };
 
   // UI for each circuit transfer card
-  function TransferCard({ transfer, selected, onChange, index }: any) {
+  function TransferCard({ transfer, selected, onChange, index, showPrices }: any) {
     const hotel = getHotel(transfer.hotel_id);
     const pricePerSeat = transfer.sell_price_per_seat_gbp || 0;
     const totalPrice = pricePerSeat * (selected.quantity || 1);
@@ -1541,9 +1539,7 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                         <SelectItem key={t.id} value={t.id}>
                           <div className="flex items-center justify-between w-full">
                             <span>{tHotel?.name || 'Unknown Hotel'} - {t.transfer_type}</span>
-                            <span className="text-[var(--color-muted-foreground)] ml-2">
-                              £{t.sell_price_per_seat_gbp?.toFixed(2) || '0.00'}
-                            </span>
+                            {showPrices && <span className="text-[var(--color-muted-foreground)] ml-2">£{t.sell_price_per_seat_gbp?.toFixed(2) || '0.00'}</span>}
                           </div>
                         </SelectItem>
                       );
@@ -1554,12 +1550,8 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
             {/* Price (top right) */}
             <div className="flex flex-col items-end flex-shrink-0 min-w-[120px]">
               <span className="text-xs font-semibold text-[var(--color-muted-foreground)] mb-1">Total Price</span>
-              <span className="text-2xl font-extrabold text-[var(--color-primary)]">
-                £{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="text-xs text-[var(--color-muted-foreground)]">
-                £{pricePerSeat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per seat
-              </span>
+              {showPrices && <span className="text-2xl font-extrabold text-[var(--color-primary)]">£{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+              {showPrices && <span className="text-xs text-[var(--color-muted-foreground)]">£{pricePerSeat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per seat</span>}
             </div>
           </div>
 
@@ -1654,19 +1646,21 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
           </div>
 
           {/* Bottom row: Price breakdown */}
-          <div className="mt-4 p-3 bg-[var(--color-muted)]/20 rounded-lg">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-[var(--color-muted-foreground)]">Price Breakdown:</span>
-              <div className="text-right">
-                <div className="font-medium">
-                  {selected.quantity || 1} seat{(selected.quantity || 1) !== 1 ? 's' : ''} × £{pricePerSeat.toFixed(2)}
-                </div>
-                <div className="text-xs text-[var(--color-muted-foreground)]">
-                  {coachesRequired} coach{coachesRequired !== 1 ? 'es' : ''} required
+          {showPrices && (
+            <div className="mt-4 p-3 bg-[var(--color-muted)]/20 rounded-lg">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-[var(--color-muted-foreground)]">Price Breakdown:</span>
+                <div className="text-right">
+                  <div className="font-medium">
+                    {selected.quantity || 1} seat{(selected.quantity || 1) !== 1 ? 's' : ''} × £{pricePerSeat.toFixed(2)}
+                  </div>
+                  <div className="text-xs text-[var(--color-muted-foreground)]">
+                    {coachesRequired} coach{coachesRequired !== 1 ? 'es' : ''} required
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </Card>
     );
@@ -1775,6 +1769,7 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                   selected={selectedTransfer}
                   onChange={(transferId: string) => handleTransferChange(transferId, index)}
                   index={index}
+                  showPrices={showPrices}
                 />
               );
             })}
@@ -1801,13 +1796,14 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
   );
 }
 
-function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, enabled, onToggle }: { 
+function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, enabled, onToggle, showPrices }: { 
   adults: number, 
   selectedEvent: any, 
   selectedTier: any,
   setValue: any,
   enabled: boolean,
-  onToggle: (enabled: boolean) => void
+  onToggle: (enabled: boolean) => void,
+  showPrices: boolean
 }) {
   const [airportTransfers, setAirportTransfers] = useState<any[]>([]);
   const [availableTransfers, setAvailableTransfers] = useState<any[]>([]);
@@ -1975,7 +1971,7 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
   };
 
   // UI for each airport transfer card
-  function TransferCard({ transfer, selected, onChange, index }: any) {
+  function TransferCard({ transfer, selected, onChange, index, showPrices }: any) {
     const hotel = getHotel(transfer.hotel_id);
     const pricePerVehicle = transfer.price_per_car_gbp_markup || 0;
     const transferDirection = selected.transferDirection || 'outbound';
@@ -2012,9 +2008,7 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                         <SelectItem key={t.id} value={t.id}>
                           <div className="flex items-center justify-between w-full">
                             <span>{tHotel?.name || 'Unknown Hotel'} - {t.transport_type}</span>
-                            <span className="text-[var(--color-muted-foreground)] ml-2">
-                              £{t.price_per_car_gbp_markup?.toFixed(2) || '0.00'}
-                            </span>
+                            {showPrices && <span className="text-[var(--color-muted-foreground)] ml-2">£{t.price_per_car_gbp_markup?.toFixed(2) || '0.00'}</span>}
                           </div>
                         </SelectItem>
                       );
@@ -2025,13 +2019,9 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
             {/* Price (top right) */}
             <div className="flex flex-col items-end flex-shrink-0 min-w-[120px]">
               <span className="text-xs font-semibold text-[var(--color-muted-foreground)] mb-1">Total Price</span>
-              <span className="text-2xl font-extrabold text-[var(--color-primary)]">
-                £{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="text-xs text-[var(--color-muted-foreground)]">
-                £{pricePerVehicle.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per vehicle
-                {directionMultiplier > 1 && ` × ${directionMultiplier} (${transferDirection})`}
-              </span>
+              {showPrices && <span className="text-2xl font-extrabold text-[var(--color-primary)]">£{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+              {showPrices && <span className="text-xs text-[var(--color-muted-foreground)]">£{pricePerVehicle.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per vehicle</span>}
+              {directionMultiplier > 1 && ` × ${directionMultiplier} (${transferDirection})`}
             </div>
           </div>
 
@@ -2198,22 +2188,24 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
             </div>
           </div>
           {/* Bottom row: Price breakdown and capacity info */}
-          <div className="mt-4 p-3 bg-[var(--color-muted)]/20 rounded-lg">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-[var(--color-muted-foreground)]">Price Breakdown:</span>
-              <div className="text-right">
-                <div className="font-medium">
-                  {selected.quantity || 1} vehicle{(selected.quantity || 1) !== 1 ? 's' : ''} × {directionMultiplier} direction{directionMultiplier > 1 ? 's' : ''} × £{pricePerVehicle.toFixed(2)}
-                </div>
-
-                {transferDirection === 'both' && (
-                  <div className="text-xs text-[var(--color-muted-foreground)]">
-                    (Covers both outbound and return)
+          {showPrices && (
+            <div className="mt-4 p-3 bg-[var(--color-muted)]/20 rounded-lg">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-[var(--color-muted-foreground)]">Price Breakdown:</span>
+                <div className="text-right">
+                  <div className="font-medium">
+                    {selected.quantity || 1} vehicle{(selected.quantity || 1) !== 1 ? 's' : ''} × {directionMultiplier} direction{directionMultiplier > 1 ? 's' : ''} × £{pricePerVehicle.toFixed(2)}
                   </div>
-                )}
+
+                  {transferDirection === 'both' && (
+                    <div className="text-xs text-[var(--color-muted-foreground)]">
+                      (Covers both outbound and return)
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </Card>
     );
@@ -2339,6 +2331,7 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                   selected={selectedTransfer}
                   onChange={(transferId: string) => handleTransferChange(transferId, index)}
                   index={index}
+                  showPrices={showPrices}
                 />
               );
             })}
@@ -2370,7 +2363,7 @@ function parseDate(dateString?: string) {
 }
 
 // Add LoungePassTab component
-function LoungePassTab({ loungePasses, loading, selected, setValue }: { loungePasses: any[], loading: boolean, selected: any, setValue: any }) {
+function LoungePassTab({ loungePasses, loading, selected, setValue, showPrices }: { loungePasses: any[], loading: boolean, selected: any, setValue: any, showPrices: boolean }) {
   // Get number of adults from form context
   const { watch } = useFormContext();
   const adults = watch('travelers.adults') || 1;
@@ -2462,7 +2455,7 @@ function LoungePassTab({ loungePasses, loading, selected, setValue }: { loungePa
                       <span className="text-xs text-[var(--color-muted-foreground)] ml-2">Max: {adults}</span>
                     </div>
                   )}
-                  <div className="text-xl font-bold text-[var(--color-primary)] ml-6">£{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  {showPrices && <div className="text-xl font-bold text-[var(--color-primary)] ml-6">£{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
                   {isSelected && <Badge variant="secondary">Selected</Badge>}
                 </CardContent>
               </Card>

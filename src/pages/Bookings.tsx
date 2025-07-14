@@ -374,6 +374,81 @@ export default function Bookings() {
     }
   };
 
+  // Helper to convert booking to CSV and trigger download
+  function exportBookingToCSV(booking: BookingWithDetails) {
+    // Flatten booking data for CSV
+    const rows = [];
+    // Main booking info
+    rows.push(['Booking Reference', booking.booking_reference]);
+    rows.push(['Status', booking.status]);
+    rows.push(['Total Price', booking.total_price]);
+    rows.push(['Currency', booking.currency]);
+    rows.push(['Created At', booking.created_at]);
+    rows.push(['Client Name', booking.quote?.client_name || '']);
+    rows.push(['Event Name', booking.quote?.event_name || '']);
+    rows.push(['Event Location', booking.quote?.event_location || '']);
+    rows.push(['Package', booking.quote?.package_name || '']);
+    rows.push(['Tier', booking.quote?.tier_name || '']);
+    // Travelers
+    if (booking.travelers && booking.travelers.length > 0) {
+      rows.push(['Travelers']);
+      booking.travelers.forEach((trav, i) => {
+        rows.push([
+          `Traveler ${i + 1}`,
+          trav.first_name,
+          trav.last_name,
+          trav.traveler_type,
+          trav.email || '',
+          trav.phone || ''
+        ]);
+      });
+    }
+    // Payments
+    if (booking.payments && booking.payments.length > 0) {
+      rows.push(['Payments']);
+      booking.payments.forEach((pay, i) => {
+        rows.push([
+          `Payment ${i + 1}`,
+          pay.payment_type,
+          pay.amount,
+          pay.due_date,
+          pay.paid ? 'Paid' : 'Unpaid',
+          pay.paid_at || ''
+        ]);
+      });
+    }
+    // Components
+    if (booking.components && booking.components.length > 0) {
+      rows.push(['Components']);
+      booking.components.forEach((comp, i) => {
+        rows.push([
+          `Component ${i + 1}`,
+          comp.component_type,
+          comp.component_name,
+          comp.quantity,
+          comp.unit_price,
+          comp.total_price
+        ]);
+      });
+    }
+    // Notes
+    if (booking.booking_notes) rows.push(['Booking Notes', booking.booking_notes]);
+    if (booking.internal_notes) rows.push(['Internal Notes', booking.internal_notes]);
+    if (booking.special_requests) rows.push(['Special Requests', booking.special_requests]);
+    // Convert to CSV string
+    const csv = rows.map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `booking_${booking.booking_reference || booking.id}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="mx-auto px-8 py-6 space-y-8">
       {/* Header */}
@@ -652,6 +727,10 @@ export default function Bookings() {
                       </div>
                       
                       <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="rounded-lg" onClick={() => exportBookingToCSV(booking)}>
+                          <Download className="h-4 w-4 mr-1" />
+                          Export CSV
+                        </Button>
                         <Button variant="outline" size="sm" asChild className="rounded-lg">
                           <Link to={`/booking/${booking.id}`}>
                             <Eye className="h-4 w-4 mr-1" />
@@ -914,6 +993,9 @@ export default function Bookings() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
+                          <Button variant="outline" size="sm" className="rounded-lg" onClick={() => exportBookingToCSV(booking)}>
+                            <Download className="h-4 w-4" />
+                          </Button>
                           <Button variant="outline" size="sm" asChild>
                             <Link to={`/booking/${booking.id}`}>
                               <Eye className="h-4 w-4" />

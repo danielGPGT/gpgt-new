@@ -1338,6 +1338,80 @@ export function TicketsManager() {
             </div>
       </div>
 
+      {/* Dynamic Stats Row */}
+      <div className="flex flex-wrap gap-4 mt-6">
+        {/* Total Cost GBP */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Cost (GBP)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              £{filteredTickets.reduce((sum, t) => sum + ((t.price || 0) * (t.quantity_total || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </CardContent>
+        </Card>
+        {/* Total Quantity */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Quantity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              {filteredTickets.reduce((sum, t) => sum + (t.quantity_total || 0), 0)}
+            </div>
+          </CardContent>
+        </Card>
+        {/* Total Reserved */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Reserved</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              {filteredTickets.reduce((sum, t) => sum + (t.quantity_reserved || 0), 0)}
+            </div>
+          </CardContent>
+        </Card>
+        {/* Total Available */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Available</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              {filteredTickets.reduce((sum, t) => sum + (typeof t.quantity_available === 'number' ? t.quantity_available : (t.quantity_total || 0) - (t.quantity_reserved || 0)), 0)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Per-Category Sub Stats Row */}
+      <div className="flex gap-3 mt-2 overflow-x-auto pb-2">
+        {ticketCategories.filter(cat => filteredTickets.some(t => t.ticket_category_id === cat.id)).map(cat => {
+          const catTickets = filteredTickets.filter(t => t.ticket_category_id === cat.id);
+          const totalQty = catTickets.reduce((sum, t) => sum + (t.quantity_total || 0), 0);
+          const totalReserved = catTickets.reduce((sum, t) => sum + (t.quantity_reserved || 0), 0);
+          const totalAvailable = catTickets.reduce((sum, t) => sum + (typeof t.quantity_available === 'number' ? t.quantity_available : (t.quantity_total || 0) - (t.quantity_reserved || 0)), 0);
+          const totalCost = catTickets.reduce((sum, t) => sum + ((t.price || 0) * (t.quantity_total || 0)), 0);
+          return (
+            <Card key={cat.id} className="min-w-[180px] flex-1 max-w-xs border border-primary/30 bg-muted/40">
+              <CardHeader className="pb-0">
+                <CardTitle className="text-xs font-semibold text-primary truncate">{cat.category_name}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="flex flex-col gap-1 text-xs">
+                  <div><span className="font-semibold">Quantity:</span> {totalQty}</div>
+                  <div><span className="font-semibold">Reserved:</span> {totalReserved}</div>
+                  <div><span className="font-semibold">Available:</span> {totalAvailable}</div>
+                  <div><span className="font-semibold">Cost:</span> £{totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div> 
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
       {/* Ticket Form Drawer */}
       <Drawer open={ticketDrawerOpen} onOpenChange={setTicketDrawerOpen} direction="right">
         <DrawerContent className="!max-w-3xl !max-h-none h-full">

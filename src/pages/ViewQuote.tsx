@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -67,6 +67,27 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { FlightApiService } from '@/lib/flightApiService';
 import { supabase } from '@/lib/supabase';
+import { generateEmailQuote, generateHtmlEmailQuote } from '@/lib/quoteService';
+
+// Helper to merge fetched transfer data into quote.selectedComponents
+function getEnrichedQuote(quote, circuitTransfers, airportTransfers) {
+  if (!quote || !quote.selectedComponents) return quote;
+  // Deep clone to avoid mutating original
+  const enriched = JSON.parse(JSON.stringify(quote));
+  if (circuitTransfers && circuitTransfers.length > 0) {
+    enriched.selectedComponents.circuitTransfers = (enriched.selectedComponents.circuitTransfers || []).map((t) => {
+      const full = circuitTransfers.find((ct) => ct.id === t.id);
+      return full ? { ...t, ...full } : t;
+    });
+  }
+  if (airportTransfers && airportTransfers.length > 0) {
+    enriched.selectedComponents.airportTransfers = (enriched.selectedComponents.airportTransfers || []).map((t) => {
+      const full = airportTransfers.find((at) => at.id === t.id);
+      return full ? { ...t, ...full } : t;
+    });
+  }
+  return enriched;
+}
 
 export function ViewQuote() {
   const { quoteId } = useParams<{ quoteId: string }>();
@@ -96,6 +117,9 @@ export function ViewQuote() {
   const [circuitTransfers, setCircuitTransfers] = useState<any[]>([]);
   const [airportTransfers, setAirportTransfers] = useState<any[]>([]);
   const [hotels, setHotels] = useState<any[]>([]);
+
+  // Add a ref for the HTML preview div
+  const htmlPreviewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (quoteId) {
@@ -619,6 +643,8 @@ export function ViewQuote() {
         </CardContent>
       </Card>
 
+      
+
         {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Quote Details */}
@@ -707,38 +733,49 @@ export function ViewQuote() {
             </CardContent>
           </Card>
 
-              {/* Status Management */}
-            <Card>
-              <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
-                    Status Management
-                  </CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <div className="flex items-center gap-4">
-                    <Select
-                      value={quote.status}
-                      onValueChange={(value: Quote['status']) => handleStatusUpdate(value)}
-                      disabled={updatingStatus}
-                    >
-                      <SelectTrigger className="w-48">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="sent">Sent</SelectItem>
-                        <SelectItem value="accepted">Accepted</SelectItem>
-                        <SelectItem value="declined">Declined</SelectItem>
-                        <SelectItem value="expired">Expired</SelectItem>
-                        <SelectItem value="confirmed">Confirmed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {updatingStatus && <Loader2 className="h-4 w-4 animate-spin" />}
-                </div>
-              </CardContent>
-            </Card>
+             
+            {/* Email-Ready Quote Preview with toggle */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Email-Ready Quote</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                className="w-fit flex items-center gap-2"
+                onClick={async () => {
+                  if (htmlPreviewRef.current) {
+                    const range = document.createRange();
+                    range.selectNodeContents(htmlPreviewRef.current);
+                    const selection = window.getSelection();
+                    if (selection) {
+                      selection.removeAllRanges();
+                      selection.addRange(range);
+                    }
+                    try {
+                      document.execCommand('copy');
+                      toast.success('Rich email quote copied! Paste into your email client.');
+                    } catch (err) {
+                      toast.error('Failed to copy rich content.');
+                    }
+                    // Optionally clear selection
+                    if (selection) selection.removeAllRanges();
+                  }
+                }}
+              >
+                <Copy className="h-4 w-4" />
+                Copy as Rich Email
+              </Button>
+            </div>
+            <div className="mt-4 border rounded bg-white p-4 overflow-auto" ref={htmlPreviewRef} style={{ minHeight: 200 }}>
+              {/* Live HTML preview with enriched quote */}
+              <div dangerouslySetInnerHTML={{ __html: generateHtmlEmailQuote(getEnrichedQuote(quote, circuitTransfers, airportTransfers)) }} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
             </TabsContent>
 
             <TabsContent value="components" className="space-y-6">
@@ -1905,6 +1942,38 @@ export function ViewQuote() {
 
         {/* Right Column - Sidebar */}
         <div className="space-y-6">
+           {/* Status Management */}
+           <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    Status Management
+                  </CardTitle>
+              </CardHeader>
+              <CardContent>
+                  <div className="flex items-center gap-4">
+                    <Select
+                      value={quote.status}
+                      onValueChange={(value: Quote['status']) => handleStatusUpdate(value)}
+                      disabled={updatingStatus}
+                    >
+                      <SelectTrigger className="w-48">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="sent">Sent</SelectItem>
+                        <SelectItem value="accepted">Accepted</SelectItem>
+                        <SelectItem value="declined">Declined</SelectItem>
+                        <SelectItem value="expired">Expired</SelectItem>
+                        <SelectItem value="confirmed">Confirmed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {updatingStatus && <Loader2 className="h-4 w-4 animate-spin" />}
+                </div>
+              </CardContent>
+            </Card>
           {/* Quote Info */}
             <Card>
               <CardHeader>

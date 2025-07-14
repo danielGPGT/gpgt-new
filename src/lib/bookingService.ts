@@ -71,6 +71,13 @@ export interface Booking {
   leadTravelerEmail?: string;
   leadTravelerPhone?: string;
   guestTravelers: any;
+  client?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    company?: string;
+  } | null;
   eventId?: string;
   eventName?: string;
   eventLocation?: string;
@@ -130,7 +137,22 @@ export class BookingService {
 
       const { data: bookings, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          *,
+          clients:client_id (
+            id,
+            first_name,
+            last_name,
+            email,
+            company
+          ),
+          quotes:quote_id (
+            event_name,
+            event_location,
+            package_name,
+            tier_name
+          )
+        `)
         .eq('team_id', teamId)
         .order('created_at', { ascending: false });
 
@@ -153,16 +175,23 @@ export class BookingService {
         leadTravelerEmail: booking.lead_traveler_email,
         leadTravelerPhone: booking.lead_traveler_phone,
         guestTravelers: booking.guest_travelers,
+        client: booking.clients ? {
+          id: booking.clients.id,
+          firstName: booking.clients.first_name,
+          lastName: booking.clients.last_name,
+          email: booking.clients.email,
+          company: booking.clients.company
+        } : null,
         eventId: booking.event_id,
-        eventName: booking.event_name,
-        eventLocation: booking.event_location,
-        eventStartDate: booking.event_start_date,
-        eventEndDate: booking.event_end_date,
+        eventName: booking.event_name || booking.package_snapshot?.event_name || booking.quotes?.event_name,
+        eventLocation: booking.event_location || booking.package_snapshot?.event_location || booking.quotes?.event_location,
+        eventStartDate: booking.event_start_date || booking.package_snapshot?.event_start_date,
+        eventEndDate: booking.event_end_date || booking.package_snapshot?.event_end_date,
         packageId: booking.package_id,
         packageName: booking.package_name,
         tierId: booking.tier_id,
         tierName: booking.tier_name,
-        totalCost: booking.total_cost,
+        totalCost: booking.total_price,
         currency: booking.currency,
         originalPaymentSchedule: booking.original_payment_schedule,
         adjustedPaymentSchedule: booking.adjusted_payment_schedule,
@@ -197,7 +226,22 @@ export class BookingService {
 
       const { data: booking, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          *,
+          clients:client_id (
+            id,
+            first_name,
+            last_name,
+            email,
+            company
+          ),
+          quotes:quote_id (
+            event_name,
+            event_location,
+            package_name,
+            tier_name
+          )
+        `)
         .eq('quote_id', quoteId)
         .eq('team_id', teamId)
         .single();
@@ -225,16 +269,23 @@ export class BookingService {
         leadTravelerEmail: booking.lead_traveler_email,
         leadTravelerPhone: booking.lead_traveler_phone,
         guestTravelers: booking.guest_travelers,
+        client: booking.clients ? {
+          id: booking.clients.id,
+          firstName: booking.clients.first_name,
+          lastName: booking.clients.last_name,
+          email: booking.clients.email,
+          company: booking.clients.company
+        } : null,
         eventId: booking.event_id,
-        eventName: booking.event_name,
-        eventLocation: booking.event_location,
-        eventStartDate: booking.event_start_date,
-        eventEndDate: booking.event_end_date,
+        eventName: booking.event_name || booking.package_snapshot?.event_name || booking.quotes?.event_name,
+        eventLocation: booking.event_location || booking.package_snapshot?.event_location || booking.quotes?.event_location,
+        eventStartDate: booking.event_start_date || booking.package_snapshot?.event_start_date,
+        eventEndDate: booking.event_end_date || booking.package_snapshot?.event_end_date,
         packageId: booking.package_id,
         packageName: booking.package_name,
         tierId: booking.tier_id,
         tierName: booking.tier_name,
-        totalCost: booking.total_cost,
+        totalCost: booking.total_price,
         currency: booking.currency,
         originalPaymentSchedule: booking.original_payment_schedule,
         adjustedPaymentSchedule: booking.adjusted_payment_schedule,
@@ -269,7 +320,22 @@ export class BookingService {
 
       const { data: booking, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          *,
+          clients:client_id (
+            id,
+            first_name,
+            last_name,
+            email,
+            company
+          ),
+          quotes:quote_id (
+            event_name,
+            event_location,
+            package_name,
+            tier_name
+          )
+        `)
         .eq('id', bookingId)
         .eq('team_id', teamId)
         .single();
@@ -293,16 +359,23 @@ export class BookingService {
         leadTravelerEmail: booking.lead_traveler_email,
         leadTravelerPhone: booking.lead_traveler_phone,
         guestTravelers: booking.guest_travelers,
+        client: booking.clients ? {
+          id: booking.clients.id,
+          firstName: booking.clients.first_name,
+          lastName: booking.clients.last_name,
+          email: booking.clients.email,
+          company: booking.clients.company
+        } : null,
         eventId: booking.event_id,
-        eventName: booking.event_name,
-        eventLocation: booking.event_location,
-        eventStartDate: booking.event_start_date,
-        eventEndDate: booking.event_end_date,
+        eventName: booking.event_name || booking.package_snapshot?.event_name || booking.quotes?.event_name,
+        eventLocation: booking.event_location || booking.package_snapshot?.event_location || booking.quotes?.event_location,
+        eventStartDate: booking.event_start_date || booking.package_snapshot?.event_start_date,
+        eventEndDate: booking.event_end_date || booking.package_snapshot?.event_end_date,
         packageId: booking.package_id,
         packageName: booking.package_name,
         tierId: booking.tier_id,
         tierName: booking.tier_name,
-        totalCost: booking.total_cost,
+        totalCost: booking.total_price,
         currency: booking.currency,
         originalPaymentSchedule: booking.original_payment_schedule,
         adjustedPaymentSchedule: booking.adjusted_payment_schedule,
@@ -337,7 +410,22 @@ export class BookingService {
 
       const { data: bookings, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          *,
+          clients:client_id (
+            id,
+            first_name,
+            last_name,
+            email,
+            company
+          ),
+          quotes:quote_id (
+            event_name,
+            event_location,
+            package_name,
+            tier_name
+          )
+        `)
         .eq('team_id', teamId);
 
       if (error) {
@@ -352,7 +440,7 @@ export class BookingService {
 
       const totalRevenue = bookings
         .filter(b => b.status === 'confirmed' || b.status === 'completed')
-        .reduce((sum, b) => sum + b.total_cost, 0);
+        .reduce((sum, b) => sum + b.total_price, 0);
 
       const averageBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
 
@@ -369,7 +457,7 @@ export class BookingService {
                  date.getFullYear() === now.getFullYear() && 
                  (b.status === 'confirmed' || b.status === 'completed');
         })
-        .reduce((sum, b) => sum + b.total_cost, 0);
+        .reduce((sum, b) => sum + b.total_price, 0);
 
       return {
         totalBookings,

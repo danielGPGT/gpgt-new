@@ -71,110 +71,19 @@ import { UndrawMakeItRain } from 'react-undraw-illustrations';
 import { SiStripe } from 'react-icons/si';
 
 // Interactive chart data and config for the Today summary section
-const chartData = [
-  { date: "2024-04-01", desktop: 222, mobile: 150 },
-  { date: "2024-04-02", desktop: 97, mobile: 180 },
-  { date: "2024-04-03", desktop: 167, mobile: 120 },
-  { date: "2024-04-04", desktop: 242, mobile: 260 },
-  { date: "2024-04-05", desktop: 373, mobile: 290 },
-  { date: "2024-04-06", desktop: 301, mobile: 340 },
-  { date: "2024-04-07", desktop: 245, mobile: 180 },
-  { date: "2024-04-08", desktop: 409, mobile: 320 },
-  { date: "2024-04-09", desktop: 59, mobile: 110 },
-  { date: "2024-04-10", desktop: 261, mobile: 190 },
-  { date: "2024-04-11", desktop: 327, mobile: 350 },
-  { date: "2024-04-12", desktop: 292, mobile: 210 },
-  { date: "2024-04-13", desktop: 342, mobile: 380 },
-  { date: "2024-04-14", desktop: 137, mobile: 220 },
-  { date: "2024-04-15", desktop: 120, mobile: 170 },
-  { date: "2024-04-16", desktop: 138, mobile: 190 },
-  { date: "2024-04-17", desktop: 446, mobile: 360 },
-  { date: "2024-04-18", desktop: 364, mobile: 410 },
-  { date: "2024-04-19", desktop: 243, mobile: 180 },
-  { date: "2024-04-20", desktop: 89, mobile: 150 },
-  { date: "2024-04-21", desktop: 137, mobile: 200 },
-  { date: "2024-04-22", desktop: 224, mobile: 170 },
-  { date: "2024-04-23", desktop: 138, mobile: 230 },
-  { date: "2024-04-24", desktop: 387, mobile: 290 },
-  { date: "2024-04-25", desktop: 215, mobile: 250 },
-  { date: "2024-04-26", desktop: 75, mobile: 130 },
-  { date: "2024-04-27", desktop: 383, mobile: 420 },
-  { date: "2024-04-28", desktop: 122, mobile: 180 },
-  { date: "2024-04-29", desktop: 315, mobile: 240 },
-  { date: "2024-04-30", desktop: 454, mobile: 380 },
-  { date: "2024-05-01", desktop: 165, mobile: 220 },
-  { date: "2024-05-02", desktop: 293, mobile: 310 },
-  { date: "2024-05-03", desktop: 247, mobile: 190 },
-  { date: "2024-05-04", desktop: 385, mobile: 420 },
-  { date: "2024-05-05", desktop: 481, mobile: 390 },
-  { date: "2024-05-06", desktop: 498, mobile: 520 },
-  { date: "2024-05-07", desktop: 388, mobile: 300 },
-  { date: "2024-05-08", desktop: 149, mobile: 210 },
-  { date: "2024-05-09", desktop: 227, mobile: 180 },
-  { date: "2024-05-10", desktop: 293, mobile: 330 },
-  { date: "2024-05-11", desktop: 335, mobile: 270 },
-  { date: "2024-05-12", desktop: 197, mobile: 240 },
-  { date: "2024-05-13", desktop: 197, mobile: 160 },
-  { date: "2024-05-14", desktop: 448, mobile: 490 },
-  { date: "2024-05-15", desktop: 473, mobile: 380 },
-  { date: "2024-05-16", desktop: 338, mobile: 400 },
-  { date: "2024-05-17", desktop: 499, mobile: 420 },
-  { date: "2024-05-18", desktop: 315, mobile: 350 },
-  { date: "2024-05-19", desktop: 235, mobile: 180 },
-  { date: "2024-05-20", desktop: 177, mobile: 230 },
-  { date: "2024-05-21", desktop: 82, mobile: 140 },
-  { date: "2024-05-22", desktop: 81, mobile: 120 },
-  { date: "2024-05-23", desktop: 252, mobile: 290 },
-  { date: "2024-05-24", desktop: 294, mobile: 220 },
-  { date: "2024-05-25", desktop: 201, mobile: 250 },
-  { date: "2024-05-26", desktop: 213, mobile: 170 },
-  { date: "2024-05-27", desktop: 420, mobile: 460 },
-  { date: "2024-05-28", desktop: 233, mobile: 190 },
-  { date: "2024-05-29", desktop: 78, mobile: 130 },
-  { date: "2024-05-30", desktop: 340, mobile: 280 },
-  { date: "2024-05-31", desktop: 178, mobile: 230 },
-  { date: "2024-06-01", desktop: 178, mobile: 200 },
-  { date: "2024-06-02", desktop: 470, mobile: 410 },
-  { date: "2024-06-03", desktop: 103, mobile: 160 },
-  { date: "2024-06-04", desktop: 439, mobile: 380 },
-  { date: "2024-06-05", desktop: 88, mobile: 140 },
-  { date: "2024-06-06", desktop: 294, mobile: 250 },
-  { date: "2024-06-07", desktop: 323, mobile: 370 },
-  { date: "2024-06-08", desktop: 385, mobile: 320 },
-  { date: "2024-06-09", desktop: 438, mobile: 480 },
-  { date: "2024-06-10", desktop: 155, mobile: 200 },
-  { date: "2024-06-11", desktop: 92, mobile: 150 },
-  { date: "2024-06-12", desktop: 492, mobile: 420 },
-  { date: "2024-06-13", desktop: 81, mobile: 130 },
-  { date: "2024-06-14", desktop: 426, mobile: 380 },
-  { date: "2024-06-15", desktop: 307, mobile: 350 },
-  { date: "2024-06-16", desktop: 371, mobile: 310 },
-  { date: "2024-06-17", desktop: 475, mobile: 520 },
-  { date: "2024-06-18", desktop: 107, mobile: 170 },
-  { date: "2024-06-19", desktop: 341, mobile: 290 },
-  { date: "2024-06-20", desktop: 408, mobile: 450 },
-  { date: "2024-06-21", desktop: 169, mobile: 210 },
-  { date: "2024-06-22", desktop: 317, mobile: 270 },
-  { date: "2024-06-23", desktop: 480, mobile: 530 },
-  { date: "2024-06-24", desktop: 132, mobile: 180 },
-  { date: "2024-06-25", desktop: 141, mobile: 190 },
-  { date: "2024-06-26", desktop: 434, mobile: 380 },
-  { date: "2024-06-27", desktop: 448, mobile: 490 },
-  { date: "2024-06-28", desktop: 149, mobile: 200 },
-  { date: "2024-06-29", desktop: 103, mobile: 160 },
-  { date: "2024-06-30", desktop: 446, mobile: 400 },
-];
+// Generate real chart data from quotes and bookings
 const chartConfig = {
-  views: {
-    label: "Page Views",
+  bookingRevenue: {
+    label: "Booking Revenue",
+    color: "var(--primary-500)",
   },
-  desktop: {
-    label: "Desktop",
-    color: "var(--chart-1)",
+  quotes: {
+    label: "Quotes Created",
+    color: "var(--secondary-950)",
   },
-  mobile: {
-    label: "Mobile",
-    color: "var(--chart-2)",
+  bookings: {
+    label: "Bookings Created", 
+    color: "var(--primary-300)",
   },
 } satisfies ChartConfig;
 
@@ -187,13 +96,55 @@ export function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [bookingSearchTerm, setBookingSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
-  const [activeChart, setActiveChart] = React.useState<keyof typeof chartConfig>("desktop");
+  const [activeChart, setActiveChart] = React.useState<keyof typeof chartConfig>("bookingRevenue");
+  const [timeRange, setTimeRange] = React.useState<'7d' | '30d' | '1y'>('30d');
+  
+  // Generate chart data from actual quotes and bookings with time range support
+  const chartData = React.useMemo(() => {
+    const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 365;
+    const dateRange = Array.from({ length: days }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (days - 1 - i));
+      return date.toISOString().split('T')[0];
+    });
+
+    return dateRange.map(date => {
+      // QUOTES DATA (from quotes table)
+      // Quotes created on this date
+      const quotesOnDate = quotes.filter(q => 
+        q.createdAt.split('T')[0] === date
+      );
+      
+      // BOOKINGS DATA (from bookings table)
+      // Bookings created on this date
+      const bookingsOnDate = bookings.filter(b => 
+        b.createdAt?.split('T')[0] === date
+      );
+      
+      // Confirmed bookings on this date
+      const confirmedBookingsOnDate = bookings.filter(b => 
+        b.createdAt?.split('T')[0] === date && b.status === 'confirmed'
+      );
+      
+      // Revenue from confirmed bookings on this date
+      const bookingRevenueOnDate = confirmedBookingsOnDate.reduce((sum, b) => sum + (b.totalCost || 0), 0);
+
+      return {
+        date,
+        bookingRevenue: bookingRevenueOnDate,
+        quotes: quotesOnDate.length,
+        bookings: bookingsOnDate.length,
+      };
+    });
+  }, [quotes, bookings, timeRange]);
+  
   const total = React.useMemo(
     () => ({
-      desktop: chartData.reduce((acc, curr) => acc + curr.desktop, 0),
-      mobile: chartData.reduce((acc, curr) => acc + curr.mobile, 0),
+      bookingRevenue: chartData.reduce((acc, curr) => acc + curr.bookingRevenue, 0),
+      quotes: chartData.reduce((acc, curr) => acc + curr.quotes, 0),
+      bookings: chartData.reduce((acc, curr) => acc + curr.bookings, 0),
     }),
-    []
+    [chartData]
   );
 
   useEffect(() => {
@@ -377,7 +328,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto px-8 pt-0 pb-8 space-y-8">
+    <div className="mx-auto px-8 py-8 space-y-8">
       {/* Today summary section */}
       <div className=" mb-8">
         <div className="flex flex-col lg:flex-row justify-between items-end gap-6">
@@ -385,37 +336,54 @@ export function Dashboard() {
           <div className="flex-1 w-full h-full">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-6 gap-2">
               <div>
-                <h2 className="text-2xl font-bold">Today</h2>
-                <p className="text-muted-foreground text-sm mt-1">Your Payouts at a glance</p>
+                <h2 className="text-2xl font-bold">Dashboard</h2>
+                <p className="text-muted-foreground text-sm mt-1">Your business performance at a glance</p>
               </div>
               <div className="flex gap-8 items-end mt-2 sm:mt-0 flex-wrap">
                 <div className="text-right">
-                  <div className="text-muted-foreground text-sm">Gross volume</div>
-                  <div className="text-xl font-semibold">$0.00</div>
+                  <div className="text-muted-foreground text-sm">Total Revenue</div>
+                  <div className="text-xl font-semibold">{formatCurrency(totalRevenue)}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-muted-foreground text-sm">Yesterday</div>
-                  <div className="text-xl font-semibold">$0.00</div>
+                  <div className="text-muted-foreground text-sm">Total Quotes</div>
+                  <div className="text-xl font-semibold">{totalQuotes}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-muted-foreground text-sm">USD Balance</div>
-                  <div className="text-xl font-semibold">$0.00</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-muted-foreground text-sm">Payouts</div>
-                  <div className="text-xl font-semibold">$0.00</div>
+                  <div className="text-muted-foreground text-sm">Bookings Created</div>
+                  <div className="text-xl font-semibold">{bookings.length}</div>
                 </div>
               </div>
             </div>
             {/* Improved Chart UI */}
             <div className="rounded-xl border border-border bg-gradient-to-b from-card/95 to-card/20 p-4 shadow-sm">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <span className="font-semibold text-base">Payouts Overview</span>
-                  <span className="ml-2 text-xs text-muted-foreground">(last 3 months)</span>
+                  <span className="font-semibold text-base">Business Performance</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ({timeRange === '7d' ? 'last 7 days' : timeRange === '30d' ? 'last 30 days' : 'last year'})
+                  </span>
                 </div>
                 <div className="flex gap-2">
-                  {(['desktop', 'mobile'] as const).map((key) => (
+                  <div className="flex gap-1 bg-muted rounded-lg p-1">
+                    {(['7d', '30d', '1y'] as const).map((range) => (
+                      <button
+                        key={range}
+                        onClick={() => setTimeRange(range)}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                          timeRange === range
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {range === '7d' ? '7D' : range === '30d' ? '30D' : '1Y'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex gap-2">
+                  {(['bookingRevenue', 'quotes', 'bookings'] as const).map((key) => (
                     <button
                       key={key}
                       data-active={activeChart === key}
@@ -447,26 +415,40 @@ export function Dashboard() {
                     tickLine={false}
                     axisLine={false}
                     tickMargin={8}
-                    minTickGap={32}
+                    minTickGap={timeRange === '1y' ? 60 : 32}
                     tickFormatter={(value) => {
                       const date = new Date(value);
+                      if (timeRange === '1y') {
+                        return date.toLocaleDateString("en-US", {
+                          month: "short",
+                          year: "2-digit",
+                        });
+                      } else {
                       return date.toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                       });
+                      }
                     }}
                   />
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
                         className="w-[150px]"
-                        nameKey="views"
+                        nameKey={activeChart}
                         labelFormatter={(value) => {
                           return new Date(value).toLocaleDateString("en-US", {
                             month: "short",
                             day: "numeric",
                             year: "numeric",
                           });
+                        }}
+                        valueFormatter={(value) => {
+                          if (activeChart === 'bookingRevenue') {
+                            return formatCurrency(value);
+                          } else {
+                            return value.toString();
+                          }
                         }}
                       />
                     }
@@ -482,34 +464,94 @@ export function Dashboard() {
               </ChartContainer>
               <div className="flex items-center justify-between mt-3">
                 <div className="text-xs text-muted-foreground">
-                  Total {chartConfig[activeChart].label.toLowerCase()}: <span className="font-semibold text-foreground">{total[activeChart as 'desktop' | 'mobile'].toLocaleString()}</span>
+                  {activeChart === 'bookingRevenue' && `Total Booking Revenue: ${formatCurrency(total[activeChart])}`}
+                  {activeChart === 'quotes' && `Total Quotes: ${total[activeChart].toLocaleString()}`}
+                  {activeChart === 'bookings' && `Total Bookings: ${total[activeChart].toLocaleString()}`}
                 </div>
                 <div className="text-xs text-muted-foreground italic">Interactive chart</div>
               </div>
             </div>
           </div>
-          {/* Right: Info Card */}
-          <div className="w-full lg:w-96 h-full ">
+          {/* Right: Business Overview Card */}
+          <div className="w-full lg:w-96 h-full">
             <div className="bg-gradient-to-b from-card/95 to-card/20 rounded-xl p-6 shadow flex flex-col gap-4 border border-border h-full justify-center">
-              <div className="w-full flex justify-center mb-2">
-                <UndrawMakeItRain
-                  primaryColor="var(--primary)"
-                  secondaryColor="var(--secondary)"
-                  height="150px"
-                  className="object-contain"
-                />
-                <SiStripe className="h-8 w-8 text-[#635BFF] mt-2" />
+              <div className="text-center mb-4">
+                <h3 className="font-bold text-lg mb-2">Today's Business Overview</h3>
+                <p className="text-muted-foreground text-sm">Your daily activity summary</p>
               </div>
-              <div className="flex items-center gap-2 mb-1 justify-center">
-                <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded font-semibold">Action Required</span>
+              
+              {/* Today's Activity */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">Quotes Created</span>
               </div>
-              <div className="font-bold text-lg mb-1 text-center">Connect your Stripe account</div>
-              <div className="text-muted-foreground text-sm mb-3 text-center">
-                In order to receive payouts from your bookings, you must connect your Stripe account. This enables secure and fast transfers directly to your bank.
+                  <span className="text-lg font-bold">
+                    {quotes.filter(q => q.createdAt.split('T')[0] === new Date().toISOString().split('T')[0]).length}
+                  </span>
               </div>
-              <button className="bg-primary text-primary-foreground font-semibold rounded-lg px-5 py-2 mt-2 shadow hover:bg-primary/90 transition-colors mx-auto">
-                Connect Stripe
+                
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">Bookings Confirmed</span>
+                  </div>
+                  <span className="text-lg font-bold">
+                    {bookings.filter(b => b.createdAt?.split('T')[0] === new Date().toISOString().split('T')[0] && b.status === 'confirmed').length}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">Revenue Today</span>
+                  </div>
+                  <span className="text-lg font-bold">
+                    {formatCurrency(
+                      bookings
+                        .filter(b => b.createdAt?.split('T')[0] === new Date().toISOString().split('T')[0] && b.status === 'confirmed')
+                        .reduce((sum, b) => sum + (b.totalCost || 0), 0)
+                    )}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Quick Actions */}
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Quick Actions</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <Link to="/package-intake-test">
+                    <button className="w-full bg-primary text-primary-foreground font-medium rounded-lg px-3 py-2 text-sm shadow hover:bg-primary/90 transition-colors">
+                      Create Quote
               </button>
+                  </Link>
+                  <Link to="/bookings">
+                    <button className="w-full bg-secondary text-secondary-foreground font-medium rounded-lg px-3 py-2 text-sm shadow hover:bg-secondary/90 transition-colors">
+                      View Bookings
+                    </button>
+                  </Link>
+            </div>
+          </div>
+              
+              {/* Pending Items */}
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Pending Items</h4>
+                <div className="text-sm space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span>Quotes to Follow Up</span>
+                    <span className="font-semibold">
+                      {quotes.filter(q => q.status === 'sent').length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Pending Bookings</span>
+                    <span className="font-semibold">
+                      {bookings.filter(b => b.status === 'pending_payment').length}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -557,44 +599,74 @@ export function Dashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-foreground">Total Revenue</span>
-              <span className="flex items-center gap-1 text-xs font-semibold bg-muted px-2 py-0.5 rounded-full border border-border"><TrendingUp className="w-4 h-4 text-muted-foreground" />+12.5%</span>
+              <span className="flex items-center gap-1 text-xs font-semibold bg-muted px-2 py-0.5 rounded-full border border-border">
+                <DollarSign className="w-4 h-4 text-muted-foreground" />
+                From Bookings
+              </span>
             </div>
-            <div className="text-3xl font-bold text-foreground mb-4">{formatCurrency(totalRevenue)}</div>
-            <div className="text-sm font-medium text-foreground flex items-center gap-1 mb-1">Trending up this month <TrendingUp className="w-4 h-4 text-muted-foreground" /></div>
-            <div className="text-xs text-muted-foreground">Visitors for the last 6 months</div>
+            <div className="text-3xl font-bold text-foreground mb-4">
+              {formatCurrency(bookings.filter(b => b.status === 'confirmed').reduce((sum, b) => sum + (b.totalCost || 0), 0))}
+            </div>
+            <div className="text-sm font-medium text-foreground flex items-center gap-1 mb-1">
+              Confirmed bookings only <CheckCircle className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="text-xs text-muted-foreground">Reliable revenue tracking</div>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-b  from-card/95 to-background/20 border border-border rounded-2xl shadow-sm pt-0 pb-0">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-foreground">Total Quotes</span>
-              <span className="flex items-center gap-1 text-xs font-semibold bg-muted px-2 py-0.5 rounded-full border border-border">-20%</span>
+              <span className="flex items-center gap-1 text-xs font-semibold bg-muted px-2 py-0.5 rounded-full border border-border">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                Created
+              </span>
             </div>
             <div className="text-3xl font-bold text-foreground mb-4">{totalQuotes}</div>
-            <div className="text-sm font-medium text-foreground flex items-center gap-1 mb-1">Down 20% this period</div>
-            <div className="text-xs text-muted-foreground">Quote volume needs attention</div>
+            <div className="text-sm font-medium text-foreground flex items-center gap-1 mb-1">
+              All time quotes <TrendingUp className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="text-xs text-muted-foreground">Sales pipeline activity</div>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-b  from-card/95 to-background/20 border border-border rounded-2xl shadow-sm pt-0 pb-0">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-foreground">Active Bookings</span>
-              <span className="flex items-center gap-1 text-xs font-semibold bg-muted px-2 py-0.5 rounded-full border border-border"><TrendingUp className="w-4 h-4 text-muted-foreground" />+12.5%</span>
+              <span className="flex items-center gap-1 text-xs font-semibold bg-muted px-2 py-0.5 rounded-full border border-border">
+                <CheckCircle className="w-4 h-4 text-muted-foreground" />
+                Confirmed
+              </span>
             </div>
-            <div className="text-3xl font-bold text-foreground mb-4">{confirmedQuotes}</div>
-            <div className="text-sm font-medium text-foreground flex items-center gap-1 mb-1">Strong user retention <TrendingUp className="w-4 h-4 text-muted-foreground" /></div>
-            <div className="text-xs text-muted-foreground">Engagement exceeds targets</div>
+            <div className="text-3xl font-bold text-foreground mb-4">
+              {bookings.filter(b => b.status === 'confirmed').length}
+            </div>
+            <div className="text-sm font-medium text-foreground flex items-center gap-1 mb-1">
+              Confirmed bookings <CheckCircle className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="text-xs text-muted-foreground">Active business</div>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-b  from-card/95 to-background/20 border border-border rounded-2xl shadow-sm pt-0 pb-0">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-foreground">Conversion Rate</span>
-              <span className="flex items-center gap-1 text-xs font-semibold bg-muted px-2 py-0.5 rounded-full border border-border">+4.5%</span>
+              <span className="text-sm font-medium text-foreground">Avg Booking Value</span>
+              <span className="flex items-center gap-1 text-xs font-semibold bg-muted px-2 py-0.5 rounded-full border border-border">
+                <DollarSign className="w-4 h-4 text-muted-foreground" />
+                Per Booking
+              </span>
             </div>
-            <div className="text-3xl font-bold text-foreground mb-4">{conversionRate.toFixed(1)}%</div>
-            <div className="text-sm font-medium text-foreground flex items-center gap-1 mb-1">Steady increase <TrendingUp className="w-4 h-4 text-muted-foreground" /></div>
-            <div className="text-xs text-muted-foreground">Meets growth projections</div>
+            <div className="text-3xl font-bold text-foreground mb-4">
+              {(() => {
+                const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
+                const totalValue = confirmedBookings.reduce((sum, b) => sum + (b.totalCost || 0), 0);
+                return confirmedBookings.length > 0 ? formatCurrency(totalValue / confirmedBookings.length) : formatCurrency(0);
+              })()}
+            </div>
+            <div className="text-sm font-medium text-foreground flex items-center gap-1 mb-1">
+              Average confirmed booking <TrendingUp className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="text-xs text-muted-foreground">Revenue per booking</div>
           </CardContent>
         </Card>
       </div>
@@ -644,11 +716,64 @@ export function Dashboard() {
               </CardContent>
             </Card>
 
+            <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5" />
+                  Recent Bookings
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {bookings.slice(0, 5).map((booking) => (
+                    <div
+                      key={booking.id}
+                      className="flex items-center justify-between gap-4 p-4 rounded-xl bg-muted/40 border border-border"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center border border-green-500/20">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold truncate text-sm text-foreground">
+                            {booking.client ? `${booking.client.firstName} ${booking.client.lastName}` : booking.leadTravelerName || 'Client'}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {booking.eventName ? `${booking.eventName} • ` : ''}{getTimeAgo(booking.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 min-w-[90px]">
+                        <span className="font-bold text-green-600 text-base">
+                          {formatCurrency(booking.totalCost, booking.currency)}
+                        </span>
+                        <Badge 
+                          variant={getStatusColor(booking.status)}
+                          className="text-xs px-2 py-0.5 rounded-full capitalize"
+                        >
+                          {booking.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                  {bookings.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No bookings yet</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Business Performance */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="border border-border bg-gradient-to-b from-card/95 to-background/20">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <TrendingUp className="h-5 w-5" />
-                  Performance Chart
+                  Business Performance
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -662,17 +787,86 @@ export function Dashboard() {
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Monthly Goal Progress</span>
-                      <span>75%</span>
+                      <span>Confirmed Bookings</span>
+                      <span>{bookings.filter(b => b.status === 'confirmed').length}</span>
                     </div>
-                    <Progress value={75} className="h-2" />
+                    <Progress 
+                      value={bookings.length > 0 ? (bookings.filter(b => b.status === 'confirmed').length / bookings.length) * 100 : 0} 
+                      className="h-2" 
+                    />
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Customer Satisfaction</span>
-                      <span>98%</span>
+                      <span>Average Booking Value</span>
+                      <span>
+                        {(() => {
+                          const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
+                          const totalValue = confirmedBookings.reduce((sum, b) => sum + (b.totalCost || 0), 0);
+                          return confirmedBookings.length > 0 ? formatCurrency(totalValue / confirmedBookings.length) : formatCurrency(0);
+                        })()}
+                      </span>
                     </div>
-                    <Progress value={98} className="h-2" />
+                    <div className="h-2 bg-muted rounded-full">
+                      <div className="h-2 bg-primary rounded-full" style={{ width: '100%' }}></div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-border bg-gradient-to-b from-card/95 to-background/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  This Month Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">Quotes This Month</span>
+                    </div>
+                    <span className="text-lg font-bold">
+                      {quotes.filter(q => {
+                        const date = new Date(q.createdAt);
+                        const now = new Date();
+                        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                      }).length}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-medium">Bookings This Month</span>
+                    </div>
+                    <span className="text-lg font-bold">
+                      {bookings.filter(b => {
+                        const date = new Date(b.createdAt);
+                        const now = new Date();
+                        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                      }).length}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-medium">Revenue This Month</span>
+                    </div>
+                    <span className="text-lg font-bold">
+                      {formatCurrency(
+                        bookings
+                          .filter(b => {
+                            const date = new Date(b.createdAt);
+                            const now = new Date();
+                            return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear() && b.status === 'confirmed';
+                          })
+                          .reduce((sum, b) => sum + (b.totalCost || 0), 0)
+                      )}
+                    </span>
                   </div>
                 </div>
               </CardContent>

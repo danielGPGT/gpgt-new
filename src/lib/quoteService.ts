@@ -1059,3 +1059,437 @@ export class QuoteService {
     throw new Error('Booking creation not implemented yet');
   }
 } 
+
+/**
+ * Generates a professional, email-ready quote summary for a client, using clean tables for each section.
+ * @param quote Quote object (with selectedComponents grouped)
+ * @returns string - ready to copy-paste into an email
+ */
+export function generateEmailQuote(quote: Quote): string {
+  const formatDate = (date?: string) => date ? new Date(date).toLocaleDateString() : '-';
+  const formatMoney = (amount?: number, currency?: string) =>
+    typeof amount === 'number' ? `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`.trim() : '-';
+
+  // Event details table
+  const eventTable = `
+| Event         | Location         | Dates                        |
+|---------------|------------------|------------------------------|
+| ${quote.eventName || '-'} | ${quote.eventLocation || '-'} | ${formatDate(quote.eventStartDate)} to ${formatDate(quote.eventEndDate)} |
+`;
+
+  // Package & tier table
+  const packageTable = `
+| Package       | Tier             | Description                  |
+|---------------|------------------|------------------------------|
+| ${quote.packageName || '-'} | ${quote.tierName || '-'} | ${quote.tierDescription ? quote.tierDescription.replace(/\n/g, ' ') : '-'} |
+`;
+
+  // Components tables
+  const comps = quote.selectedComponents || {};
+  // Tickets
+  const ticketsRows = (comps.tickets || []).map((t: any) =>
+    `| ${t.category || t.name || 'Ticket'} | ${t.quantity || 1} | ${formatMoney(t.price, quote.currency)} | ${t.notes || '-'} |`
+  );
+  const ticketsTable = ticketsRows.length ?
+    `| Ticket Type   | Quantity | Price    | Notes         |
+|--------------|----------|----------|--------------|
+${ticketsRows.join('\n')}` : 'No tickets included.';
+  // Hotels
+  const hotelsRows = (comps.hotels || []).map((h: any) =>
+    `| ${h.hotelName || h.name || 'Hotel'} | ${h.roomType || h.room || '-'} | ${h.nights || '-'} | ${h.checkIn ? formatDate(h.checkIn) : '-'} | ${h.checkOut ? formatDate(h.checkOut) : '-'} | ${formatMoney(h.pricePerNight, quote.currency)} | ${h.notes || '-'} |`
+  );
+  const hotelsTable = hotelsRows.length ?
+    `| Hotel         | Room Type | Nights | Check-in | Check-out | Price/Night | Notes |
+|--------------|-----------|--------|----------|-----------|-------------|-------|
+${hotelsRows.join('\n')}` : 'No hotel included.';
+  // Circuit Transfers
+  const circuitRows = (comps.circuitTransfers || []).map((tr: any) =>
+    `| Circuit Transfer | ${tr.transferType || tr.type || '-'} | ${tr.notes || '-'} |`
+  );
+  const circuitTable = circuitRows.length ?
+    `| Type             | Transfer Type | Notes |
+|------------------|--------------|-------|
+${circuitRows.join('\n')}` : '';
+  // Airport Transfers
+  const airportRows = (comps.airportTransfers || []).map((tr: any) =>
+    `| Airport Transfer | ${tr.transferType || tr.type || '-'} | ${tr.notes || '-'} |`
+  );
+  const airportTable = airportRows.length ?
+    `| Type             | Transfer Type | Notes |
+|------------------|--------------|-------|
+${airportRows.join('\n')}` : '';
+  // Extras
+  const extrasTable = comps.loungePass ?
+    `| Extra        | Details |
+|--------------|---------|
+| Lounge Pass  | ${comps.loungePass.variant || 'Standard'}${comps.loungePass.notes ? ` (${comps.loungePass.notes})` : ''} |` : '';
+
+  // Flights table
+  const flightsRows = (comps.flights || []).map((f: any, idx: number) =>
+    `| ${idx + 1} | ${f.airline || f.outboundMarketingAirlineName || '-'} | ${f.flightNumber || f.outboundFlightNumber || '-'} | ${f.origin || f.outboundDepartureAirportName || '-'} | ${f.destination || f.outboundArrivalAirportName || '-'} | ${formatDate(f.departureDate || f.outboundDepartureDateTime)} | ${formatDate(f.arrivalDate || f.outboundArrivalDateTime)} | ${f.cabin || f.outboundCabinName || '-'} | ${f.stops || f.outboundStops || 0} | ${f.baggageAllowance || f.outboundBaggageAllowance || '-'} |`
+  );
+  const flightsTable = flightsRows.length ?
+    `| # | Airline | Flight # | From | To | Departure | Arrival | Class | Stops | Baggage |
+|---|---------|----------|------|----|-----------|--------|-------|-------|---------|
+${flightsRows.join('\n')}` : 'No flights included.';
+
+  // Payment schedule table
+  const paymentRows = [
+    { label: 'Deposit', amount: quote.paymentDeposit, date: quote.paymentDepositDate },
+    { label: 'Second Payment', amount: quote.paymentSecondPayment, date: quote.paymentSecondPaymentDate },
+    { label: 'Final Payment', amount: quote.paymentFinalPayment, date: quote.paymentFinalPaymentDate },
+  ].filter(row => row.amount && row.amount > 0);
+  const paymentTable = paymentRows.length
+    ? `| Payment Stage   | Amount         | Due Date         |\n|----------------|---------------|------------------|\n${paymentRows.map(row => `| ${row.label.padEnd(14)}| ${formatMoney(row.amount, quote.currency).padEnd(13)} | ${formatDate(row.date).padEnd(16)} |`).join('\n')}`
+    : 'No payment schedule.';
+
+  // Total price
+  const totalPrice = formatMoney(quote.totalPrice, quote.currency);
+
+  // Compose email
+  return `Dear ${quote.clientName || 'Client'},\n\nThank you for your interest in our event packages. Please find your personalized quote below.\n\n---\n\n**Event Details**\n${eventTable}\n\n**Package & Tier**\n${packageTable}\n\n**Tickets**\n${ticketsTable}\n\n**Hotel**\n${hotelsTable}\n\n${circuitTable ? `**Circuit Transfers**\n${circuitTable}\n` : ''}${airportTable ? `**Airport Transfers**\n${airportTable}\n` : ''}${extrasTable ? `**Extras**\n${extrasTable}\n` : ''}\n**Flights**\n${flightsTable}\n\n**Payment Schedule**\n${paymentTable}\n\n**Total Price:** ${totalPrice}\n\n---\n\nIf you have any questions or would like to make adjustments, please let us know. We look forward to helping you create an unforgettable experience!\n\nBest regards,\n[Your Name/Company]\n[Contact Information]\n`;
+} 
+
+/**
+ * Generates a professional, PDF-style HTML email-ready quote summary for a client.
+ * All non-flight components are combined into a single 'Included in the Package' table.
+ * No component prices are shown. Matches the PDF's look and feel.
+ * @param quote Quote object (with selectedComponents grouped)
+ * @returns string - HTML ready to copy-paste into an email
+ */
+export function generateHtmlEmailQuote(quote: Quote): string {
+  const formatDate = (date?: string) => date ? new Date(date).toLocaleDateString() : '-';
+  const fontFamily = 'font-family:Helvetica,Arial,sans-serif;';
+  const sectionTitleStyle = 'font-size:16px;font-weight:bold;color:#CF212A;border-bottom:2px solid #CF212A;padding-bottom:4px;margin-bottom:10px;margin-top:24px;'+fontFamily;
+  const infoTableStyle = 'width:100%;border-collapse:collapse;margin-bottom:10px;'+fontFamily;
+  const infoLabelStyle = 'font-weight:bold;color:#374151;padding:4px 8px;width:120px;background:#f9fafb;font-size:13px;';
+  const infoValueStyle = 'color:#111827;padding:4px 8px;font-size:13px;';
+  const tableStyle = 'border-collapse:collapse;margin-bottom:14px;width:100%;'+fontFamily+'font-size:13px;';
+  const thStyle = 'background:#CF212A;color:#fff;border:1px solid #e0e0e0;padding:6px 8px;text-align:left;font-weight:600;';
+  const tdStyle = 'border:1px solid #e0e0e0;padding:6px 8px;background:#fff;color:#222;';
+  const totalBoxStyle = 'margin-top:18px;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e5e7eb;display:inline-block;'+fontFamily;
+  const totalLabelStyle = 'font-size:15px;font-weight:bold;color:#374151;';
+  const totalAmountStyle = 'font-size:20px;font-weight:bold;color:#CF212A;';
+  const paymentRedStyle = 'color:#CF212A;font-weight:bold;';
+
+
+  // Event Info Table
+  const eventTable = `
+<table style="${infoTableStyle}">
+  <tr><td style="${infoLabelStyle}">Event:</td><td style="${infoValueStyle}">${quote.eventName || '-'}</td></tr>
+  <tr><td style="${infoLabelStyle}">Location:</td><td style="${infoValueStyle}">${quote.eventLocation || '-'}</td></tr>
+  <tr><td style="${infoLabelStyle}">Dates:</td><td style="${infoValueStyle}">${formatDate(quote.eventStartDate)} to ${formatDate(quote.eventEndDate)}</td></tr>
+</table>`;
+
+  // Package Info Table
+  const packageTable = `
+<table style="${infoTableStyle}">
+  <tr><td style="${infoLabelStyle}">Package:</td><td style="${infoValueStyle}">${quote.packageName || '-'}</td></tr>
+  <tr><td style="${infoLabelStyle}">Tier:</td><td style="${infoValueStyle}">${quote.tierName || '-'}</td></tr>
+  <tr><td style="${infoLabelStyle}">Description:</td><td style="${infoValueStyle}">${quote.tierDescription ? quote.tierDescription.replace(/\n/g, ' ') : '-'}</td></tr>
+</table>`;
+
+  // Combine all non-flight components into a single table
+  const comps = quote.selectedComponents || {};
+  const allComponents: any[] = [
+    ...(comps.tickets || []),
+    ...(comps.hotels || []),
+    ...(comps.circuitTransfers ? comps.circuitTransfers.map((c: any) => ({ ...c, _forceType: 'Circuit Transfer' })) : []),
+    ...(comps.airportTransfers ? comps.airportTransfers.map((c: any) => ({ ...c, _forceType: 'Airport Transfer' })) : []),
+    ...(comps.loungePass ? [comps.loungePass] : []),
+  ];
+  // Helper to extract info for each component
+  const extractComponent = (c: any) => {
+    // Prefer .data for transfer details if present
+    const d = c.data || c;
+    if (c._forceType === 'Circuit Transfer') {
+      // Use database field names that match the Components tab
+      const type = d.transfer_type || d.transferType || d.type || '-';
+      const days = d.days || d.number_of_days || d.duration;
+      const supplier = d.supplier || 'TBD';
+      
+      let details = type;
+      // Convert database format to readable text (e.g., 'hotel_chauffeur' -> 'Hotel Chauffeur')
+      if (details !== '-') {
+        details = details.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      }
+      if (days) details += `, ${days} day${days > 1 ? 's' : ''}`;
+
+      
+      return {
+        type: 'Circuit Transfer',
+        details,
+        quantity: d.quantity || 1,
+        
+      };
+    }
+    if (c._forceType === 'Airport Transfer') {
+      // Use database field names that match the Components tab
+      const type = d.transport_type || d.transferType || d.type || '-';
+      const supplier = d.supplier || 'TBD';
+      
+      let details = type;
+      // Convert database format to readable text (e.g., 'hotel_chauffeur' -> 'Hotel Chauffeur')
+      if (details !== '-') {
+        details = details.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      }
+      if (supplier && supplier !== 'TBD') details += ` (${supplier})`;
+      
+      return {
+        type: 'Airport Transfer',
+        details,
+        quantity: d.quantity || 1,
+      };
+    }
+    if (c.category || c.name) {
+      return {
+        type: c.category ? 'Ticket' : (c.name || 'Component'),
+        details: c.category || c.name || '-',
+        quantity: c.quantity || 1,
+        
+      };
+    }
+    if (c.hotelName || c.roomType || c.room) {
+      const formatDate = (date?: string) => date ? new Date(date).toLocaleDateString() : '';
+      const checkIn = formatDate(c.checkIn);
+      const checkOut = formatDate(c.checkOut);
+      let details = `${c.hotelName || c.name || '-'}${c.roomType ? ', ' + c.roomType : c.room ? ', ' + c.room : ''}`;
+      if (checkIn && checkOut) {
+        details += ` (${checkIn} - ${checkOut})`;
+      }
+      
+      return {
+        type: 'Hotel',
+        details,
+        quantity: c.nights || c.quantity || 1,
+        
+      };
+    }
+    if (c.variant && c.variant.toLowerCase().includes('lounge')) {
+      return {
+        type: 'Lounge Pass',
+        details: c.variant,
+        quantity: c.quantity || 1,
+       
+      };
+    }
+    return {
+      type: c.type || 'Component',
+      details: c.name || '-',
+      quantity: c.quantity || 1,
+    };
+  };
+  // Filter out flights
+  const nonFlightComponents = allComponents.filter(c => c && c.type !== 'flight');
+  const componentsRows = nonFlightComponents.map((c, i) => {
+    const info = extractComponent(c);
+    return `<tr${i%2===1?` style=\"background:#f9fafb;\"`:''}><td style=\"${tdStyle}\">${info.type}</td><td style=\"${tdStyle}\">${info.details}</td><td style=\"${tdStyle}\">${info.quantity}</td></tr>`;
+  }).join('');
+  const componentsTable = componentsRows ?
+    `<div style=\"${sectionTitleStyle}\">Included in the Package</div><table style=\"${tableStyle}\"><tr><th style=\"${thStyle}\">Component</th><th style=\"${thStyle}\">Details</th><th style=\"${thStyle}\">Quantity</th></tr>${componentsRows}</table>` : '';
+
+  // Flights Table (no prices)
+  const formatDateTime = (dt?: string) => dt ? new Date(dt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A';
+  const getBaggage = (seg: any, flightData: any) => seg?.BaggageAllowance?.NumberOfPieces || seg?.baggageAllowance?.NumberOfPieces || flightData.baggageAllowance?.NumberOfPieces || 'N/A';
+  
+  // Currency code mapping function
+  const getCurrencySymbol = (code: any) => {
+    if (!code) return '£';
+    const codeStr = String(code).toUpperCase();
+    
+    // Handle numeric currency codes and return symbols
+    const currencyMap: { [key: string]: string } = {
+      '826': '£', // British Pound
+      '840': '$', // US Dollar
+      '978': '€', // Euro
+      '036': 'A$', // Australian Dollar
+      '124': 'C$', // Canadian Dollar
+      '756': 'CHF', // Swiss Franc
+      '392': '¥', // Japanese Yen
+      '156': '¥', // Chinese Yuan
+      '356': '₹', // Indian Rupee
+      '554': 'NZ$', // New Zealand Dollar
+      '710': 'R', // South African Rand
+      '986': 'R$', // Brazilian Real
+      '484': '$', // Mexican Peso
+      '032': '$', // Argentine Peso
+      '152': '$', // Chilean Peso
+      '604': 'S/', // Peruvian Sol
+      '858': '$', // Uruguayan Peso
+      '862': 'Bs', // Venezuelan Bolivar
+      '188': '₡', // Costa Rican Colon
+      '320': 'Q', // Guatemalan Quetzal
+      '340': 'L', // Honduran Lempira
+      '558': 'C$', // Nicaraguan Cordoba
+      '590': 'B/.', // Panamanian Balboa
+      '600': '₲', // Paraguayan Guarani
+      '222': '₡', // Salvadoran Colon
+    };
+    
+    // If it's a numeric code, map it to symbol
+    if (currencyMap[codeStr]) {
+      return currencyMap[codeStr];
+    }
+    
+    // If it's already a 3-letter code, map to symbol
+    const symbolMap: { [key: string]: string } = {
+      'GBP': '£',
+      'USD': '$',
+      'EUR': '€',
+      'AUD': 'A$',
+      'CAD': 'C$',
+      'CHF': 'CHF',
+      'JPY': '¥',
+      'CNY': '¥',
+      'INR': '₹',
+      'NZD': 'NZ$',
+      'ZAR': 'R',
+      'BRL': 'R$',
+      'MXN': '$',
+      'ARS': '$',
+      'CLP': '$',
+      'PEN': 'S/',
+      'UYU': '$',
+      'VEF': 'Bs',
+      'CRC': '₡',
+      'GTQ': 'Q',
+      'HNL': 'L',
+      'NIO': 'C$',
+      'PAB': 'B/.',
+      'PYG': '₲',
+      'SVC': '₡',
+    };
+    
+    if (symbolMap[codeStr]) {
+      return symbolMap[codeStr];
+    }
+    
+    // Default to £
+    return '£';
+  };
+  
+  const flightsTable = (comps.flights || []).map((f: any, idx: number) => {
+    const flightData = f.data || f;
+    const outboundSegments = flightData.outboundFlightSegments || (flightData.outboundFlight ? [flightData.outboundFlight] : []);
+    const returnSegments = flightData.returnFlightSegments || (flightData.inboundFlight ? [flightData.inboundFlight] : []);
+    const passengers = flightData.passengers || flightData.Passengers || flightData.recommendation?.Passengers?.length || 'N/A';
+    const totalPrice = flightData.total || flightData.totalFare || flightData.price || (flightData.recommendation?.Total) || 'N/A';
+    const currencySymbol = getCurrencySymbol(flightData.currencyCode || flightData.currencyId || 'GBP');
+    let displayPrice = totalPrice;
+    if (typeof displayPrice === 'string') displayPrice = displayPrice.replace(/[^\d.,-]/g, '');
+    
+    // Helper to get shared info from first segment
+    const getSharedInfo = (segments: any[]) => {
+      const seg = segments[0] || {};
+      return {
+        airline: seg.marketingAirlineName || seg.operatingAirlineName || flightData.airline || 'N/A',
+        class: seg.cabin || seg.CabinId || flightData.cabin || 'N/A',
+        baggage: getBaggage(seg, flightData),
+      };
+    };
+    
+    // Helper to render segment table rows
+    const renderSegmentRows = (segments: any[]) => {
+      return segments.map((seg: any, i: number) => 
+        `<tr${i%2===1?` style=\"background:#f9fafb;\"`:''}>
+          <td style=\"${tdStyle}\">${seg.departureAirportName || seg.DepartureAirportName || 'N/A'} (${seg.departureAirportId || 'N/A'})</td>
+          <td style=\"${tdStyle}\">${seg.arrivalAirportName || seg.ArrivalAirportName || 'N/A'} (${seg.arrivalAirportId || 'N/A'})</td>
+          <td style=\"${tdStyle}\">${formatDateTime(seg.departureDateTime)}</td>
+          <td style=\"${tdStyle}\">${formatDateTime(seg.arrivalDateTime)}</td>
+          <td style=\"${tdStyle}\">${seg.flightDuration || 'N/A'}</td>
+        </tr>`
+      ).join('');
+    };
+    
+    // Outbound flight section
+    const outboundInfo = getSharedInfo(outboundSegments);
+    const outboundSection = outboundSegments.length > 0 ? `
+      <div style=\"margin-bottom:16px;\">
+        <div style=\"background:#f8fafc;border-radius:4px;padding:6px;margin-bottom:4px;font-size:13px;${fontFamily}\">
+          <span style=\"font-weight:bold;margin-right:12px;\">Airline</span>
+          <span style=\"margin-right:24px;\">${outboundInfo.airline}</span>
+          <span style=\"font-weight:bold;margin-right:12px;\">Class</span>
+          <span style=\"margin-right:24px;\">${outboundInfo.class}</span>
+          <span style=\"font-weight:bold;margin-right:12px;\">Baggage</span>
+          <span>${outboundInfo.baggage}</span>
+        </div>
+        <table style=\"${tableStyle}\">
+          <tr><th style=\"${thStyle}\">From</th><th style=\"${thStyle}\">To</th><th style=\"${thStyle}\">Departure</th><th style=\"${thStyle}\">Arrival</th><th style=\"${thStyle}\">Duration</th></tr>
+          ${renderSegmentRows(outboundSegments)}
+        </table>
+      </div>
+    ` : '<p style=\"margin-left:10px;font-size:13px;\">N/A</p>';
+    
+    // Return flight section
+    const returnInfo = getSharedInfo(returnSegments);
+    const returnSection = returnSegments.length > 0 ? `
+      <div style=\"margin-bottom:16px;\">
+        <div style=\"background:#f8fafc;border-radius:4px;padding:6px;margin-bottom:4px;font-size:13px;${fontFamily}\">
+          <span style=\"font-weight:bold;margin-right:12px;\">Airline</span>
+          <span style=\"margin-right:24px;\">${returnInfo.airline}</span>
+          <span style=\"font-weight:bold;margin-right:12px;\">Class</span>
+          <span style=\"margin-right:24px;\">${returnInfo.class}</span>
+          <span style=\"font-weight:bold;margin-right:12px;\">Baggage</span>
+          <span>${returnInfo.baggage}</span>
+        </div>
+        <table style=\"${tableStyle}\">
+          <tr><th style=\"${thStyle}\">From</th><th style=\"${thStyle}\">To</th><th style=\"${thStyle}\">Departure</th><th style=\"${thStyle}\">Arrival</th><th style=\"${thStyle}\">Duration</th></tr>
+          ${renderSegmentRows(returnSegments)}
+        </table>
+      </div>
+    ` : '<p style=\"margin-left:10px;font-size:13px;\">N/A</p>';
+    
+    // Summary section
+    const summarySection = `
+      <div style=\"margin-top:14px;border-top:1px solid #eee;padding-top:8px;font-size:13px;${fontFamily}\">
+        <div style=\"display:flex;justify-content:space-between;margin-bottom:2px;\">
+          <span style=\"font-weight:bold;\">Passengers</span>
+          <span>${passengers}</span>
+        </div>
+        <div style=\"display:flex;justify-content:space-between;\">
+          <span style=\"font-weight:bold;\">Total Price</span>
+          <span>${currencySymbol}${displayPrice} per person</span>
+        </div>
+      </div>
+    `;
+    
+    return `
+      <div style=\"margin-bottom:24px;\">
+        <div style=\"${sectionTitleStyle}\">Flight ${idx + 1}</div>
+        <div style=\"margin-bottom:8px;font-size:14px;font-weight:bold;color:#22223b;${fontFamily}\">Outbound Flight</div>
+        ${outboundSection}
+        <div style=\"margin-top:8px;margin-bottom:8px;font-size:14px;font-weight:bold;color:#22223b;${fontFamily}\">Return Flight</div>
+        ${returnSection}
+        ${summarySection}
+      </div>
+    `;
+  }).join('');
+  
+  const flightsSection = flightsTable ? `<div style=\"${sectionTitleStyle}\">Flights</div>${flightsTable}` : '';
+
+  // Payment schedule table (keep prices here)
+  const formatMoney = (amount?: number, currency?: string) =>
+    typeof amount === 'number' ? `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`.trim() : '-';
+  const paymentRows = [
+    { label: 'Deposit', amount: quote.paymentDeposit, date: quote.paymentDepositDate },
+    { label: 'Second Payment', amount: quote.paymentSecondPayment, date: quote.paymentSecondPaymentDate },
+    { label: 'Final Payment', amount: quote.paymentFinalPayment, date: quote.paymentFinalPaymentDate },
+  ].filter(row => row.amount && row.amount > 0);
+  const paymentTable = paymentRows.length
+    ? `<div style=\"${sectionTitleStyle}\">Payment Schedule</div><table style=\"${tableStyle}\"><tr><th style=\"${thStyle}\">Payment Stage</th><th style=\"${thStyle}\">Amount</th><th style=\"${thStyle}\">Due Date</th></tr>${paymentRows.map((row, i) => `<tr${i%2===1?` style=\\\"background:#f9fafb;\\\"`:''}><td style=\"${tdStyle}\">${row.label}</td><td style=\"${tdStyle+paymentRedStyle}\">${formatMoney(row.amount, quote.currency)}</td><td style=\"${tdStyle}\">${formatDate(row.date)}</td></tr>`).join('')}</table>`
+    : '';
+
+  // Total price
+  const totalPrice = formatMoney(quote.totalPrice, quote.currency);
+  const totalBox = `<div style=\"${totalBoxStyle}\"><span style=\"${totalLabelStyle}\">Total Price:</span> <span style=\"${totalAmountStyle}\">${totalPrice}</span></div>`;
+
+  // Compose HTML email
+  return `
+<div> <div style=\"${sectionTitleStyle}\">Event Information</div>${eventTable}</div>
+<div> <div style=\"${sectionTitleStyle}\">Package Details</div>${packageTable}</div>
+${componentsTable}
+${flightsSection}
+${paymentTable}
+${totalBox}
+`;
+} 

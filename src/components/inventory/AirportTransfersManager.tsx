@@ -250,12 +250,26 @@ export default function AirportTransfersManager() {
 
   // Filtering
   const filteredTransfers = transfers.filter(t => {
-    if (!searchTerm) return true;
-    return (
+    // Search filter
+    if (searchTerm && !(
       t.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.transport_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.notes?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    )) return false;
+
+    // Event filter
+    if (selectedEvent && t.event_id !== selectedEvent.id) return false;
+
+    // Hotel filter
+    if (selectedHotel && t.hotel_id !== selectedHotel.id) return false;
+
+    // Transport type filter
+    if (selectedTransportType !== 'all' && t.transport_type !== selectedTransportType) return false;
+
+    // Supplier filter
+    if (selectedSupplier !== 'all' && t.supplier !== selectedSupplier) return false;
+
+    return true;
   });
 
   // Pagination logic (must come after filteredTransfers)

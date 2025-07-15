@@ -9,11 +9,14 @@ import MediaLibrarySelector from '../MediaLibrarySelector';
 import { Textarea } from '@/components/ui/textarea';
 import type { MediaItem } from '@/lib/mediaLibrary';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { DrawerFooter } from '@/components/ui/drawer';
 import { EventConsultantSelector } from '@/components/EventConsultantSelector';
 import type { Sport, Event, EventInsert, Venue } from '@/types/inventory';
 import { InventoryService } from '@/lib/inventoryService';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 export function EventFormDrawer({ event, sportId, sports, venues, onSubmit, onCancel, isLoading, queryClient }: {
   event?: Event;
@@ -50,6 +53,8 @@ export function EventFormDrawer({ event, sportId, sports, venues, onSubmit, onCa
   const [showImageSelector, setShowImageSelector] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [selectedImages, setSelectedImages] = useState<MediaItem[]>([]);
+  const [venuePopoverOpen, setVenuePopoverOpen] = useState(false);
+  const [venueSearch, setVenueSearch] = useState('');
 
   useEffect(() => { setVenuesList(venues || []); }, [venues]);
 
@@ -81,298 +86,288 @@ export function EventFormDrawer({ event, sportId, sports, venues, onSubmit, onCa
         <Label htmlFor="name">Event Name *</Label>
         <Input id="name" value={formData.name} onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))} required />
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="venue">Venue</Label>
-        <Select
-          value={(formData.venue_id ?? '') + ''}
-          onValueChange={v => {
-            if (v === '__create__') setVenueDialogOpen(true);
-            else setFormData(prev => ({ ...prev, venue_id: v }));
-          }}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select venue" />
-          </SelectTrigger>
-          <SelectContent>
-            {venuesList.map(v => (
-              <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-            ))}
-            <SelectItem value="__create__" className="text-primary font-semibold">+ Create new venue</SelectItem>
-          </SelectContent>
-        </Select>
-        {/* Venue creation dialog */}
-        <Dialog open={venueDialogOpen} onOpenChange={setVenueDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{'Add New Venue'}</DialogTitle>
-              <DialogDescription>{'Create a new venue for events'}</DialogDescription>
-            </DialogHeader>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setVenueLoading(true);
-                // Always send images as array of objects (id, image_url, thumbnail_url, description)
-                const images = (newVenue.images || []).map((img: any) => ({
-                  id: img.id,
-                  image_url: img.image_url,
-                  thumbnail_url: img.thumbnail_url,
-                  description: img.description,
-                }));
-                const payload = { ...newVenue, images, latitude: newVenue.latitude ? parseFloat(newVenue.latitude) : undefined, longitude: newVenue.longitude ? parseFloat(newVenue.longitude) : undefined };
-                const created = await InventoryService.createVenue(payload);
-                setVenuesList((prev) => [...prev, created]);
-                setFormData((prev) => ({ ...prev, venue_id: created.id }));
-                setVenueDialogOpen(false);
-                setNewVenue({
-                  name: '',
-                  slug: '',
-                  country: '',
-                  city: '',
-                  latitude: '',
-                  longitude: '',
-                  description: '',
-                  map_url: '',
-                  images: [],
-                });
-                setVenueLoading(false);
-                queryClient.invalidateQueries({ queryKey: ['venues'] });
-                queryClient.invalidateQueries({ queryKey: ['events'] });
-                queryClient.invalidateQueries({ queryKey: ['sports'] });
-              }}
-              className="space-y-4"
-            >
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="venue-name">Venue Name *</Label>
-                  <Input
-                    id="venue-name"
-                    value={newVenue.name}
-                    onChange={(e) => {
-                      const name = e.target.value;
-                      setNewVenue((prev) => {
-                        let slug = prev.slug;
-                        if (!slugManuallyEdited) {
-                          slug = name
-                            .toLowerCase()
-                            .replace(/[^a-z0-9]+/g, '-')
-                            .replace(/(^-|-$)+/g, '');
-                        }
-                        return { ...prev, name, slug };
-                      });
-                    }}
-                    placeholder="e.g., Circuit de Monaco"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="venue-slug">Slug</Label>
-                  <Input
-                    id="venue-slug"
-                    value={newVenue.slug}
-                    onChange={(e) => {
-                      setSlugManuallyEdited(true);
-                      setNewVenue((prev) => ({ ...prev, slug: e.target.value }));
-                    }}
-                    placeholder="e.g., circuit-de-monaco"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="venue-country">Country</Label>
-                  <Input
-                    id="venue-country"
-                    value={newVenue.country}
-                    onChange={(e) => setNewVenue((prev) => ({ ...prev, country: e.target.value }))}
-                    placeholder="e.g., Monaco"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="venue-city">City</Label>
-                  <Input
-                    id="venue-city"
-                    value={newVenue.city}
-                    onChange={(e) => setNewVenue((prev) => ({ ...prev, city: e.target.value }))}
-                    placeholder="e.g., Monte Carlo"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="venue-latitude">Latitude</Label>
-                  <Input
-                    id="venue-latitude"
-                    type="number"
-                    step="any"
-                    value={newVenue.latitude}
-                    onChange={(e) => setNewVenue((prev) => ({ ...prev, latitude: e.target.value }))}
-                    placeholder="e.g., 43.7384"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="venue-longitude">Longitude</Label>
-                  <Input
-                    id="venue-longitude"
-                    type="number"
-                    step="any"
-                    value={newVenue.longitude}
-                    onChange={(e) => setNewVenue((prev) => ({ ...prev, longitude: e.target.value }))}
-                    placeholder="e.g., 7.4246"
-                  />
-                </div>
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="venue-description">Description</Label>
-                  <Textarea
-                    id="venue-description"
-                    value={newVenue.description}
-                    onChange={(e) => setNewVenue((prev) => ({ ...prev, description: e.target.value }))}
-                    placeholder="Venue description..."
-                  />
-                </div>
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="venue-map-url">Map URL</Label>
-                  <Input
-                    id="venue-map-url"
-                    value={newVenue.map_url}
-                    onChange={(e) => setNewVenue((prev) => ({ ...prev, map_url: e.target.value }))}
-                    placeholder="https://maps.example.com"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2 col-span-2">
-                <Label>Venue Images</Label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {(newVenue.images || []).length > 0 ? (
-                    (newVenue.images as MediaItem[]).map((img) => (
-                      <div key={img.id} className="relative group w-24 h-24 border rounded overflow-hidden">
-                        <img src={img.thumbnail_url || img.image_url} alt={img.description || ''} className="object-cover w-full h-full" />
-                        <button
-                          type="button"
-                          className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
-                          onClick={() => setNewVenue(prev => ({ ...prev, images: (prev.images || []).filter((i: MediaItem) => i.id !== img.id) }))}
-                          aria-label="Remove image"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <span className="text-muted-foreground text-sm">No images selected</span>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedImages(newVenue.images || []);
-                    setShowImageSelector(true);
+      {/* --- Venue Combobox --- */}
+      <Label htmlFor="venue">Venue</Label>
+      <Popover open={venuePopoverOpen} onOpenChange={setVenuePopoverOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={venuePopoverOpen}
+            className="w-full justify-between"
+          >
+            {venuesList.find(v => v.id === formData.venue_id)?.name || 'Select venue'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-full p-0">
+          <Command>
+            <CommandInput
+              placeholder="Search venues..."
+              value={venueSearch}
+              onValueChange={setVenueSearch}
+              autoFocus
+            />
+            <CommandList>
+              <CommandEmpty>No venues found.</CommandEmpty>
+              {venuesList.filter(v => v.name.toLowerCase().includes(venueSearch.toLowerCase())).map(v => (
+                <CommandItem
+                  key={v.id}
+                  value={v.id}
+                  onSelect={() => {
+                    setFormData(prev => ({ ...prev, venue_id: v.id }));
+                    setVenuePopoverOpen(false);
                   }}
                 >
-                  {newVenue.images && newVenue.images.length > 0 ? 'Edit Images' : 'Select Images'}
-                </Button>
-                <Dialog open={showImageSelector} onOpenChange={setShowImageSelector}>
-                  <DialogContent className="!max-w-6xl max-h-[80vh] flex flex-col">
-                    <DialogHeader className="flex-shrink-0">
-                      <DialogTitle>Select Venue Images</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex-1 overflow-hidden min-h-0">
-                      <MediaLibrarySelector
-                        selectedItems={Array.isArray(selectedImages) ? selectedImages : []}
-                        onSelect={(item) => {
-                          setSelectedImages((prev) => {
-                            const exists = prev.find((img) => img.id === item.id);
-                            if (exists) {
-                              return prev.filter((img) => img.id !== item.id);
-                            } else {
-                              return [...prev, item];
-                            }
-                          });
-                        }}
-                        multiple={true}
-                      />
-                    </div>
-                    <DialogFooter className="flex-shrink-0">
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          setNewVenue(prev => ({ ...prev, images: selectedImages }));
-                          setShowImageSelector(false);
-                        }}
-                      >
-                        Confirm Selection
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                  {v.name}
+                </CommandItem>
+              ))}
+              <CommandItem
+                value="__create__"
+                onSelect={() => {
+                  setVenuePopoverOpen(false);
+                  setVenueDialogOpen(true);
+                }}
+                className="text-primary font-semibold"
+              >
+                + Create new venue
+              </CommandItem>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {/* --- End Venue Combobox --- */}
+      {/* Venue creation dialog */}
+      <Dialog open={venueDialogOpen} onOpenChange={setVenueDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{'Add New Venue'}</DialogTitle>
+            <DialogDescription>{'Create a new venue for events'}</DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setVenueLoading(true);
+              // Always send images as array of objects (id, image_url, thumbnail_url, description)
+              const images = (newVenue.images || []).map((img: any) => ({
+                id: img.id,
+                image_url: img.image_url,
+                thumbnail_url: img.thumbnail_url,
+                description: img.description,
+              }));
+              const payload = { ...newVenue, images, latitude: newVenue.latitude ? parseFloat(newVenue.latitude) : undefined, longitude: newVenue.longitude ? parseFloat(newVenue.longitude) : undefined };
+              const created = await InventoryService.createVenue(payload);
+              setVenuesList((prev) => [...prev, created]);
+              setFormData((prev) => ({ ...prev, venue_id: created.id }));
+              setVenueDialogOpen(false);
+              setNewVenue({
+                name: '',
+                slug: '',
+                country: '',
+                city: '',
+                latitude: '',
+                longitude: '',
+                description: '',
+                map_url: '',
+                images: [],
+              });
+              setVenueLoading(false);
+              queryClient.invalidateQueries({ queryKey: ['venues'] });
+              queryClient.invalidateQueries({ queryKey: ['events'] });
+              queryClient.invalidateQueries({ queryKey: ['sports'] });
+            }}
+            className="space-y-4"
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="venue-name">Venue Name *</Label>
+                <Input
+                  id="venue-name"
+                  value={newVenue.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setNewVenue((prev) => {
+                      let slug = prev.slug;
+                      if (!slugManuallyEdited) {
+                        slug = name
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, '-')
+                          .replace(/(^-|-$)+/g, '');
+                      }
+                      return { ...prev, name, slug };
+                    });
+                  }}
+                  placeholder="e.g., Circuit de Monaco"
+                  required
+                />
               </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button type="submit" disabled={venueLoading}>{venueLoading ? 'Saving...' : 'Create Venue'}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+              <div className="space-y-2">
+                <Label htmlFor="venue-slug">Slug</Label>
+                <Input
+                  id="venue-slug"
+                  value={newVenue.slug}
+                  onChange={(e) => {
+                    setSlugManuallyEdited(true);
+                    setNewVenue((prev) => ({ ...prev, slug: e.target.value }));
+                  }}
+                  placeholder="e.g., circuit-de-monaco"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="venue-country">Country</Label>
+                <Input
+                  id="venue-country"
+                  value={newVenue.country}
+                  onChange={(e) => setNewVenue((prev) => ({ ...prev, country: e.target.value }))}
+                  placeholder="e.g., Monaco"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="venue-city">City</Label>
+                <Input
+                  id="venue-city"
+                  value={newVenue.city}
+                  onChange={(e) => setNewVenue((prev) => ({ ...prev, city: e.target.value }))}
+                  placeholder="e.g., Monte Carlo"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="venue-latitude">Latitude</Label>
+                <Input
+                  id="venue-latitude"
+                  type="number"
+                  step="any"
+                  value={newVenue.latitude}
+                  onChange={(e) => setNewVenue((prev) => ({ ...prev, latitude: e.target.value }))}
+                  placeholder="e.g., 43.7384"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="venue-longitude">Longitude</Label>
+                <Input
+                  id="venue-longitude"
+                  type="number"
+                  step="any"
+                  value={newVenue.longitude}
+                  onChange={(e) => setNewVenue((prev) => ({ ...prev, longitude: e.target.value }))}
+                  placeholder="e.g., 7.4246"
+                />
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="venue-description">Description</Label>
+                <Textarea
+                  id="venue-description"
+                  value={newVenue.description}
+                  onChange={(e) => setNewVenue((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="Venue description..."
+                />
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="venue-map-url">Map URL</Label>
+                <Input
+                  id="venue-map-url"
+                  value={newVenue.map_url}
+                  onChange={(e) => setNewVenue((prev) => ({ ...prev, map_url: e.target.value }))}
+                  placeholder="https://maps.example.com"
+                />
+              </div>
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label>Venue Images</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {(newVenue.images || []).length > 0 ? (
+                  (newVenue.images as MediaItem[]).map((img) => (
+                    <div key={img.id} className="relative group w-24 h-24 border rounded overflow-hidden">
+                      <img src={img.thumbnail_url || img.image_url} alt={img.description || ''} className="object-cover w-full h-full" />
+                      <button
+                        type="button"
+                        className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                        onClick={() => setNewVenue(prev => ({ ...prev, images: (prev.images || []).filter((i: MediaItem) => i.id !== img.id) }))}
+                        aria-label="Remove image"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-muted-foreground text-sm">No images selected</span>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSelectedImages(newVenue.images || []);
+                  setShowImageSelector(true);
+                }}
+              >
+                {newVenue.images && newVenue.images.length > 0 ? 'Edit Images' : 'Select Images'}
+              </Button>
+              <Dialog open={showImageSelector} onOpenChange={setShowImageSelector}>
+                <DialogContent className="!max-w-6xl max-h-[80vh] flex flex-col">
+                  <DialogHeader className="flex-shrink-0">
+                    <DialogTitle>Select Venue Images</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex-1 overflow-hidden min-h-0">
+                    <MediaLibrarySelector
+                      selectedItems={Array.isArray(selectedImages) ? selectedImages : []}
+                      onSelect={(item) => {
+                        setSelectedImages((prev) => {
+                          const exists = prev.find((img) => img.id === item.id);
+                          if (exists) {
+                            return prev.filter((img) => img.id !== item.id);
+                          } else {
+                            return [...prev, item];
+                          }
+                        });
+                      }}
+                      multiple={true}
+                    />
+                  </div>
+                  <DialogFooter className="flex-shrink-0">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setNewVenue(prev => ({ ...prev, images: selectedImages }));
+                        setShowImageSelector(false);
+                      }}
+                    >
+                      Confirm Selection
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button type="submit" disabled={venueLoading}>{venueLoading ? 'Saving...' : 'Create Venue'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       <div className="flex gap-4">
         <div className="space-y-2 flex-1">
           <Label htmlFor="start_date">Start Date</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !formData.start_date && "text-muted-foreground"
-                )}
-              >
-                {formData.start_date
-                  ? new Date(formData.start_date).toLocaleDateString()
-                  : "Select date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <CalendarComponent
-                mode="single"
-                selected={formData.start_date ? new Date(formData.start_date) : undefined}
-                onSelect={(date: Date | undefined) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    start_date: date ? date.toISOString().slice(0, 10) : ''
-                  }));
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+          <DatePicker
+            selected={formData.start_date ? new Date(formData.start_date) : null}
+            onChange={date => setFormData(prev => ({ ...prev, start_date: date ? date.toISOString().slice(0, 10) : '' }))}
+            dateFormat="yyyy-MM-dd"
+            minDate={new Date()}
+            className="w-full border rounded px-2 py-2"
+            placeholderText="Select start date"
+          />
         </div>
         <div className="space-y-2 flex-1">
           <Label htmlFor="end_date">End Date</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !formData.end_date && "text-muted-foreground"
-                )}
-              >
-                {formData.end_date
-                  ? new Date(formData.end_date).toLocaleDateString()
-                  : "Select date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <CalendarComponent
-                mode="single"
-                selected={formData.end_date ? new Date(formData.end_date) : undefined}
-                onSelect={(date: Date | undefined) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    end_date: date ? date.toISOString().slice(0, 10) : ''
-                  }));
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+          <DatePicker
+            selected={formData.end_date ? new Date(formData.end_date) : null}
+            onChange={date => setFormData(prev => ({ ...prev, end_date: date ? date.toISOString().slice(0, 10) : '' }))}
+            dateFormat="yyyy-MM-dd"
+            minDate={formData.start_date ? new Date(formData.start_date) : new Date()}
+            className="w-full border rounded px-2 py-2"
+            placeholderText="Select end date"
+          />
         </div>
       </div>
       

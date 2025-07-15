@@ -1055,7 +1055,7 @@ export function ViewQuote() {
                                   {formatCurrency(transfer.price || 0, quote.currency)}
                           </div>
                                 <div className="text-xs text-muted-foreground">
-                                  per vehicle × {transfer.quantity || 1}
+                                  per vehicle × {transfer.totalTransfers || transfer.quantity || 1}
                                 </div>
                               </div>
                             </div>
@@ -1163,7 +1163,7 @@ export function ViewQuote() {
                               <div className="flex items-center justify-between text-sm">
                                 <div className="flex items-center gap-4">
                                   <span className="text-muted-foreground">
-                                    Quantity: <span className="font-medium">{transfer.quantity || 1}</span>
+                                    Quantity: <span className="font-medium">{transfer.totalTransfers || transfer.quantity || 1}</span>
                                   </span>
                                   {transfer.transferDirection === 'both' && (
                                     <span className="text-muted-foreground">
@@ -1179,7 +1179,7 @@ export function ViewQuote() {
                                 <div className="text-right">
                                   <div className="font-semibold">
                                     Total: {formatCurrency(
-                                      (transfer.price || 0) * (transfer.quantity || 1) * (transfer.transferDirection === 'both' ? 2 : 1), 
+                                      (transfer.price || 0) * (transfer.totalTransfers || transfer.quantity || 1) * (transfer.transferDirection === 'both' ? 2 : 1), 
                                       quote.currency
                                     )}
                                   </div>

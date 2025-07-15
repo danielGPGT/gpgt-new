@@ -90,6 +90,57 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
   const [selectedComponents, setSelectedComponents] = useState<SelectedComponent[]>([]);
   const [activeTab, setActiveTab] = useState<string>('ticket');
 
+  // State for dynamically fetched transfers
+  const [availableCircuitTransfers, setAvailableCircuitTransfers] = useState<any[]>([]);
+  const [availableAirportTransfers, setAvailableAirportTransfers] = useState<any[]>([]);
+
+  // Find the currently selected hotel room
+  const selectedHotelRoom = selectedComponents.find(c => c.componentType === 'hotel_room');
+
+  // Dynamically fetch circuit and airport transfers when hotel room changes
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchTransfers() {
+      if (selectedHotelRoom && eventId) {
+        // Fetch hotel_id from the selected hotel room
+        const { data: hotelRoom, error } = await supabase
+          .from('hotel_rooms')
+          .select('hotel_id')
+          .eq('id', selectedHotelRoom.componentId)
+          .single();
+        const hotelId = hotelRoom?.hotel_id;
+        console.log('[DEBUG] fetched hotel_id for selected hotel room:', hotelId);
+        if (!hotelId) {
+          setAvailableCircuitTransfers([]);
+          setAvailableAirportTransfers([]);
+          return;
+        }
+        // Fetch circuit transfers for the hotel
+        PackageManagerService.getAvailableComponents(eventId, 'circuit_transfer', hotelId)
+          .then(data => { 
+            if (isMounted) {
+              console.log('[DEBUG] fetched circuit transfers:', data);
+              setAvailableCircuitTransfers(data);
+            }
+          })
+          .catch(() => { if (isMounted) setAvailableCircuitTransfers([]); });
+        // Fetch airport transfers for the hotel
+        PackageManagerService.getAvailableComponents(eventId, 'airport_transfer', hotelId)
+          .then(data => { 
+            if (isMounted) {
+              console.log('[DEBUG] fetched airport transfers:', data);
+              setAvailableAirportTransfers(data);
+            }
+          })
+          .catch(() => { if (isMounted) setAvailableAirportTransfers([]); });
+      } else {
+        setAvailableCircuitTransfers([]);
+        setAvailableAirportTransfers([]);
+      }
+    }
+    fetchTransfers();
+    return () => { isMounted = false; };
+  }, [selectedHotelRoom?.componentId, eventId]);
 
 
   // Get hotel_id from existing hotel room components for transfer filtering
@@ -214,50 +265,144 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
       return;
     }
 
-    // Check if we're editing existing components or creating new ones
+    // Debugging: Log selected and existing components
+    console.log('[DEBUG] selectedComponents:', selectedComponents);
+    console.log('[DEBUG] existingComponents:', existingComponents);
+
     const isEditing = existingComponents && existingComponents.length > 0;
 
     if (isEditing) {
-      // Update existing components
-      const componentsToUpdate = selectedComponents.map(selected => {
-        const existing = existingComponents.find(ec => 
-          ec.component_type === selected.componentType && 
-          ec.component_id === selected.componentId
-        );
-        
-        return {
-          id: existing?.id || '',
-          updates: {
-            price_override: selected.priceOverride,
-          }
-        };
-      }).filter(item => item.id); // Only include components that exist
+      // Build maps for easier comparison
+      const existingMap = new Map<PackageComponent["component_type"], PackageComponent>(existingComponents.map(ec => [ec.component_type, ec]));
+      const selectedMap = new Map<PackageComponent["component_type"], SelectedComponent>(selectedComponents.map(sc => [sc.componentType as PackageComponent["component_type"], sc]));
 
-      updateComponentMutation.mutate(componentsToUpdate);
+      // 1. Deletes: If a type exists in existing but not in selected, delete it
+      const deletes = Array.from(existingMap.entries())
+        .filter(([type]) => !selectedMap.has(type))
+        .map(([_, ec]) => ec.id);
+
+      // 2. Inserts: If a type exists in selected but not in existing, insert it
+      const inserts = Array.from(selectedMap.entries())
+        .filter(([type]) => !existingMap.has(type))
+        .map(([_, sc]) => ({
+          tier_id: tierId ? tierId : '',
+          event_id: eventId ? eventId : '',
+          component_type: sc.componentType as PackageComponent["component_type"],
+          component_id: sc.componentId,
+          default_quantity: 1,
+          price_override: sc.priceOverride,
+          notes: '',
+        }));
+
+      // 3. Swaps: If a type exists in both but the componentId is different, delete old and insert new
+      const swaps = Array.from(selectedMap.entries())
+        .filter(([type, sc]) => {
+          const existing = existingMap.get(type);
+          return existing && existing.component_id !== sc.componentId;
+        })
+        .map(([type, sc]) => {
+          const existing = existingMap.get(type);
+          return existing ? {
+            deleteId: String(existing.id),
+            insert: {
+              tier_id: String(tierId || ''),
+              event_id: String(eventId || ''),
+              component_type: sc.componentType as PackageComponent["component_type"],
+              component_id: sc.componentId,
+              default_quantity: 1,
+              price_override: sc.priceOverride,
+              notes: '',
+            }
+          } : null;
+        }).filter((item): item is { deleteId: string; insert: { tier_id: string; event_id: string; component_type: PackageComponent["component_type"]; component_id: string; default_quantity: number; price_override: number | undefined; notes: string; }; } => !!item && typeof item.deleteId === 'string');
+
+      // 4. Updates: If a type exists in both and the componentId is the same, update if priceOverride changed
+      const updates = Array.from(selectedMap.entries())
+        .filter(([type, sc]) => {
+          const existing = existingMap.get(type);
+          return existing && existing.component_id === sc.componentId;
+        })
+        .map(([type, sc]) => {
+          const existing = existingMap.get(type);
+          if (!existing) return null;
+          const updates: PackageComponentUpdate = {};
+          if (typeof sc.priceOverride !== 'undefined' && sc.priceOverride !== existing.price_override) {
+            updates.price_override = sc.priceOverride;
+          }
+          return (existing.id && Object.keys(updates).length > 0)
+            ? { id: existing.id, updates }
+            : null;
+        }).filter((item): item is { id: string; updates: PackageComponentUpdate } => item !== null);
+
+      // Execute deletes
+      if (deletes.length > 0) {
+        Promise.all(deletes.map(id => PackageManagerService.deletePackageComponent(id)))
+          .then(() => {
+            toast.success('Removed old components.');
+            queryClient.invalidateQueries({ queryKey: ['packages'] });
+          })
+          .catch(error => toast.error(`Failed to delete component: ${error.message}`));
+      }
+
+      // Execute swaps (delete old, insert new)
+      if (swaps.length > 0) {
+        Promise.all(swaps.map(swap =>
+          swap ? (
+            PackageManagerService.deletePackageComponent(swap.deleteId)
+              .then(() => PackageManagerService.createPackageComponent(swap.insert))
+          ) : Promise.resolve()
+        ))
+          .then(() => {
+            toast.success('Swapped components.');
+            queryClient.invalidateQueries({ queryKey: ['packages'] });
+          })
+          .catch(error => toast.error(`Failed to swap component: ${error.message}`));
+      }
+
+      // Execute inserts
+      if (inserts.length > 0) {
+        Promise.all(inserts.map(insert => PackageManagerService.createPackageComponent(insert)))
+          .then(() => {
+            toast.success('Added new components.');
+            queryClient.invalidateQueries({ queryKey: ['packages'] });
+          })
+          .catch(error => toast.error(`Failed to add component: ${error.message}`));
+      }
+
+      // Execute updates
+      if (updates.length > 0) {
+        updateComponentMutation.mutate(updates);
+      } else if (deletes.length === 0 && swaps.length === 0 && inserts.length === 0) {
+        toast.info('No changes to update.');
+      }
     } else {
-      // Create new components
+      // Create new components (only one per type)
       const componentsToCreate: PackageComponentInsert[] = selectedComponents.map(selected => ({
         tier_id: tierId || '',
         event_id: eventId || '',
-        component_type: selected.componentType as any,
+        component_type: selected.componentType as PackageComponent["component_type"],
         component_id: selected.componentId,
         default_quantity: 1,
         price_override: selected.priceOverride,
         notes: '',
       }));
-
       createComponentMutation.mutate(componentsToCreate);
     }
   };
 
+  // Updated: Only allow one component per type to be selected
   const handleComponentToggle = (componentType: string, componentData: any, checked: boolean) => {
     if (checked) {
-      setSelectedComponents(prev => [...prev, {
-        componentType,
-        componentId: componentData.id,
-        componentData,
-        priceOverride: undefined
-      }]);
+      setSelectedComponents(prev => [
+        // Remove any existing selection of this type
+        ...prev.filter(c => c.componentType !== componentType),
+        {
+          componentType,
+          componentId: componentData.id,
+          componentData,
+          priceOverride: undefined
+        }
+      ]);
     } else {
       setSelectedComponents(prev => prev.filter(c => !(c.componentType === componentType && c.componentId === componentData.id)));
     }
@@ -433,7 +578,7 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
                           )}
                         </div>
                         
-                        {allComponents?.[type]?.length > 0 ? (
+                        {type === 'ticket' && Array.isArray(allComponents?.[type]) && allComponents[type].length > 0 ? (
                           <div className="space-y-2">
                             {allComponents[type].map((component) => {
                               const isSelected = selectedComponents.some(
@@ -465,6 +610,98 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
                                           <p className="text-xs text-muted-foreground">
                                             Hotel: {component.hotel.name}
                                           </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        ) : type === 'hotel_room' && Array.isArray(allComponents?.[type]) && allComponents[type].length > 0 ? (
+                          <div className="space-y-2">
+                            {allComponents[type].map((component) => {
+                              const isSelected = selectedComponents.some(
+                                sc => sc.componentType === type && sc.componentId === component.id
+                              );
+                              
+                              return (
+                                <Card 
+                                  key={component.id} 
+                                  className={`cursor-pointer transition-all py-0 ${
+                                    isSelected 
+                                      ? 'border-primary bg-primary/5' 
+                                      : 'hover:bg-muted/50'
+                                  }`}
+                                >
+                                  <CardContent className="p-3">
+                                    <div className="flex items-start gap-3">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={(checked) => 
+                                          handleComponentToggle(type, component, checked as boolean)
+                                        }
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm">
+                                          {getComponentDisplayName(component, type)}
+                                        </p>
+                                        {component.hotel?.name && (
+                                          <p className="text-xs text-muted-foreground">
+                                            Hotel: {component.hotel.name}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        ) : type === 'circuit_transfer' && availableCircuitTransfers.length > 0 ? (
+                          <div className="space-y-2">
+                            {availableCircuitTransfers.map((component) => {
+                              const isSelected = selectedComponents.some(
+                                sc => sc.componentType === type && sc.componentId === component.id
+                              );
+                              return (
+                                <Card key={component.id} className={`cursor-pointer transition-all py-0 ${isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                                  <CardContent className="p-3">
+                                    <div className="flex items-start gap-3">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={(checked) => handleComponentToggle(type, component, checked as boolean)}
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm">{getComponentDisplayName(component, type)}</p>
+                                        {component.hotel?.name && (
+                                          <p className="text-xs text-muted-foreground">Hotel: {component.hotel.name}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        ) : type === 'airport_transfer' && availableAirportTransfers.length > 0 ? (
+                          <div className="space-y-2">
+                            {availableAirportTransfers.map((component) => {
+                              const isSelected = selectedComponents.some(
+                                sc => sc.componentType === type && sc.componentId === component.id
+                              );
+                              return (
+                                <Card key={component.id} className={`cursor-pointer transition-all py-0 ${isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                                  <CardContent className="p-3">
+                                    <div className="flex items-start gap-3">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={(checked) => handleComponentToggle(type, component, checked as boolean)}
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm">{getComponentDisplayName(component, type)}</p>
+                                        {component.hotel?.name && (
+                                          <p className="text-xs text-muted-foreground">Hotel: {component.hotel.name}</p>
                                         )}
                                       </div>
                                     </div>

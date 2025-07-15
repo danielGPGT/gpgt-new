@@ -144,17 +144,20 @@ export class QuoteService {
           sortOrder: data.componentsData.tickets.length + data.componentsData.hotels.length + index,
           data: transfer
         })),
-        ...data.componentsData.airportTransfers.map((transfer: any, index: number) => ({
-          type: 'airport_transfer',
-          id: transfer.id,
-          name: `Airport Transfer - ${transfer.transferType || 'Standard'}`,
-          description: `Transportation to/from airport`,
-          unitPrice: transfer.price || 0,
-          quantity: transfer.quantity || 1,
-          totalPrice: (transfer.price || 0) * (transfer.quantity || 1),
-          sortOrder: data.componentsData.tickets.length + data.componentsData.hotels.length + data.componentsData.circuitTransfers.length + index,
-          data: transfer
-        })),
+        ...data.componentsData.airportTransfers.map((transfer: any, index: number) => {
+          const directionMultiplier = transfer.transferDirection === 'both' ? 2 : 1;
+          return {
+            type: 'airport_transfer',
+            id: transfer.id,
+            name: `Airport Transfer - ${transfer.transferType || 'Standard'}`,
+            description: `Transportation to/from airport`,
+            unitPrice: transfer.price || 0,
+            quantity: transfer.quantity || 1, // vehicles per direction
+            totalPrice: (transfer.price || 0) * (transfer.quantity || 1) * directionMultiplier,
+            sortOrder: data.componentsData.tickets.length + data.componentsData.hotels.length + data.componentsData.circuitTransfers.length + index,
+            data: transfer
+          };
+        }),
         ...data.componentsData.flights.map((flight: any, index: number) => ({
           type: 'flight',
           id: flight.id || `flight-${index}`,
@@ -1111,12 +1114,13 @@ ${hotelsRows.join('\n')}` : 'No hotel included.';
 |------------------|--------------|-------|
 ${circuitRows.join('\n')}` : '';
   // Airport Transfers
-  const airportRows = (comps.airportTransfers || []).map((tr: any) =>
-    `| Airport Transfer | ${tr.transferType || tr.type || '-'} | ${tr.notes || '-'} |`
-  );
+  const airportRows = (comps.airportTransfers || []).map((tr: any) => {
+    const directionMultiplier = tr.transferDirection === 'both' ? 2 : 1;
+    return `| Airport Transfer | ${tr.transferType || tr.type || '-'} | ${tr.notes || '-'} | ${formatMoney(tr.price, quote.currency)} | ${tr.quantity || 1} | ${formatMoney(tr.price * (tr.quantity || 1) * directionMultiplier, quote.currency)} |`;
+  });
   const airportTable = airportRows.length ?
-    `| Type             | Transfer Type | Notes |
-|------------------|--------------|-------|
+    `| Type             | Transfer Type | Notes | Price/Vehicle | Quantity | Total Price |
+|------------------|--------------|-------|---------------|----------|-------------|
 ${airportRows.join('\n')}` : '';
   // Extras
   const extrasTable = comps.loungePass ?
@@ -1186,7 +1190,7 @@ export function generateHtmlEmailQuote(quote: Quote): string {
 <table style="${infoTableStyle}">
   <tr><td style="${infoLabelStyle}">Package:</td><td style="${infoValueStyle}">${quote.packageName || '-'}</td></tr>
   <tr><td style="${infoLabelStyle}">Tier:</td><td style="${infoValueStyle}">${quote.tierName || '-'}</td></tr>
-  <tr><td style="${infoLabelStyle}">Description:</td><td style="${infoValueStyle}">${quote.tierDescription ? quote.tierDescription.replace(/\n/g, ' ') : '-'}</td></tr>
+  
 </table>`;
 
   // Combine all non-flight components into a single table
@@ -1211,7 +1215,7 @@ export function generateHtmlEmailQuote(quote: Quote): string {
       let details = type;
       // Convert database format to readable text (e.g., 'hotel_chauffeur' -> 'Hotel Chauffeur')
       if (details !== '-') {
-        details = details.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        details = details.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
       }
       if (days) details += `, ${days} day${days > 1 ? 's' : ''}`;
 
@@ -1227,14 +1231,17 @@ export function generateHtmlEmailQuote(quote: Quote): string {
       // Use database field names that match the Components tab
       const type = d.transport_type || d.transferType || d.type || '-';
       const supplier = d.supplier || 'TBD';
-      
       let details = type;
       // Convert database format to readable text (e.g., 'hotel_chauffeur' -> 'Hotel Chauffeur')
       if (details !== '-') {
-        details = details.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        details = details.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
       }
       if (supplier && supplier !== 'TBD') details += ` (${supplier})`;
-      
+      // Add transfer direction info
+      const directionLabel = d.transferDirection === 'both'
+        ? 'both ways (outbound & return)'
+        : d.transferDirection || '-';
+      details += ` — ${d.quantity || 1} vehicle${(d.quantity || 1) > 1 ? 's' : ''} ${directionLabel}`;
       return {
         type: 'Airport Transfer',
         details,
@@ -1471,7 +1478,7 @@ export function generateHtmlEmailQuote(quote: Quote): string {
   const formatMoney = (amount?: number, currency?: string) =>
     typeof amount === 'number' ? `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`.trim() : '-';
   const paymentRows = [
-    { label: 'Deposit', amount: quote.paymentDeposit, date: quote.paymentDepositDate },
+    { label: 'Deposit', amount: quote.paymentDeposit, date: 'Upon Acceptance' },
     { label: 'Second Payment', amount: quote.paymentSecondPayment, date: quote.paymentSecondPaymentDate },
     { label: 'Final Payment', amount: quote.paymentFinalPayment, date: quote.paymentFinalPaymentDate },
   ].filter(row => row.amount && row.amount > 0);

@@ -21,6 +21,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format, subDays, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { FormField } from '@/components/ui/form';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 // Live FX rate API using exchangerate-api.com (free tier)
 const EXCHANGE_RATE_API_BASE = 'https://api.exchangerate-api.com/v4/latest';
@@ -631,61 +633,25 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-foreground">Check-in Date *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal border-border bg-background",
-                          !formData.check_in && "text-muted-foreground"
-                        )}
-                      >
-                        <Calendar className="mr-2 h-4 w-4" />
-                        {formData.check_in ? format(new Date(formData.check_in), 'PPP') : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        key={`checkin-${formData.check_in}-${calendarKey}`}
-                        mode="single"
-                        selected={formData.check_in ? new Date(formData.check_in) : undefined}
-                        onSelect={handleCheckInChange}
-                        initialFocus
-                        disabled={(date) => date < new Date()}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <DatePicker
+                    selected={formData.check_in ? new Date(formData.check_in) : null}
+                    onChange={date => handleCheckInChange(date as Date)}
+                    dateFormat="yyyy-MM-dd"
+                    minDate={new Date()}
+                    className="w-full border rounded px-2 py-2"
+                    placeholderText="Select check-in date"
+                  />
                 </div>
-
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-foreground">Check-out Date *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal border-border bg-background",
-                          !formData.check_out && "text-muted-foreground"
-                        )}
-                      >
-                        <Calendar className="mr-2 h-4 w-4" />
-                        {formData.check_out ? format(new Date(formData.check_out), 'PPP') : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        key={`checkout-${formData.check_out}-${calendarKey}`}
-                        mode="single"
-                        selected={formData.check_out ? new Date(formData.check_out) : undefined}
-                        onSelect={handleCheckOutChange}
-                        initialFocus
-                        disabled={(date) => {
-                          const checkInDate = formData.check_in ? new Date(formData.check_in) : new Date();
-                          return date <= checkInDate;
-                        }}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <DatePicker
+                    selected={formData.check_out ? new Date(formData.check_out) : null}
+                    onChange={date => handleCheckOutChange(date as Date)}
+                    dateFormat="yyyy-MM-dd"
+                    minDate={formData.check_in ? new Date(formData.check_in) : new Date()}
+                    className="w-full border rounded px-2 py-2"
+                    placeholderText="Select check-out date"
+                  />
                 </div>
               </div>
 

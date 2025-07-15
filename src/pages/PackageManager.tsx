@@ -101,6 +101,8 @@ import motogpIcon from '@/assets/icons/motogp.svg';
 import { useEffect} from 'react';
 import { hasTeamFeature } from '@/lib/teamUtils';
 import { Navigate } from 'react-router-dom';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 interface Filters {
   sport_ids?: string[];
@@ -484,46 +486,34 @@ export default function PackageManager() {
                   <Label className="text-sm font-medium text-[var(--foreground)]">Date Range</Label>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="bg-[var(--background)] border-[var(--border)] hover:bg-[var(--muted)] text-[var(--foreground)]"
-                      >
-                        <Calendar className="h-3 w-3 mr-1" />
-                        From
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <CalendarIcon
-                        mode="single"
-                        selected={filters.date_from}
-                        onSelect={(date) => setFilters(prev => ({ ...prev, date_from: date }))}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="bg-[var(--background)] border-[var(--border)] hover:bg-[var(--muted)] text-[var(--foreground)]"
-                      >
-                        <Calendar className="h-3 w-3 mr-1"/>
-                        To
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <CalendarIcon
-                        mode="single"
-                        selected={filters.date_to}
-                        onSelect={(date) => setFilters(prev => ({ ...prev, date_to: date }))}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <div>
+                    <DatePicker
+                      selected={filters.date_from || null}
+                      onChange={date => setFilters(prev => ({ ...prev, date_from: date }))}
+                      selectsStart
+                      startDate={filters.date_from || null}
+                      endDate={filters.date_to || null}
+                      dateFormat="yyyy-MM-dd"
+                      className="w-full border rounded px-2 py-2"
+                      placeholderText="From"
+                      isClearable
+                      maxDate={filters.date_to || undefined}
+                    />
+                  </div>
+                  <div>
+                    <DatePicker
+                      selected={filters.date_to || null}
+                      onChange={date => setFilters(prev => ({ ...prev, date_to: date }))}
+                      selectsEnd
+                      startDate={filters.date_from || null}
+                      endDate={filters.date_to || null}
+                      dateFormat="yyyy-MM-dd"
+                      className="w-full border rounded px-2 py-2"
+                      placeholderText="To"
+                      isClearable
+                      minDate={filters.date_from || undefined}
+                    />
+                  </div>
                 </div>
               </div>
 

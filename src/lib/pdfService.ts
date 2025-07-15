@@ -1,6 +1,7 @@
 import React from 'react';
 import { pdf } from '@react-pdf/renderer';
 import QuotePDFDocument from '../components/QuotePDFDocument';
+import BookingConfirmationPDFDocument from '../components/BookingConfirmationPDFDocument';
 import { getBase64Image } from './imageUtils';
 
 interface QuoteData {
@@ -117,4 +118,32 @@ export const getQuotePDFAsBlob = async (quoteData: QuoteData): Promise<Blob> => 
   
   const element = React.createElement(QuotePDFDocument, { quoteData: processedQuoteData });
   return await pdf(element).toBlob();
+}; 
+
+export const downloadBookingConfirmationPDF = async (bookingData: any, filename?: string): Promise<void> => {
+  // (Optional) Convert logo URL to base64 as in downloadQuotePDF
+  let processedBookingData = { ...bookingData };
+  if (bookingData.team?.logo_url) {
+    try {
+      const base64Logo = await getBase64Image(bookingData.team.logo_url);
+      processedBookingData = {
+        ...bookingData,
+        team: {
+          ...bookingData.team,
+          logo_url: base64Logo
+        }
+      };
+    } catch (error) {
+      console.error('Failed to convert logo to base64:', error);
+      // Keep original data if conversion fails
+    }
+  }
+  const element = React.createElement(BookingConfirmationPDFDocument, { bookingData: processedBookingData });
+  const blob = await pdf(element).toBlob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || `booking-confirmation-${bookingData.booking_reference || 'N/A'}-${new Date().toISOString().split('T')[0]}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
 }; 

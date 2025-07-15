@@ -503,10 +503,7 @@ function roundUpHundredMinusTwo(n: number) {
                 Airport Transfers 
                 {components.airportTransfers?.length > 0 && (
                   <Badge variant="secondary" className="text-xs">
-                    x {components.airportTransfers.reduce((sum: number, a: any) => {
-                      const directionMultiplier = a.transferDirection === 'both' ? 2 : 1;
-                      return sum + ((a.quantity || 0) * directionMultiplier);
-                    }, 0)}
+                    x {components.airportTransfers.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0)}
                   </Badge>
                 )}
                 {components.airportTransfers?.length === 0 && (
@@ -539,7 +536,7 @@ function roundUpHundredMinusTwo(n: number) {
               Lounge Pass
               {loungePass && loungePass.id ? (
                 <Badge variant="secondary" className="text-xs">
-                  {loungePass.variant} × {loungePass.quantity || 1}
+                   × {loungePass.quantity || 1}
                 </Badge>
               ) : (
                 <Badge variant="outline" className="text-xs text-muted-foreground">
@@ -1236,8 +1233,6 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
   
   // Calculate payment dates based on new requirements
   const today = new Date();
-  // Deposit is upon acceptance - no specific date needed
-  
   // Second payment: 2 months after deposit, on the 1st of the month
   const secondPaymentDateObj = new Date(today.getTime() + 2 * 30 * 24 * 60 * 60 * 1000);
   secondPaymentDateObj.setDate(1); // Set to 1st of the month
@@ -1249,191 +1244,46 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
   let finalPaymentDate = finalPaymentDateObj.toISOString().slice(0, 10);
   
   // Check if we're getting close to the event date and adjust if necessary
+  useEffect(() => {
+    let adjustedSecondPaymentDate = secondPaymentDate;
+    let adjustedFinalPaymentDate = finalPaymentDate;
   if (selectedEvent?.startDate) {
     const eventDate = new Date(selectedEvent.startDate);
-    
     // If final payment would be after the event, move it to 7 days before the event
     if (finalPaymentDateObj > eventDate) {
       const adjustedFinalPaymentDateObj = new Date(eventDate.getTime() - 7 * 24 * 60 * 60 * 1000);
       adjustedFinalPaymentDateObj.setDate(1); // Still try to keep it on the 1st if possible
-      finalPaymentDate = adjustedFinalPaymentDateObj.toISOString().slice(0, 10);
+        adjustedFinalPaymentDate = adjustedFinalPaymentDateObj.toISOString().slice(0, 10);
     }
-    
     // If we're already within 4 months of the event, compress the payment schedule
     const monthsUntilEvent = (eventDate.getTime() - today.getTime()) / (30 * 24 * 60 * 60 * 1000);
     if (monthsUntilEvent < 4) {
-      // Adjust second payment to be halfway between now and 7 days before event, on the 1st of the month
       const adjustedSecondPaymentDateObj = new Date(today.getTime() + (monthsUntilEvent - 0.25) * 30 * 24 * 60 * 60 * 1000 / 2);
       adjustedSecondPaymentDateObj.setDate(1); // Set to 1st of the month
-      const adjustedSecondPaymentDate = adjustedSecondPaymentDateObj.toISOString().slice(0, 10);
-      
-      // Final payment 7 days before event, but try to keep on 1st if possible
+        adjustedSecondPaymentDate = adjustedSecondPaymentDateObj.toISOString().slice(0, 10);
       const adjustedFinalPaymentDateObj = new Date(eventDate.getTime() - 7 * 24 * 60 * 60 * 1000);
       adjustedFinalPaymentDateObj.setDate(1); // Set to 1st of the month
-      finalPaymentDate = adjustedFinalPaymentDateObj.toISOString().slice(0, 10);
-      
-              // Update form with adjusted dates
-        form.setValue('payments', {
-          total: paymentTotal,
-          deposit: paymentDeposit,
-          secondPayment: paymentSecondPayment,
-          finalPayment: paymentFinalPayment,
-          depositDate: undefined, // Upon acceptance
-          secondPaymentDate: adjustedSecondPaymentDate,
-          finalPaymentDate,
-        });
-    } else {
-      // Update form with standard payment dates
-      form.setValue('payments', {
-        total: paymentTotal,
-        deposit: paymentDeposit,
-        secondPayment: paymentSecondPayment,
-        finalPayment: paymentFinalPayment,
-        depositDate: undefined, // Upon acceptance
-        secondPaymentDate,
-        finalPaymentDate,
-      });
+        adjustedFinalPaymentDate = adjustedFinalPaymentDateObj.toISOString().slice(0, 10);
+      }
     }
-  } else {
-    // Update form with standard payment dates
-    form.setValue('payments', {
-      total: paymentTotal,
-      deposit: paymentDeposit,
-      secondPayment: paymentSecondPayment,
-      finalPayment: paymentFinalPayment,
-      depositDate: undefined, // Upon acceptance
-      secondPaymentDate,
-      finalPaymentDate,
-    });
+    // Only set payment dates if not already set by the user
+    const currentSecondPaymentDate = form.getValues('payments.secondPaymentDate');
+    const currentFinalPaymentDate = form.getValues('payments.finalPaymentDate');
+    form.setValue('payments.total', paymentTotal);
+    form.setValue('payments.deposit', paymentDeposit);
+    form.setValue('payments.secondPayment', paymentSecondPayment);
+    form.setValue('payments.finalPayment', paymentFinalPayment);
+    form.setValue('payments.depositDate', undefined); // Upon acceptance
+    if (!currentSecondPaymentDate) {
+      form.setValue('payments.secondPaymentDate', adjustedSecondPaymentDate);
+    }
+    if (!currentFinalPaymentDate) {
+      form.setValue('payments.finalPaymentDate', adjustedFinalPaymentDate);
   }
-  
   // Also update the summary total price
   form.setValue('summary.totalPrice', roundedTotal);
-  
-  // Update the converted price if currency is not GBP
-  const selectedCurrency = form.getValues('summary.currency');
-  if (selectedCurrency && selectedCurrency !== 'GBP') {
-    // The currency conversion will be handled by the PriceSummaryCardContent component
-    // which will update summary.convertedPrice and summary.exchangeRate
-  }
-  
-  // --- Request Button Logic ---
-  const [requesting, setRequesting] = useState(false);
-  const handleRequest = async () => {
-    // Fetch consultant email from event
-    const { data, error } = await supabase
-      .from('events')
-      .select('*, team_member:primary_consultant_id(*)')
-      .eq('id', selectedEvent.id)
-      .single();
-    const consultantEmail = data?.team_member?.email;
-    const consultantName = data?.team_member?.name || '';
-    if (!consultantEmail) {
-      toast.error('No consultant assigned to this event.');
-      return;
-    }
-    // Get current user info
-    const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null;
-    const currentUser = {
-      name: user?.user_metadata?.name || user?.email || 'A user',
-      email: user?.email || '',
-    };
-    const formValues = form.getValues();
-    const client = formValues.client || {};
-    const event = formValues.selectedEvent || {};
-    const travelers = formValues.travelers || {};
-    const pkg = formValues.selectedPackage || {};
-    const tier = formValues.selectedTier || {};
-    const components = formValues.components || {};
-    // --- Build concise component summary strings ---
-    // Tickets
-    const ticketsSummary = (components.tickets || []).length > 0
-      ? 'Tickets: ' + components.tickets.map((t: any) => `${t.quantity}x ${t.category}`).join(', ')
-      : null;
-    // Hotels
-    const hotelsSummary = (components.hotels || []).length > 0
-      ? 'Hotels: ' + components.hotels.map((h: any) => {
-          // Try to get hotel name from h, or from hotels state
-          let hotelName = h.hotelName || (hotels && h.hotelId ? (hotels.find((ht: any) => ht.id === h.hotelId)?.name) : undefined) || h.hotelId || 'Hotel';
-          // Try to get room type from h, or from hotelRooms state
-          let roomType = h.roomType || h.room_type_id || (hotelRooms && h.roomId ? (hotelRooms.find((rm: any) => rm.id === h.roomId)?.room_type_id) : undefined) || '';
-          // Try to get bed type from h, or from hotelRooms state
-          let bedType = h.bed_type || (hotelRooms && h.roomId ? (hotelRooms.find((rm: any) => rm.id === h.roomId)?.bed_type) : undefined) || '';
-          let checkIn = h.checkIn || '';
-          let checkOut = h.checkOut || '';
-          let details = [roomType, bedType, checkIn && checkOut ? `${checkIn} to ${checkOut}` : null].filter(Boolean).join(', ');
-          return `${h.quantity || 1}x ${hotelName}${details ? ` (${details})` : ''}`;
-        }).join(', ')
-      : null;
-    // Circuit Transfers
-    const circuitTransfersSummary = (components.circuitTransfers || []).length > 0
-      ? 'Circuit Transfers: ' + components.circuitTransfers.map((c: any) => `${c.quantity}x ${c.transferType || c.transfer_type || 'Transfer'}`).join(', ')
-      : null;
-    // Airport Transfers
-    const airportTransfersSummary = (components.airportTransfers || []).length > 0
-      ? 'Airport Transfers: ' + components.airportTransfers.map((a: any) => `${a.quantity}x ${a.transportType || a.transport_type || 'Transfer'} (${a.transferDirection || ''})`).join(', ')
-      : null;
-    // Flights
-    const flightsSummary = (components.flights || []).length > 0
-      ? 'Flights: ' + components.flights.map((f: any) => {
-          const currency = formValues.summary?.currency || 'GBP';
-          function formatMoney(amount: number) {
-            return currency === 'GBP' ? `£${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
-          }
-          const route = `${f.origin}→${f.destination}`;
-          const pax = `${f.passengers} pax${f.returnDate ? ', RT' : ''}`;
-          const airline = f.airline ? `Airline: ${f.airline}` : '';
-          const flightNum = f.outboundFlightNumber || f.flightNumber ? `Flight: ${f.outboundFlightNumber || f.flightNumber}` : '';
-          const outDate = f.departureDate ? `Out: ${f.departureDate}` : '';
-          const backDate = f.returnDate ? `Back: ${f.returnDate}` : '';
-          const price = f.price ? `Price: ${formatMoney(f.price)}/pp` : '';
-          // Compose details, omitting empty
-          const details = [airline, flightNum, outDate, backDate, price].filter(Boolean).join(' | ');
-          return `${route} (${pax})${details ? ' | ' + details : ''}`;
-        }).join('; ')
-      : null;
-    // Lounge Pass
-    const loungePass = components.loungePass;
-    const loungePassSummary = loungePass && loungePass.id
-      ? `Lounge Pass: ${loungePass.variant || ''} x${loungePass.quantity || 1}`
-      : null;
-    // Combine all summaries, skipping nulls
-    const componentLines = [ticketsSummary, hotelsSummary, circuitTransfersSummary, airportTransfersSummary, flightsSummary, loungePassSummary].filter(Boolean);
-    // --- Payment summary ---
-    const currency = formValues.summary?.currency || 'GBP';
-    const total = formValues.payments?.total || 0;
-    const deposit = formValues.payments?.deposit || 0;
-    const secondPayment = formValues.payments?.secondPayment || 0;
-    const finalPayment = formValues.payments?.finalPayment || 0;
-    const depositDate = formValues.payments?.depositDate;
-    const secondPaymentDate = formValues.payments?.secondPaymentDate;
-    const finalPaymentDate = formValues.payments?.finalPaymentDate;
-    function formatMoney(amount: number) {
-      return currency === 'GBP' ? `£${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
-    }
-    const paymentLines = [
-      `Total Price: ${formatMoney(total)}`,
-      `Deposit: ${formatMoney(deposit)}${depositDate ? ` (Due: ${depositDate})` : ''}`,
-      `Second Payment: ${formatMoney(secondPayment)}${secondPaymentDate ? ` (Due: ${secondPaymentDate})` : ''}`,
-      `Final Payment: ${formatMoney(finalPayment)}${finalPaymentDate ? ` (Due: ${finalPaymentDate})` : ''}`
-    ];
-    const subject = encodeURIComponent('New Package Request');
-    const body = encodeURIComponent(
-      `Hi ${consultantName},\n\n` +
-      `A new package request has been submitted by ${currentUser.name} (${currentUser.email}):\n\n` +
-      `Client: ${client.firstName || ''} ${client.lastName || ''}\n` +
-      `Client Email: ${client.email || ''}\n` +
-      `Event: ${event.name || ''}\n` +
-      `Event Dates: ${event.startDate || ''} to ${event.endDate || ''}\n` +
-      `Travelers: ${travelers.adults || 0} adults, ${travelers.children || 0} children\n` +
-      `Package: ${pkg.name || ''}\n` +
-      `Tier: ${tier.name || ''}\n` +
-      (componentLines.length > 0 ? `\n${componentLines.join('\n')}` : '') +
-      `\n\n${paymentLines.join('\n')}`
-    );
-    const mailtoLink = `mailto:${consultantEmail}?subject=${subject}&body=${body}`;
-    window.location.href = mailtoLink;
-  };
+    // Update the converted price if currency is not GBP (handled elsewhere)
+  }, [roundedTotal, convertedTotal, paymentTotal, paymentDeposit, paymentSecondPayment, paymentFinalPayment, selectedEvent?.startDate]);
 
   // --- UI ---
   return (

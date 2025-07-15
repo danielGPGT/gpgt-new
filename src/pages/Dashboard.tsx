@@ -586,9 +586,6 @@ export function Dashboard() {
             <Link to="/bookings">
               <Button variant="outline" className="rounded-lg px-4">View Bookings</Button>
             </Link>
-            <Link to="/new-proposal">
-              <Button className="rounded-lg px-4">Create Proposal</Button>
-            </Link>
           </div>
         </div>
 

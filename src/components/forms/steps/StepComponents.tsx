@@ -145,6 +145,10 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
   const [loungePasses, setLoungePasses] = useState<any[]>([]);
   const [loungeLoading, setLoungeLoading] = useState(false);
 
+  // Add state for all event transfers
+  const [allCircuitTransfers, setAllCircuitTransfers] = useState<any[]>([]);
+  const [allAirportTransfers, setAllAirportTransfers] = useState<any[]>([]);
+
   // Memoize callback functions to prevent infinite re-renders
   const handleFlightSourceChange = useCallback((src: FlightSource) => {
     setValue('components.flightsSource', src);
@@ -482,6 +486,93 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
       setValue('components.airportTransfers', []);
     }
   };
+
+  // Add this effect to StepComponents to clean up transfers when hotel selection changes
+  useEffect(() => {
+    const selectedRooms = components.hotels || [];
+    const selectedHotelIds = selectedRooms.map((room: any) => room.hotelId).filter(Boolean);
+
+    // Clean up circuit transfers
+    if (components.circuitTransfers && components.circuitTransfers.length > 0) {
+      const validCircuitTransfers = components.circuitTransfers.filter((transfer: any) =>
+        selectedHotelIds.includes(
+          // Find the hotel_id for this transfer
+          (() => {
+            // Find the transfer in the availableTransfers (if available)
+            // Fallback: use transfer.hotelId if present
+            if (transfer.hotelId) return transfer.hotelId;
+            // Otherwise, keep it (could not verify)
+            return null;
+          })()
+        )
+      );
+      if (validCircuitTransfers.length !== components.circuitTransfers.length) {
+        setValue('components.circuitTransfers', validCircuitTransfers);
+      }
+    }
+
+    // Clean up airport transfers
+    if (components.airportTransfers && components.airportTransfers.length > 0) {
+      const validAirportTransfers = components.airportTransfers.filter((transfer: any) =>
+        selectedHotelIds.includes(
+          (() => {
+            if (transfer.hotelId) return transfer.hotelId;
+            return null;
+          })()
+        )
+      );
+      if (validAirportTransfers.length !== components.airportTransfers.length) {
+        setValue('components.airportTransfers', validAirportTransfers);
+      }
+    }
+  }, [components.hotels, setValue]);
+
+  // --- MINIMAL ROBUST TRANSFER LOGIC ---
+  // 1. Fetch all transfers for the event ONCE
+  useEffect(() => {
+    if (!selectedEvent?.id) {
+      setAllCircuitTransfers([]);
+      setAllAirportTransfers([]);
+      return;
+    }
+    supabase
+      .from('circuit_transfers')
+      .select('*, gpgt_hotels(*)')
+      .eq('event_id', selectedEvent.id)
+      .eq('active', true)
+      .then(({ data }) => setAllCircuitTransfers(data || []));
+    supabase
+      .from('airport_transfers')
+      .select('*, gpgt_hotels(*)')
+      .eq('event_id', selectedEvent.id)
+      .eq('active', true)
+      .then(({ data }) => setAllAirportTransfers(data || []));
+  }, [selectedEvent?.id]);
+
+  // 2. On hotel selection change, filter compatible transfers and remove invalid selections
+  useEffect(() => {
+    const selectedHotelIds = (components.hotels || []).map((room: any) => room.hotelId).filter(Boolean);
+
+    // Filter compatible transfers
+    const compatibleCircuitTransfers = allCircuitTransfers.filter((t: any) => selectedHotelIds.includes(t.hotel_id));
+    const compatibleAirportTransfers = allAirportTransfers.filter((t: any) => selectedHotelIds.includes(t.hotel_id));
+
+    // Remove any selected transfers that are no longer compatible
+    const validSelectedCircuitTransfers = (components.circuitTransfers || []).filter((sel: any) =>
+      compatibleCircuitTransfers.some((t: any) => t.id === sel.id)
+    );
+    const validSelectedAirportTransfers = (components.airportTransfers || []).filter((sel: any) =>
+      compatibleAirportTransfers.some((t: any) => t.id === sel.id)
+    );
+
+    // Only update if changed
+    if (validSelectedCircuitTransfers.length !== (components.circuitTransfers || []).length) {
+      setValue('components.circuitTransfers', validSelectedCircuitTransfers);
+    }
+    if (validSelectedAirportTransfers.length !== (components.airportTransfers || []).length) {
+      setValue('components.airportTransfers', validSelectedAirportTransfers);
+    }
+  }, [components.hotels, allCircuitTransfers, allAirportTransfers, setValue]);
 
   return (
     <div className="space-y-8">
@@ -826,6 +917,9 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
             enabled={circuitTransfersEnabled}
             onToggle={handleCircuitTransfersToggle}
             showPrices={showPrices}
+            allTransfers={allCircuitTransfers}
+            selectedHotels={components.hotels || []}
+            selectedTransfers={components.circuitTransfers || []}
           />
         )}
 
@@ -838,6 +932,9 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
             enabled={airportTransfersEnabled}
             onToggle={handleAirportTransfersToggle}
             showPrices={showPrices}
+            allTransfers={allAirportTransfers}
+            selectedHotels={components.hotels || []}
+            selectedTransfers={components.airportTransfers || []}
           />
         )}
 
@@ -1238,17 +1335,27 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                   <SelectValue placeholder="Select a room" />
                 </SelectTrigger>
                 <SelectContent>
-                  {swapOptions.map((opt: any) => {
-                    const optHotel = getHotel(opt.hotel_id);
-                    return (
-                      <SelectItem key={opt.id} value={opt.id}>
-                        {optHotel?.name || 'Unknown Hotel'} | {opt.room_type_id} | Bed: {opt.bed_type} | Flex: {opt.flexibility}
-                        {opt.is_provisional && (
-                          <span className="ml-2 text-xs text-orange-600 font-semibold">(PTO)</span>
-                        )}
-                      </SelectItem>
-                    );
-                  })}
+                  {[...swapOptions]
+                    .sort((a, b) => {
+                      const aPrice = a.total_price_per_stay_gbp_with_markup ?? a.total_price_per_stay_gbp ?? 0;
+                      const bPrice = b.total_price_per_stay_gbp_with_markup ?? b.total_price_per_stay_gbp ?? 0;
+                      return aPrice - bPrice;
+                    })
+                    .map((opt: any) => {
+                      const optHotel = getHotel(opt.hotel_id);
+                      const price = opt.total_price_per_stay_gbp_with_markup ?? opt.total_price_per_stay_gbp ?? 0;
+                      return (
+                        <SelectItem key={opt.id} value={opt.id}>
+                          {optHotel?.name || 'Unknown Hotel'} - {opt.room_type_id} - {opt.bed_type}
+                          {' - £' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {' - '}
+                          {opt.is_provisional
+                            ? <span className="text-orange-600 font-semibold">PTO</span>
+                            : <>Qty: {opt.quantity_available ?? 1}</>
+                          }
+                        </SelectItem>
+                      );
+                    })}
                 </SelectContent>
               </Select>
               {/* Delete Room Button */}
@@ -1294,20 +1401,32 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
   );
 }
 
-function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, enabled, onToggle, showPrices }: { 
+function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, enabled, onToggle, showPrices, allTransfers, selectedHotels, selectedTransfers }: { 
   adults: number, 
   selectedEvent: any, 
   selectedTier: any,
   setValue: any,
   enabled: boolean,
   onToggle: (enabled: boolean) => void,
-  showPrices: boolean
+  showPrices: boolean,
+  allTransfers: any[],
+  selectedHotels: any[],
+  selectedTransfers: any[]
 }) {
   const [circuitTransfers, setCircuitTransfers] = useState<any[]>([]);
   const [availableTransfers, setAvailableTransfers] = useState<any[]>([]);
   const [hotels, setHotels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTransfers, setSelectedTransfers] = useState<any[]>([]);
+
+  // Debug log for enabled state
+  console.log('[DEBUG] CircuitTransfersTab enabled:', enabled);
+
+  // Reset loading state when enabled changes to false
+  useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+    }
+  }, [enabled]);
 
   // Get selected hotel rooms to filter circuit transfers
   const { watch } = useFormContext();
@@ -1315,7 +1434,6 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
 
   useEffect(() => {
     if (!enabled) {
-      setSelectedTransfers([]);
       setValue('components.circuitTransfers', []);
       setLoading(false);
       return;
@@ -1368,10 +1486,9 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                 price: transfer.sell_price_per_seat_gbp || 0,
                 packageComponentId: packageComps.find(comp => comp.component_id === transfer.id)?.id
               }));
-              setSelectedTransfers(initialTransfers);
               setValue('components.circuitTransfers', initialTransfers);
             } else {
-              setSelectedTransfers(currentTransfers);
+              setValue('components.circuitTransfers', currentTransfers);
             }
           }
         }
@@ -1435,12 +1552,12 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
 
   // Helper: get hotel for a transfer
   function getHotel(hotelId: string) {
-    return hotels.find(h => h.id === hotelId);
+    return hotels.find((h: any) => h.id === hotelId);
   }
 
-  // Helper: get transfer by id
+  // Helper: get transfer by id (always from allTransfers)
   function getTransfer(transferId: string) {
-    return circuitTransfers.find(t => t.id === transferId);
+    return allTransfers.find((t: any) => t.id === transferId);
   }
 
   // Calculate total seats selected
@@ -1462,24 +1579,25 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
     };
     
     const updated = [...selectedTransfers, newTransfer];
-    setSelectedTransfers(updated);
     setValue('components.circuitTransfers', updated);
   }
 
   // Handle transfer change (swapping)
   function handleTransferChange(transferId: string, index: number) {
-    const selectedTransfer = availableTransfers.find(t => t.id === transferId);
+    const selectedTransfer = allTransfers.find((t: any) => t.id === transferId);
+    console.log('[DEBUG] handleTransferChange called with:', transferId, 'at index', index, 'selectedTransfer:', selectedTransfer);
     if (!selectedTransfer) return;
-    
+
     const updatedTransfers = [...selectedTransfers];
     updatedTransfers[index] = {
       ...updatedTransfers[index],
       id: transferId,
-      quantity: adults || 1,
-      price: selectedTransfer.sell_price_per_seat_gbp || 0
+      price: selectedTransfer.sell_price_per_seat_gbp || 0,
+      hotelId: selectedTransfer.hotel_id,
+      transfer_type: selectedTransfer.transfer_type,
+      // Add any other fields you want to sync from the transfer object
     };
-    
-    setSelectedTransfers(updatedTransfers);
+    console.log('[DEBUG] Updated transfers:', updatedTransfers);
     setValue('components.circuitTransfers', updatedTransfers);
   }
 
@@ -1487,7 +1605,6 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
   function handleQuantityChange(quantity: number, index: number) {
     const updatedTransfers = [...selectedTransfers];
     updatedTransfers[index] = { ...updatedTransfers[index], quantity };
-    setSelectedTransfers(updatedTransfers);
     setValue('components.circuitTransfers', updatedTransfers);
   }
 
@@ -1500,14 +1617,15 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
       // The useEffect will handle the refetch
     } else {
       // When disabling, clear selections
-      setSelectedTransfers([]);
       setValue('components.circuitTransfers', []);
     }
   };
 
   // UI for each circuit transfer card
-  function TransferCard({ transfer, selected, onChange, index, showPrices }: any) {
-    const hotel = getHotel(transfer.hotel_id);
+  function TransferCard({ transfer, selected, hotel, onChange, index, showPrices }: any) {
+    // Robustly handle hotel prop (object or array)
+    const resolvedHotel = Array.isArray(hotel) ? hotel[0] : hotel;
+    console.log('[DEBUG] TransferCard hotel prop:', hotel, 'resolvedHotel:', resolvedHotel);
     const pricePerSeat = transfer.sell_price_per_seat_gbp || 0;
     const totalPrice = pricePerSeat * (selected.quantity || 1);
     const coachesRequired = Math.ceil((selected.quantity || 1) / transfer.coach_capacity);
@@ -1527,19 +1645,19 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                   <SelectValue placeholder="Select transfer type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {getCompatibleTransfers()
+                  {allTransfers
                     .filter((t: any) => {
                       // Allow the current transfer id, but not any others already selected
                       const selectedIds = selectedTransfers.map((tr: any, i: number) => i !== index && tr.id).filter(Boolean);
                       return t.id === transfer.id || !selectedIds.includes(t.id);
                     })
                     .map((t: any) => {
-                      const tHotel = getHotel(t.hotel_id);
+                      const tHotel = Array.isArray(t.gpgt_hotels) ? t.gpgt_hotels[0] : t.gpgt_hotels;
                       return (
                         <SelectItem key={t.id} value={t.id}>
                           <div className="flex items-center justify-between w-full">
-                            <span>{tHotel?.name || 'Unknown Hotel'} - {t.transfer_type}</span>
-                            {showPrices && <span className="text-[var(--color-muted-foreground)] ml-2">£{t.sell_price_per_seat_gbp?.toFixed(2) || '0.00'}</span>}
+                            <span>{tHotel?.name || 'Unknown Hotel'} - {t.transfer_type || t.transport_type}</span>
+                            {showPrices && <span className="text-[var(--color-muted-foreground)] ml-2">£{(t.sell_price_per_seat_gbp || t.price_per_car_gbp_markup)?.toFixed(2) || '0.00'}</span>}
                           </div>
                         </SelectItem>
                       );
@@ -1564,7 +1682,7 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
               </div>
               <div className="min-w-0">
                 <div className="font-bold text-lg text-[var(--color-foreground)] truncate">
-                  {hotel?.name || 'Unknown Hotel'}
+                  {resolvedHotel?.name || 'Unknown Hotel'}
                 </div>
                 <div className="text-[var(--color-muted-foreground)] text-xs truncate">
                   {transfer.transfer_type} • {transfer.supplier || 'Standard'}
@@ -1635,7 +1753,6 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                   aria-label="Remove transfer"
                   onClick={() => {
                     const updated = selectedTransfers.filter((_: any, i: number) => i !== index);
-                    setSelectedTransfers(updated);
                     setValue('components.circuitTransfers', updated);
                   }}
                 >
@@ -1678,6 +1795,9 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
   }
 
   const compatibleTransfers = getCompatibleTransfers();
+  const compatibleTransferIds = compatibleTransfers.map(t => t.id);
+  // Only render selected transfers that are still compatible
+  const filteredSelectedTransfers = selectedTransfers.filter(sel => compatibleTransferIds.includes(sel.id));
 
   if (selectedRooms.length === 0) {
     return (
@@ -1760,13 +1880,15 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
           <div className="space-y-4">
             {selectedTransfers.map((selectedTransfer: any, index: number) => {
               const transfer = getTransfer(selectedTransfer.id);
+              const hotel = getHotelFromTransfer(transfer);
+              console.log('[DEBUG] Rendering card for selectedTransfer:', selectedTransfer, 'resolved transfer:', transfer, 'hotel:', hotel);
               if (!transfer) return null;
-              
               return (
                 <TransferCard
                   key={transfer.id}
                   transfer={transfer}
                   selected={selectedTransfer}
+                  hotel={hotel}
                   onChange={(transferId: string) => handleTransferChange(transferId, index)}
                   index={index}
                   showPrices={showPrices}
@@ -1796,20 +1918,32 @@ function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
   );
 }
 
-function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, enabled, onToggle, showPrices }: { 
+function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, enabled, onToggle, showPrices, allTransfers, selectedHotels, selectedTransfers }: { 
   adults: number, 
   selectedEvent: any, 
   selectedTier: any,
   setValue: any,
   enabled: boolean,
   onToggle: (enabled: boolean) => void,
-  showPrices: boolean
+  showPrices: boolean,
+  allTransfers: any[],
+  selectedHotels: any[],
+  selectedTransfers: any[]
 }) {
   const [airportTransfers, setAirportTransfers] = useState<any[]>([]);
   const [availableTransfers, setAvailableTransfers] = useState<any[]>([]);
   const [hotels, setHotels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTransfers, setSelectedTransfers] = useState<any[]>([]);
+
+  // Debug log for enabled state
+  console.log('[DEBUG] AirportTransfersTab enabled:', enabled);
+
+  // Reset loading state when enabled changes to false
+  useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+    }
+  }, [enabled]);
 
   // Get selected hotel rooms to filter airport transfers
   const { watch } = useFormContext();
@@ -1817,7 +1951,6 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
 
   useEffect(() => {
     if (!enabled) {
-      setSelectedTransfers([]);
       setValue('components.airportTransfers', []);
       setLoading(false);
       return;
@@ -1855,15 +1988,14 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
             if (currentTransfers.length === 0) {
               const initialTransfers = transfers.map(transfer => ({
                 id: transfer.id,
-                quantity: 1, // Default to 1 vehicle
+                quantity: 1, // Default to 1 vehicle per direction
                 price: transfer.price_per_car_gbp_markup || 0,
                 transferDirection: 'both' as const, // Default to both (outbound + return)
                 packageComponentId: packageComps.find(comp => comp.component_id === transfer.id)?.id
               }));
-              setSelectedTransfers(initialTransfers);
               setValue('components.airportTransfers', initialTransfers);
             } else {
-              setSelectedTransfers(currentTransfers);
+              setValue('components.airportTransfers', currentTransfers);
             }
           }
         }
@@ -1901,18 +2033,10 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
     return hotels.find(h => h.id === hotelId);
   }
 
-  // Helper: get transfer by id
+  // Helper: get transfer by id (always from allTransfers)
   function getTransfer(transferId: string) {
-    return airportTransfers.find(t => t.id === transferId);
+    return allTransfers.find((t: any) => t.id === transferId);
   }
-
-  // Calculate total vehicles selected
-  const totalVehicles = selectedTransfers.reduce((sum, t) => sum + (t.quantity || 0), 0);
-  // Calculate total capacity across all selected vehicles
-  const totalCapacity = selectedTransfers.reduce((sum, t) => {
-    const transfer = getTransfer(t.id);
-    return sum + ((transfer?.max_capacity || 0) * (t.quantity || 0));
-  }, 0);
 
   // Add another transfer type
   function handleAddTransfer() {
@@ -1922,29 +2046,28 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
     if (!nextTransfer) return;
     const newTransfer = {
       id: nextTransfer.id,
-      quantity: 1, // Default to 1 vehicle
+      quantity: 1, // Default to 1 vehicle per direction
       price: nextTransfer.price_per_car_gbp_markup || 0,
       transferDirection: 'both' as const, // Default to both (outbound + return)
       packageComponentId: null
     };
     const updated = [...selectedTransfers, newTransfer];
-    setSelectedTransfers(updated);
     setValue('components.airportTransfers', updated);
   }
 
   // Handle transfer change (swapping)
   function handleTransferChange(transferId: string, index: number) {
-    const selectedTransfer = availableTransfers.find(t => t.id === transferId);
+    const selectedTransfer = allTransfers.find((t: any) => t.id === transferId);
+    console.log('[DEBUG] handleTransferChange called with:', transferId, 'at index', index, 'selectedTransfer:', selectedTransfer);
     if (!selectedTransfer) return;
     const updatedTransfers = [...selectedTransfers];
     updatedTransfers[index] = {
       ...updatedTransfers[index],
       id: transferId,
-      quantity: 1, // Reset to 1 vehicle when changing transfer type
+      quantity: 1, // Reset to 1 vehicle per direction when changing transfer type
       price: selectedTransfer.price_per_car_gbp_markup || 0,
       transferDirection: updatedTransfers[index].transferDirection || 'outbound' // Preserve existing direction
     };
-    setSelectedTransfers(updatedTransfers);
     setValue('components.airportTransfers', updatedTransfers);
   }
 
@@ -1952,7 +2075,6 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
   function handleQuantityChange(quantity: number, index: number) {
     const updatedTransfers = [...selectedTransfers];
     updatedTransfers[index] = { ...updatedTransfers[index], quantity };
-    setSelectedTransfers(updatedTransfers);
     setValue('components.airportTransfers', updatedTransfers);
   }
 
@@ -1965,14 +2087,15 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
       // The useEffect will handle the refetch
     } else {
       // When disabling, clear selections
-      setSelectedTransfers([]);
       setValue('components.airportTransfers', []);
     }
   };
 
   // UI for each airport transfer card
-  function TransferCard({ transfer, selected, onChange, index, showPrices }: any) {
-    const hotel = getHotel(transfer.hotel_id);
+  function TransferCard({ transfer, selected, hotel, onChange, index, showPrices }: any) {
+    // Robustly handle hotel prop (object or array)
+    const resolvedHotel = Array.isArray(hotel) ? hotel[0] : hotel;
+    console.log('[DEBUG] TransferCard hotel prop:', hotel, 'resolvedHotel:', resolvedHotel);
     const pricePerVehicle = transfer.price_per_car_gbp_markup || 0;
     const transferDirection = selected.transferDirection || 'outbound';
     const directionMultiplier = transferDirection === 'both' ? 2 : 1;
@@ -1996,19 +2119,19 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                   <SelectValue placeholder="Select transfer type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {getCompatibleTransfers()
+                  {allTransfers
                     .filter((t: any) => {
                       // Allow the current transfer id, but not any others already selected
                       const selectedIds = selectedTransfers.map((tr: any, i: number) => i !== index && tr.id).filter(Boolean);
                       return t.id === transfer.id || !selectedIds.includes(t.id);
                     })
                     .map((t: any) => {
-                      const tHotel = getHotel(t.hotel_id);
+                      const tHotel = Array.isArray(t.gpgt_hotels) ? t.gpgt_hotels[0] : t.gpgt_hotels;
                       return (
                         <SelectItem key={t.id} value={t.id}>
                           <div className="flex items-center justify-between w-full">
                             <span>{tHotel?.name || 'Unknown Hotel'} - {t.transport_type}</span>
-                            {showPrices && <span className="text-[var(--color-muted-foreground)] ml-2">£{t.price_per_car_gbp_markup?.toFixed(2) || '0.00'}</span>}
+                            {showPrices && <span className="text-[var(--color-muted-foreground)] ml-2">£{(t.price_per_car_gbp_markup || t.sell_price_per_seat_gbp)?.toFixed(2) || '0.00'}</span>}
                           </div>
                         </SelectItem>
                       );
@@ -2020,8 +2143,8 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
             <div className="flex flex-col items-end flex-shrink-0 min-w-[120px]">
               <span className="text-xs font-semibold text-[var(--color-muted-foreground)] mb-1">Total Price</span>
               {showPrices && <span className="text-2xl font-extrabold text-[var(--color-primary)]">£{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-              {showPrices && <span className="text-xs text-[var(--color-muted-foreground)]">£{pricePerVehicle.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per vehicle</span>}
-              {directionMultiplier > 1 && ` × ${directionMultiplier} (${transferDirection})`}
+              {showPrices && <span className="text-xs text-[var(--color-muted-foreground)]">£{pricePerVehicle.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per vehicle per trip</span>}
+              {directionMultiplier > 1 && ` × 2 trips (both ways)`}
             </div>
           </div>
 
@@ -2033,12 +2156,9 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                 type="button"
                 onClick={() => {
                   const updated = { ...selected, transferDirection: 'outbound' as const };
-                  console.log('[AIRPORT_TRANSFER] Direction changed: outbound for transfer:', transfer.id);
-                  setSelectedTransfers(prev => {
+                  setValue('components.airportTransfers', prev => {
                     const newTransfers = [...prev];
                     newTransfers[index] = updated;
-                    console.log('[AIRPORT_TRANSFER] Updated transfers:', newTransfers);
-                    setValue('components.airportTransfers', newTransfers);
                     return newTransfers;
                   });
                 }}
@@ -2054,12 +2174,9 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                 type="button"
                 onClick={() => {
                   const updated = { ...selected, transferDirection: 'return' as const };
-                  console.log('[AIRPORT_TRANSFER] Direction changed: return for transfer:', transfer.id);
-                  setSelectedTransfers(prev => {
+                  setValue('components.airportTransfers', prev => {
                     const newTransfers = [...prev];
                     newTransfers[index] = updated;
-                    console.log('[AIRPORT_TRANSFER] Updated transfers:', newTransfers);
-                    setValue('components.airportTransfers', newTransfers);
                     return newTransfers;
                   });
                 }}
@@ -2075,12 +2192,9 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                 type="button"
                 onClick={() => {
                   const updated = { ...selected, transferDirection: 'both' as const };
-                  console.log('[AIRPORT_TRANSFER] Direction changed: both for transfer:', transfer.id);
-                  setSelectedTransfers(prev => {
+                  setValue('components.airportTransfers', prev => {
                     const newTransfers = [...prev];
                     newTransfers[index] = updated;
-                    console.log('[AIRPORT_TRANSFER] Updated transfers:', newTransfers);
-                    setValue('components.airportTransfers', newTransfers);
                     return newTransfers;
                   });
                 }}
@@ -2095,7 +2209,7 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
             </div>
           </div>
 
-                    {/* Second row: Transfer Info (left), Quantity, Remove (right) */}
+          {/* Second row: Transfer Info (left), Quantity, Remove (right) */}
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 w-full justify-between">
             {/* Left: Icon, hotel, details */}
             <div className="flex flex-row items-center gap-3 flex-1 min-w-0">
@@ -2104,7 +2218,7 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
               </div>
               <div className="min-w-0">
                 <div className="font-bold text-lg text-[var(--color-foreground)] truncate">
-                  {hotel?.name || 'Unknown Hotel'}
+                  {resolvedHotel?.name || 'Unknown Hotel'}
                 </div>
                 <div className="text-[var(--color-muted-foreground)] text-xs truncate">
                   {transfer.transport_type} • {transfer.supplier || 'Standard'}
@@ -2118,21 +2232,19 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                 </div>
               </div>
             </div>
-            
             {/* Right: Quantity Selector, Remove */}
             <div className="flex flex-row items-center gap-2 flex-shrink-0 justify-end">
               <Label htmlFor={`quantity-${transfer.id}`} className="text-xs font-semibold text-[var(--color-muted-foreground)] mr-2">
-                {transferDirection === 'both' ? 'Total Transfers' : 'Vehicles'}
+                Vehicles per direction
               </Label>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const newTotalTransfers = Math.max(1, totalTransfers - directionMultiplier);
-                  const newQuantity = Math.ceil(newTotalTransfers / directionMultiplier);
+                  const newQuantity = Math.max(1, (selected.quantity || 1) - 1);
                   handleQuantityChange(newQuantity, index);
                 }}
-                disabled={totalTransfers <= directionMultiplier}
+                disabled={selected.quantity <= 1}
                 className="w-8 h-8 p-0"
                 tabIndex={-1}
               >
@@ -2141,33 +2253,31 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
               <Input
                 id={`quantity-${transfer.id}`}
                 type="number"
-                value={totalTransfers}
+                value={selected.quantity || 1}
                 onChange={(e) => {
                   const val = parseInt(e.target.value, 10);
-                  const newTotalTransfers = Number.isFinite(val) && val > 0 ? val : 1;
-                  const newQuantity = Math.ceil(newTotalTransfers / directionMultiplier);
+                  const newQuantity = Number.isFinite(val) && val > 0 ? val : 1;
                   handleQuantityChange(newQuantity, index);
                 }}
                 min={1}
-                max={10 * directionMultiplier} // Reasonable max for total transfers
+                max={10}
                 className="w-12 text-center font-bold text-base bg-transparent border-none focus:ring-2 focus:ring-[var(--color-primary)]"
               />
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const newTotalTransfers = Math.min(10 * directionMultiplier, totalTransfers + directionMultiplier);
-                  const newQuantity = Math.ceil(newTotalTransfers / directionMultiplier);
+                  const newQuantity = Math.min(10, (selected.quantity || 1) + 1);
                   handleQuantityChange(newQuantity, index);
                 }}
-                disabled={totalTransfers >= 10 * directionMultiplier}
+                disabled={selected.quantity >= 10}
                 className="w-8 h-8 p-0"
                 tabIndex={-1}
               >
                 +
               </Button>
               <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
-                Max: {10 * directionMultiplier}
+                Max: 10
               </span>
               {selectedTransfers.length > 1 && (
                 <Button
@@ -2178,8 +2288,11 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                   aria-label="Remove transfer"
                   onClick={() => {
                     const updated = selectedTransfers.filter((_: any, i: number) => i !== index);
-                    setSelectedTransfers(updated);
-                    setValue('components.airportTransfers', updated);
+                    setValue('components.airportTransfers', prev => {
+                      const newTransfers = [...prev];
+                      newTransfers.splice(index, 1);
+                      return newTransfers;
+                    });
                   }}
                 >
                   ×
@@ -2194,9 +2307,8 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
                 <span className="text-[var(--color-muted-foreground)]">Price Breakdown:</span>
                 <div className="text-right">
                   <div className="font-medium">
-                    {selected.quantity || 1} vehicle{(selected.quantity || 1) !== 1 ? 's' : ''} × {directionMultiplier} direction{directionMultiplier > 1 ? 's' : ''} × £{pricePerVehicle.toFixed(2)}
+                    {selected.quantity || 1} vehicle{(selected.quantity || 1) !== 1 ? 's' : ''} × {directionMultiplier} trip{directionMultiplier > 1 ? 's' : ''} × £{pricePerVehicle.toFixed(2)}
                   </div>
-
                   {transferDirection === 'both' && (
                     <div className="text-xs text-[var(--color-muted-foreground)]">
                       (Covers both outbound and return)
@@ -2249,12 +2361,20 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
           </div>
           <h3 className="text-lg font-semibold mb-3 text-[var(--color-foreground)]">No Airport Transfers Available</h3>
           <p className="text-[var(--color-muted-foreground)]">
-            No airport transfers are available for the selected hotel rooms and event.
+            No airport transfers are available for the selected hotel(s) and event.
           </p>
         </CardContent>
       </Card>
     );
   }
+
+  // Calculate total vehicles and total capacity for summary
+  const totalVehicles = selectedTransfers.reduce((sum, t) => sum + (t.quantity || 0), 0);
+  const totalCapacity = selectedTransfers.reduce((sum, t) => {
+    const transfer = getTransfer(t.id);
+    const vehicleCapacity = transfer ? transfer.max_capacity || 0 : 0;
+    return sum + (t.quantity || 0) * vehicleCapacity;
+  }, 0);
 
   return (
     <div className="space-y-6">
@@ -2323,12 +2443,14 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
           <div className="space-y-4">
             {selectedTransfers.map((selectedTransfer: any, index: number) => {
               const transfer = getTransfer(selectedTransfer.id);
+              console.log('[DEBUG] Rendering card for selectedTransfer:', selectedTransfer, 'resolved transfer:', transfer);
               if (!transfer) return null;
               return (
                 <TransferCard
                   key={transfer.id}
                   transfer={transfer}
                   selected={selectedTransfer}
+                  hotel={getHotelFromTransfer(transfer)}
                   onChange={(transferId: string) => handleTransferChange(transferId, index)}
                   index={index}
                   showPrices={showPrices}
@@ -2465,4 +2587,10 @@ function LoungePassTab({ loungePasses, loading, selected, setValue, showPrices }
       )}
     </div>
   );
+}
+
+// In CircuitTransfersTab and AirportTransfersTab, update getHotel to use the nested gpgt_hotels object from the transfer if available
+function getHotelFromTransfer(transfer: any) {
+  // Supabase join returns hotel details as gpgt_hotels
+  return transfer?.gpgt_hotels || null;
 }

@@ -31,6 +31,8 @@ import { PackageManagerService } from '@/lib/packageManagerService';
 import type { Event, EventInsert, EventUpdate, Sport, Venue } from '@/lib/packageManagerService';
 import { cleanEventUpdate } from '@/components/inventory/SportsEventsManager';
 import { EventConsultantSelector } from '@/components/EventConsultantSelector';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 interface EventFormProps {
   open: boolean;
@@ -248,131 +250,26 @@ export function EventForm({ open, onOpenChange, event, sports, venues }: EventFo
 
               <div className="space-y-2">
                 <Label htmlFor="start_date">Start Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !startDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "PPP") : <span>Pick a start date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <div className="p-3 border-b">
-                      <div className="flex items-center justify-between mb-2">
-                        <Select
-                          value={startDateMonth.getMonth().toString()}
-                          onValueChange={(value) => handleStartMonthChange(parseInt(value), startDateMonth.getFullYear())}
-                        >
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {months.map((month, index) => (
-                              <SelectItem key={index} value={index.toString()}>
-                                {month}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={startDateMonth.getFullYear().toString()}
-                          onValueChange={(value) => handleStartMonthChange(startDateMonth.getMonth(), parseInt(value))}
-                        >
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {years.map((year) => (
-                              <SelectItem key={year} value={year.toString()}>
-                                {year}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={handleStartDateChange}
-                      month={startDateMonth}
-                      onMonthChange={setStartDateMonth}
-                      initialFocus
-                      disabled={(date) => date < new Date()}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DatePicker
+                  selected={startDate || null}
+                  onChange={date => handleStartDateChange(date as Date)}
+                  dateFormat="yyyy-MM-dd"
+                  minDate={new Date()}
+                  className="w-full border rounded px-2 py-2"
+                  placeholderText="Select start date"
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="end_date">End Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !endDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {endDate ? format(endDate, "PPP") : <span>Pick an end date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <div className="p-3 border-b">
-                      <div className="flex items-center justify-between mb-2">
-                        <Select
-                          value={endDateMonth.getMonth().toString()}
-                          onValueChange={(value) => handleEndMonthChange(parseInt(value), endDateMonth.getFullYear())}
-                        >
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {months.map((month, index) => (
-                              <SelectItem key={index} value={index.toString()}>
-                                {month}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={endDateMonth.getFullYear().toString()}
-                          onValueChange={(value) => handleEndMonthChange(endDateMonth.getMonth(), parseInt(value))}
-                        >
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {years.map((year) => (
-                              <SelectItem key={year} value={year.toString()}>
-                                {year}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={handleEndDateChange}
-                      month={endDateMonth}
-                      onMonthChange={setEndDateMonth}
-                      initialFocus
-                      disabled={(date) => 
-                        date < new Date() || 
-                        (startDate ? date < startDate : false)
-                      }
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DatePicker
+                  selected={endDate || null}
+                  onChange={date => handleEndDateChange(date as Date)}
+                  dateFormat="yyyy-MM-dd"
+                  minDate={startDate || new Date()}
+                  className="w-full border rounded px-2 py-2"
+                  placeholderText="Select end date"
+                />
               </div>
             </div>
 

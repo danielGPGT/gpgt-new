@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { BookingService, Booking } from '@/lib/bookingService';
 import { Calendar, MapPin, Users, DollarSign, Clock, Search, Filter, Download, Eye, Phone, Mail, CalendarDays, TrendingUp, ArrowUpRight, ArrowDownRight, CheckCircle, XCircle, AlertCircle, Edit, Trash2, MoreHorizontal, Plus, FileText, User, Building, CreditCard, Plane, Hotel, Car, Ticket, ArrowLeft, Copy, Printer, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { downloadBookingConfirmationPDF } from '@/lib/pdfService';
 
 interface BookingWithDetails extends Booking {
   quote?: {
@@ -72,6 +73,61 @@ interface BookingWithDetails extends Booking {
     unit_price: number;
     total_price: number;
   }>;
+}
+
+// Helper to enrich transfer components with transfer_type and days
+async function enrichTransferComponents(components) {
+  return await Promise.all(
+    (components || []).map(async (c) => {
+      // Get the transfer id from component_data.id, fallback to component_id/componentId/id
+      const transferId =
+        (c.component_data && c.component_data.id) ||
+        c.component_id ||
+        c.componentId ||
+        c.id;
+
+      if (
+        (c.component_type === 'circuit_transfer' || c.componentType === 'circuit_transfer') &&
+        transferId
+      ) {
+        const { data, error } = await supabase
+          .from('circuit_transfers')
+          .select('transfer_type, days')
+          .eq('id', transferId)
+          .single();
+        console.log('ENRICH CIRCUIT:', { transferId, data, error });
+        return { ...c, component_data: { ...data, ...c.component_data } };
+      }
+      if (
+        (c.component_type === 'airport_transfer' || c.componentType === 'airport_transfer') &&
+        transferId
+      ) {
+        const { data, error } = await supabase
+          .from('airport_transfers')
+          .select('transport_type')
+          .eq('id', transferId)
+          .single();
+        console.log('ENRICH AIRPORT:', { transferId, data, error });
+        return { ...c, component_data: { ...data, ...c.component_data } };
+      }
+      return c;
+    })
+  );
+}
+
+// Helper to fetch team info for a booking
+async function getTeamForBooking(team_id: string) {
+  if (!team_id) return null;
+  const { data, error } = await supabase
+    .from('teams')
+    .select('id, name, logo_url, agency_name')
+    .eq('id', team_id)
+    .single();
+  if (error) {
+    console.error('Error fetching team:', error);
+    return null;
+  }
+  return data;
 }
 
 export default function ViewBooking() {
@@ -314,6 +370,24 @@ export default function ViewBooking() {
               <Edit className="h-4 w-4 mr-2" />
               Edit
             </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const enrichedComponents = await enrichTransferComponents(booking.components || []);
+              const team = await getTeamForBooking(booking.team_id);
+              await downloadBookingConfirmationPDF({
+                booking: { ...booking, team },
+                components: enrichedComponents,
+                payments: booking.payments || [],
+                travelers: booking.travelers || [],
+                team: team || {},
+              });
+            }}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Download Confirmation PDF
           </Button>
         </div>
       </div>

@@ -25,6 +25,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '@/components/ui/command';
 
 const COLUMN_CONFIG = [
   { key: 'event', label: 'Event' },
@@ -225,10 +227,21 @@ export default function CircuitTransfersManager() {
   const [isFetchingRate, setIsFetchingRate] = useState(false);
 
   // Form state for only editable fields
-  const [form, setForm] = useState<Partial<CircuitTransferFormData>>({});
+  const DEFAULT_FORM_VALUES: Partial<CircuitTransferFormData> = {
+    active: true,
+    utilisation_percent: 75,
+    markup_percent: 60,
+  };
+  const [form, setForm] = useState<Partial<CircuitTransferFormData>>(DEFAULT_FORM_VALUES);
 
   // Add state for validation errors
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // Add popover open state and search for event and hotel comboboxes
+  const [eventPopoverOpen, setEventPopoverOpen] = useState(false);
+  const [eventSearch, setEventSearch] = useState('');
+  const [hotelPopoverOpen, setHotelPopoverOpen] = useState(false);
+  const [hotelSearch, setHotelSearch] = useState('');
 
   // Fetch events, hotels, and circuit transfers
   const { data: events = [] } = useQuery({
@@ -354,7 +367,7 @@ export default function CircuitTransfersManager() {
   };
   const handleCreate = () => {
     setEditingTransfer(null);
-    setForm({ markup_percent: 60 });
+    setForm({ ...DEFAULT_FORM_VALUES });
     setDrawerOpen(true);
   };
   const handleDelete = (id: string) => {
@@ -532,7 +545,10 @@ export default function CircuitTransfersManager() {
     switch (key) {
       case 'event': return events.find(e => e.id === tr.event_id)?.name || '';
       case 'hotel': return hotels.find(h => h.id === tr.hotel_id)?.name || '';
-      case 'transfer_type': return tr.transfer_type;
+      case 'transfer_type':
+        if (tr.transfer_type === 'shared_coach') return 'Shared Coach';
+        if (tr.transfer_type === 'shared_mpv') return 'Shared MPV';
+        return tr.transfer_type;
       case 'used': return tr.used;
       case 'coach_capacity': return tr.coach_capacity;
       case 'coaches_required': return tr.coaches_required;
@@ -1005,31 +1021,83 @@ export default function CircuitTransfersManager() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="event_id">Event *</Label>
-                    <Select value={form.event_id || ''} onValueChange={(v: string) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, event_id: v }))}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Select event" /></SelectTrigger>
-                      <SelectContent>
-                        {events.map(evt => <SelectItem key={evt.id} value={evt.id}>{evt.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={eventPopoverOpen} onOpenChange={setEventPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={eventPopoverOpen}
+                          className="w-full justify-between h-9"
+                        >
+                          {events.find(e => e.id === form.event_id)?.name || 'Select event'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command>
+                          <CommandInput placeholder="Search events..." value={eventSearch} onValueChange={setEventSearch} />
+                          <CommandList>
+                            <CommandEmpty>No events found.</CommandEmpty>
+                            {events.filter(e => !eventSearch || e.name.toLowerCase().includes(eventSearch.toLowerCase())).map(event => (
+                              <CommandItem
+                                key={event.id}
+                                value={event.name}
+                                onSelect={() => {
+                                  setForm(f => ({ ...f, event_id: event.id }));
+                                  setEventPopoverOpen(false);
+                                }}
+                              >
+                                {event.name}
+                              </CommandItem>
+                            ))}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     {errors.event_id && <div className="text-destructive text-xs mt-1">{errors.event_id}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="hotel_id">Hotel *</Label>
-                    <Select value={form.hotel_id || ''} onValueChange={(v: string) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, hotel_id: v }))}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Select hotel" /></SelectTrigger>
-                      <SelectContent>
-                        {hotels.map(hotel => <SelectItem key={hotel.id} value={hotel.id}>{hotel.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={hotelPopoverOpen} onOpenChange={setHotelPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={hotelPopoverOpen}
+                          className="w-full justify-between h-9"
+                        >
+                          {hotels.find(h => h.id === form.hotel_id)?.name || 'Select hotel'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command>
+                          <CommandInput placeholder="Search hotels..." value={hotelSearch} onValueChange={setHotelSearch} />
+                          <CommandList>
+                            <CommandEmpty>No hotels found.</CommandEmpty>
+                            {hotels.filter(h => !hotelSearch || h.name.toLowerCase().includes(hotelSearch.toLowerCase())).map(hotel => (
+                              <CommandItem
+                                key={hotel.id}
+                                value={hotel.name}
+                                onSelect={() => {
+                                  setForm(f => ({ ...f, hotel_id: hotel.id }));
+                                  setHotelPopoverOpen(false);
+                                }}
+                              >
+                                {hotel.name}
+                              </CommandItem>
+                            ))}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     {errors.hotel_id && <div className="text-destructive text-xs mt-1">{errors.hotel_id}</div>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="transfer_type">Transfer Type *</Label>
-                    <Select value={form.transfer_type ?? 'coach'} onValueChange={(v: TransferType) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, transfer_type: v }))}>
+                    <Select value={form.transfer_type ?? 'shared_coach'} onValueChange={(v: string) => setForm((f: Partial<CircuitTransferFormData>) => ({ ...f, transfer_type: v }))}>
                       <SelectTrigger className="h-9"><SelectValue placeholder="Select type" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="coach">Coach</SelectItem>
-                        <SelectItem value="mpv">MPV</SelectItem>
+                        <SelectItem value="shared_coach">Shared Coach</SelectItem>
+                        <SelectItem value="shared_mpv">Shared MPV</SelectItem>
                       </SelectContent>
                     </Select>
                     {errors.transfer_type && <div className="text-destructive text-xs mt-1">{errors.transfer_type}</div>}

@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem } from '@/components/ui/command';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { VenueForm } from '@/components/forms/VenueForm';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext, PaginationEllipsis } from '@/components/ui/pagination';
 
 export function VenuesManager() {
   const queryClient = useQueryClient();
@@ -152,6 +153,18 @@ export function VenuesManager() {
     return 0;
   });
 
+  // Pagination state
+  const [venuePage, setVenuePage] = useState(1);
+  const venuesPerPage = 10;
+  const venueTotalPages = Math.max(1, Math.ceil(sortedVenues.length / venuesPerPage));
+  useEffect(() => { if (venuePage > venueTotalPages) setVenuePage(1); }, [venueTotalPages]);
+  const paginatedVenues = sortedVenues.slice((venuePage - 1) * venuesPerPage, venuePage * venuesPerPage);
+
+  const [categoryPage, setCategoryPage] = useState(1);
+  const categoriesPerPage = 10;
+  const categoryTotalPages = Math.max(1, Math.ceil(sortedCategories.length / categoriesPerPage));
+  useEffect(() => { if (categoryPage > categoryTotalPages) setCategoryPage(1); }, [categoryTotalPages]);
+  const paginatedCategories = sortedCategories.slice((categoryPage - 1) * categoriesPerPage, categoryPage * categoriesPerPage);
 
 
   // Ticket Category Drawer Form
@@ -362,27 +375,15 @@ export function VenuesManager() {
                       )}
                     </span>
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => {
-                    setVenueSortKey('city');
-                    setVenueSortDir(venueSortKey === 'city' && venueSortDir === 'asc' ? 'desc' : 'asc');
-                  }}>
-                    <span className="inline-flex items-center gap-1">
-                      City
-                      {venueSortKey === 'city' ? (
-                        venueSortDir === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
-                      )}
-                    </span>
-                  </TableHead>
+
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedVenues.map(venue => (
+                {paginatedVenues.map(venue => (
                   <TableRow key={venue.id} className={selectedVenue?.id === venue.id ? 'bg-muted' : ''}>
                     <TableCell onClick={() => setSelectedVenue(venue)} className="cursor-pointer font-medium">{venue.name}</TableCell>
-                    <TableCell>{venue.city || '-'}</TableCell>
+
                     <TableCell className="text-right">
                       <Button size="icon" variant="ghost" onClick={() => { setEditingVenue(venue); setVenueDrawerOpen(true); }}><Edit className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => setConfirmDeleteVenue(venue)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
@@ -393,6 +394,21 @@ export function VenuesManager() {
             </Table>
           </CardContent>
         </Card>
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious onClick={() => setVenuePage(p => Math.max(1, p - 1))} />
+            </PaginationItem>
+            {Array.from({ length: venueTotalPages }, (_, i) => (
+              <PaginationItem key={i}>
+                <PaginationLink isActive={venuePage === i + 1} onClick={() => setVenuePage(i + 1)}>{i + 1}</PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext onClick={() => setVenuePage(p => Math.min(venueTotalPages, p + 1))} />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       </div>
       {/* Ticket Categories Table */}
       <div className="flex-1">
@@ -469,7 +485,7 @@ export function VenuesManager() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedCategories.map(cat => (
+                {paginatedCategories.map(cat => (
                   <TableRow key={cat.id}>
                     <TableCell>{cat.category_name}</TableCell>
                     {!selectedVenue && <TableCell>{venues.find(v => v.id === cat.venue_id)?.name || '-'}</TableCell>}
@@ -537,6 +553,21 @@ export function VenuesManager() {
             </Table>
           </CardContent>
         </Card>
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious onClick={() => setCategoryPage(p => Math.max(1, p - 1))} />
+            </PaginationItem>
+            {Array.from({ length: categoryTotalPages }, (_, i) => (
+              <PaginationItem key={i}>
+                <PaginationLink isActive={categoryPage === i + 1} onClick={() => setCategoryPage(i + 1)}>{i + 1}</PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext onClick={() => setCategoryPage(p => Math.min(categoryTotalPages, p + 1))} />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       </div>
       {/* Venue Form */}
       <VenueForm

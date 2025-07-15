@@ -83,6 +83,7 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
   const [activeTab, setActiveTab] = useState('travelers');
   const [isCreatingBooking, setIsCreatingBooking] = useState(false);
   const [existingBooking, setExistingBooking] = useState<any>(null);
+  const [bookingType, setBookingType] = useState<'actual' | 'provisional'>('actual');
 
   const form = useForm({
     resolver: zodResolver(createBookingSchema),
@@ -322,6 +323,77 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
     // Call the async function to reset form with fetched data
     resetFormWithQuoteData();
   }, [quote]);
+
+  // Watch for status changes and adjust payments if provisional
+  useEffect(() => {
+    if (!quote) return;
+    if (bookingType === 'provisional' && form.watch('useOriginalPaymentSchedule')) {
+      // Calculate the total and split
+      const total = Number(quote.totalPrice || quote.total_price) || 0;
+      const deposit = 100;
+      const remaining = Math.max(0, total - deposit);
+      const split = Number((remaining / 3).toFixed(2));
+      // Adjust last payment for rounding
+      const payment1 = split;
+      const payment2 = split;
+      const payment3 = Number((remaining - payment1 - payment2).toFixed(2));
+      const origPayments = [
+        {
+          paymentType: 'deposit' as 'deposit',
+          amount: Number(deposit.toFixed(2)),
+          dueDate: String(quote.paymentDepositDate || quote.payment_deposit_date || format(new Date(), 'yyyy-MM-dd')),
+          notes: 'Deposit payment',
+        },
+        {
+          paymentType: 'second_payment' as 'second_payment',
+          amount: Number(payment1.toFixed(2)),
+          dueDate: String(quote.paymentSecondPaymentDate || quote.payment_second_payment_date || ''),
+          notes: 'Second payment',
+        },
+        {
+          paymentType: 'final_payment' as 'final_payment',
+          amount: Number(payment2.toFixed(2)),
+          dueDate: String(quote.paymentFinalPaymentDate || quote.payment_final_payment_date || ''),
+          notes: 'Final payment',
+        },
+        {
+          paymentType: 'additional' as 'additional',
+          amount: Number(payment3.toFixed(2)),
+          dueDate: String(format(addDays(new Date(), 120), 'yyyy-MM-dd')),
+          notes: 'Provisional payment',
+        },
+      ];
+      form.setValue('adjustedPayments', origPayments);
+      form.setValue('useOriginalPaymentSchedule', false);
+    } else if (bookingType === 'actual') {
+      // Reset to original schedule with exactly 3 payments
+      const deposit = Number(quote.paymentDeposit || quote.payment_deposit) || 0;
+      const second = Number(quote.paymentSecondPayment || quote.payment_second_payment) || 0;
+      const final = Number(quote.paymentFinalPayment || quote.payment_final_payment) || 0;
+      const origPayments = [
+        {
+          paymentType: 'deposit' as 'deposit',
+          amount: Number(deposit.toFixed(2)),
+          dueDate: String(quote.paymentDepositDate || quote.payment_deposit_date || format(new Date(), 'yyyy-MM-dd')),
+          notes: 'Deposit payment',
+        },
+        {
+          paymentType: 'second_payment' as 'second_payment',
+          amount: Number(second.toFixed(2)),
+          dueDate: String(quote.paymentSecondPaymentDate || quote.payment_second_payment_date || ''),
+          notes: 'Second payment',
+        },
+        {
+          paymentType: 'final_payment' as 'final_payment',
+          amount: Number(final.toFixed(2)),
+          dueDate: String(quote.paymentFinalPaymentDate || quote.payment_final_payment_date || ''),
+          notes: 'Final payment',
+        },
+      ];
+      form.setValue('adjustedPayments', origPayments);
+      form.setValue('useOriginalPaymentSchedule', true);
+    }
+  }, [bookingType, quote]);
 
   // Handle form submission to create booking
   const handleSubmit = async (data: CreateBookingFormData) => {
@@ -748,6 +820,19 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
                   <CreditCard className="h-5 w-5" />
                   Payment Information
                 </CardTitle>
+                {/* Status Dropdown */}
+                <div className="mt-4 flex items-center gap-2">
+                  <Label htmlFor="bookingType">Booking Type</Label>
+                  <Select value={bookingType} onValueChange={v => setBookingType(v as 'actual' | 'provisional')}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Select booking type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="actual">Actual (Confirmed)</SelectItem>
+                      <SelectItem value="provisional">Provisional</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Deposit Payment */}
@@ -767,8 +852,13 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
                 {/* Payment Schedule */}
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2">
-                    <Switch id="useOriginalSchedule" checked={form.watch('useOriginalPaymentSchedule')} onCheckedChange={(checked) => form.setValue('useOriginalPaymentSchedule', checked)} />
+                    <Switch id="useOriginalSchedule" checked={form.watch('useOriginalPaymentSchedule')} onCheckedChange={(checked) => form.setValue('useOriginalPaymentSchedule', checked)}
+                      disabled={bookingType === 'provisional'}
+                    />
                     <Label htmlFor="useOriginalSchedule">Use original payment schedule from quote</Label>
+                    {bookingType === 'provisional' && (
+                      <span className="text-xs text-muted-foreground ml-2">Provisional bookings require a £100 deposit and custom payment schedule.</span>
+                    )}
                   </div>
                   {!form.watch('useOriginalPaymentSchedule') && (
                     <div className="space-y-4">
@@ -782,7 +872,12 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
                             notes: 'Additional payment' 
                           };
                           form.setValue('adjustedPayments', [...form.getValues('adjustedPayments'), newPayment]);
-                        }} className="flex items-center gap-2">
+                        }} className="flex items-center gap-2"
+                          disabled={
+                            (bookingType === 'actual' && form.watch('adjustedPayments').length >= 3) ||
+                            (bookingType === 'provisional' && form.watch('adjustedPayments').length >= 4)
+                          }
+                        >
                           <Plus className="h-4 w-4" /> Add Payment
                         </Button>
                       </div>
@@ -790,7 +885,12 @@ export default function CreateBookingFromQuoteV2({ quote: propQuote }: { quote?:
                         <div key={index} className="space-y-4 p-4 border rounded-lg">
                           <div className="flex items-center justify-between">
                             <h5 className="font-medium">Payment {index + 1}</h5>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => form.setValue('adjustedPayments', form.getValues('adjustedPayments').filter((_: any, i: number) => i !== index))} className="text-destructive">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => form.setValue('adjustedPayments', form.getValues('adjustedPayments').filter((_: any, i: number) => i !== index))} className="text-destructive"
+                              disabled={
+                                (bookingType === 'actual' && form.watch('adjustedPayments').length <= 3) ||
+                                (bookingType === 'provisional' && form.watch('adjustedPayments').length <= 4)
+                              }
+                            >
                               <Minus className="h-4 w-4" />
                             </Button>
                           </div>

@@ -47,7 +47,7 @@ import {
   BaggageClaim,
   CreditCard
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -346,8 +346,9 @@ function roundUpHundredMinusTwo(n: number) {
           return sum + transferPrice;
         }, 0)
       : 0;
-    const airportTransfersTotal = (components.airportTransfers && components.airportTransfers.length > 0)
-      ? components.airportTransfers.reduce((sum: number, a: any) => {
+    const safeAirportTransfers = Array.isArray(components.airportTransfers) ? components.airportTransfers : [];
+    const airportTransfersTotal = (safeAirportTransfers.length > 0)
+      ? safeAirportTransfers.reduce((sum: number, a: any) => {
           const directionMultiplier = a.transferDirection === 'both' ? 2 : 1;
           const transferPrice = (a.price || 0) * (a.quantity || 0) * directionMultiplier;
           return sum + transferPrice;
@@ -501,12 +502,12 @@ function roundUpHundredMinusTwo(n: number) {
             <div className="flex justify-between text-sm">
               <span className="flex items-center gap-2">
                 Airport Transfers 
-                {components.airportTransfers?.length > 0 && (
+                {safeAirportTransfers.length > 0 && (
                   <Badge variant="secondary" className="text-xs">
-                    x {components.airportTransfers.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0)}
+                    x {safeAirportTransfers.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0)}
                   </Badge>
                 )}
-                {components.airportTransfers?.length === 0 && (
+                {safeAirportTransfers.length === 0 && (
                   <Badge variant="outline" className="text-xs text-muted-foreground">
                     Excluded
                   </Badge>
@@ -638,6 +639,20 @@ export function PackageIntakeTest() {
     }
   }, [JSON.stringify(form.getValues('components.hotels'))]);
 
+  // Migration step: ensure all airport transfers in form state have hotel_id
+  useEffect(() => {
+    const transfers = form.getValues('components.airportTransfers') || [];
+    const selectedRooms = form.getValues('components.hotels') || [];
+    const selectedHotelId = selectedRooms.length === 1 ? selectedRooms[0].hotelId : null;
+    const patchedTransfers = transfers.map(t => ({
+      ...t,
+      hotel_id: t.hotel_id || selectedHotelId
+    }));
+    if (JSON.stringify(transfers) !== JSON.stringify(patchedTransfers)) {
+      form.setValue('components.airportTransfers', patchedTransfers);
+    }
+  }, []);
+
   // Calculate progress percentage
   const progressPercentage = ((currentStep + 1) / totalSteps) * 100;
 
@@ -659,7 +674,28 @@ export function PackageIntakeTest() {
     if (fieldsToValidate.length > 0) {
       isValid = await form.trigger(fieldsToValidate as any);
     }
-    
+
+    // Custom validation for hotel/transfer compatibility (on the components step)
+    if (currentStep === 4) {
+      const hotelIds = form.getValues('components.hotels').map((h: any) => String(h.hotelId)).filter(Boolean);
+      const circuitTransfers = form.getValues('components.circuitTransfers') || [];
+      const airportTransfers = form.getValues('components.airportTransfers') || [];
+      const allTransfers = [...circuitTransfers, ...airportTransfers];
+      console.log('Hotel IDs:', hotelIds);
+      console.log('All transfers:', allTransfers);
+      // Only block if there are transfers and any of them do not match a selected hotel room
+      if (allTransfers.length > 0) {
+        const invalidTransfers = allTransfers.filter((t: any) => {
+          const transferHotelId = (t.hotelId || t.hotel_id || '').toString().trim();
+          return !hotelIds.map(id => id.toString().trim()).includes(transferHotelId);
+        });
+        if (invalidTransfers.length > 0) {
+          toast.error('One or more selected transfers do not match the selected hotel rooms. Please review your selections.');
+          return; // Prevent advancing
+        }
+      }
+    }
+
     if (isValid && currentStep < totalSteps - 1) {
       setCurrentStep(currentStep + 1);
     }
@@ -1243,47 +1279,28 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
   finalPaymentDateObj.setDate(1); // Set to 1st of the month
   let finalPaymentDate = finalPaymentDateObj.toISOString().slice(0, 10);
   
-  // Check if we're getting close to the event date and adjust if necessary
+  // Handler for user changing payment dates
+  const handleSecondPaymentDateChange = (date: Date | null) => {
+    const newDate = date ? date.toISOString().slice(0, 10) : form.getValues('payments.secondPaymentDate');
+    form.setValue('payments.secondPaymentDate', newDate);
+  };
+  const handleFinalPaymentDateChange = (date: Date | null) => {
+    const newDate = date ? date.toISOString().slice(0, 10) : form.getValues('payments.finalPaymentDate');
+    form.setValue('payments.finalPaymentDate', newDate);
+  };
+
   useEffect(() => {
-    let adjustedSecondPaymentDate = secondPaymentDate;
-    let adjustedFinalPaymentDate = finalPaymentDate;
-  if (selectedEvent?.startDate) {
-    const eventDate = new Date(selectedEvent.startDate);
-    // If final payment would be after the event, move it to 7 days before the event
-    if (finalPaymentDateObj > eventDate) {
-      const adjustedFinalPaymentDateObj = new Date(eventDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-      adjustedFinalPaymentDateObj.setDate(1); // Still try to keep it on the 1st if possible
-        adjustedFinalPaymentDate = adjustedFinalPaymentDateObj.toISOString().slice(0, 10);
-    }
-    // If we're already within 4 months of the event, compress the payment schedule
-    const monthsUntilEvent = (eventDate.getTime() - today.getTime()) / (30 * 24 * 60 * 60 * 1000);
-    if (monthsUntilEvent < 4) {
-      const adjustedSecondPaymentDateObj = new Date(today.getTime() + (monthsUntilEvent - 0.25) * 30 * 24 * 60 * 60 * 1000 / 2);
-      adjustedSecondPaymentDateObj.setDate(1); // Set to 1st of the month
-        adjustedSecondPaymentDate = adjustedSecondPaymentDateObj.toISOString().slice(0, 10);
-      const adjustedFinalPaymentDateObj = new Date(eventDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-      adjustedFinalPaymentDateObj.setDate(1); // Set to 1st of the month
-        adjustedFinalPaymentDate = adjustedFinalPaymentDateObj.toISOString().slice(0, 10);
-      }
-    }
-    // Only set payment dates if not already set by the user
-    const currentSecondPaymentDate = form.getValues('payments.secondPaymentDate');
-    const currentFinalPaymentDate = form.getValues('payments.finalPaymentDate');
-    form.setValue('payments.total', paymentTotal);
-    form.setValue('payments.deposit', paymentDeposit);
-    form.setValue('payments.secondPayment', paymentSecondPayment);
-    form.setValue('payments.finalPayment', paymentFinalPayment);
-    form.setValue('payments.depositDate', undefined); // Upon acceptance
+    const currentSecondPaymentDate = form.watch('payments.secondPaymentDate');
+    const currentFinalPaymentDate = form.watch('payments.finalPaymentDate');
     if (!currentSecondPaymentDate) {
-      form.setValue('payments.secondPaymentDate', adjustedSecondPaymentDate);
+      form.setValue('payments.secondPaymentDate', secondPaymentDate);
     }
     if (!currentFinalPaymentDate) {
-      form.setValue('payments.finalPaymentDate', adjustedFinalPaymentDate);
-  }
-  // Also update the summary total price
-  form.setValue('summary.totalPrice', roundedTotal);
-    // Update the converted price if currency is not GBP (handled elsewhere)
-  }, [roundedTotal, convertedTotal, paymentTotal, paymentDeposit, paymentSecondPayment, paymentFinalPayment, selectedEvent?.startDate]);
+      form.setValue('payments.finalPaymentDate', finalPaymentDate);
+    }
+    // Only run on mount!
+    // eslint-disable-next-line
+  }, []);
 
   // --- UI ---
   return (
@@ -1375,6 +1392,27 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
                 {components.hotels.map((h: any, i: number) => {
                   const hotel = getHotel(h.hotelId);
                   const room = getRoom(h.roomId);
+                  // Price breakdown logic (matches HotelRoomsTab)
+                  let priceBreakdown = null;
+                  if (showPrices && room) {
+                    const checkIn = h.checkIn || room.check_in;
+                    const checkOut = h.checkOut || room.check_out;
+                    const nights = (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24);
+                    const baseNights = (new Date(room.check_out).getTime() - new Date(room.check_in).getTime()) / (1000 * 60 * 60 * 24);
+                    const extraNights = Math.max(0, nights - baseNights);
+                    const basePrice = (room.total_price_per_stay_gbp_with_markup || room.total_price_per_stay_gbp || 0) * (h.quantity || 1);
+                    const extraNightPrice = (room.extra_night_price_gbp || 0) * (h.quantity || 1);
+                    const total = basePrice + extraNights * extraNightPrice;
+                    priceBreakdown = (
+                      <div className="text-xs text-[var(--color-muted-foreground)] ml-2">
+                        Base stay ({baseNights} night{baseNights !== 1 ? 's' : ''}): <span className="font-semibold">£{basePrice.toLocaleString()}</span>
+                        {extraNights > 0 && (
+                          <span> • Extra nights ({extraNights}): <span className="font-semibold">£{(extraNightPrice * extraNights).toLocaleString()}</span></span>
+                        )}
+                        <span> • <span className="font-bold text-[var(--color-primary)]">Total: £{total.toLocaleString()}</span></span>
+                      </div>
+                    );
+                  }
                   return (
                     <li key={i} className="text-sm">
                       <span className="font-medium">{hotel?.name || 'Hotel'}</span>
@@ -1384,7 +1422,7 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
                         <Calendar className="inline h-3 w-3" /> {h.checkIn} to {h.checkOut}
                       </span>
                       {hotel?.city && <> • {hotel.city}, {hotel.country}</>}
-                      {!showPrices && <span className="ml-2 text-muted-foreground">(Included)</span>}
+                      {showPrices ? priceBreakdown : <span className="ml-2 text-muted-foreground">(Included)</span>}
                     </li>
                   );
                 })}
@@ -2134,10 +2172,7 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
               <div className="flex items-center gap-2">
                 <DatePicker
                   selected={data.payments.secondPaymentDate ? new Date(data.payments.secondPaymentDate) : null}
-                  onChange={(date) => {
-                    const newDate = date ? date.toISOString().slice(0, 10) : data.payments.secondPaymentDate;
-                    form.setValue('payments.secondPaymentDate', newDate);
-                  }}
+                  onChange={handleSecondPaymentDateChange}
                   dateFormat="yyyy-MM-dd"
                   minDate={new Date()}
                   className="w-full text-xs border rounded px-2 py-1"
@@ -2160,10 +2195,7 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
               <div className="flex items-center gap-2">
                 <DatePicker
                   selected={data.payments.finalPaymentDate ? new Date(data.payments.finalPaymentDate) : null}
-                  onChange={(date) => {
-                    const newDate = date ? date.toISOString().slice(0, 10) : data.payments.finalPaymentDate;
-                    form.setValue('payments.finalPaymentDate', newDate);
-                  }}
+                  onChange={handleFinalPaymentDateChange}
                   dateFormat="yyyy-MM-dd"
                   minDate={new Date()}
                   className="w-full text-xs border rounded px-2 py-1"

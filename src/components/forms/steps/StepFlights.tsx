@@ -238,15 +238,30 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
   // Fetch database flights when source changes to database
   useEffect(() => {
     if (source === 'database' && eventId) {
-      fetchDatabaseFlights();
+      fetchDatabaseFlights().then(() => {
+        // After fetching, rehydrate selectedFlightIds from value
+        if (value && value.length > 0) {
+          setSelectedFlightIds(value.map(flight => flight.id));
+        }
+      });
     }
   }, [source, eventId]);
 
-  // Initialize selectedFlightIds from existing value when component mounts
+  // Fetch API flights when source changes to api (if you have such logic)
+  // (Assume similar logic for API fetch, e.g. after search)
+  useEffect(() => {
+    if (source === 'api' && apiFlights.length > 0) {
+      // After fetching, rehydrate selectedFlightIds from value
+      if (value && value.length > 0) {
+        setSelectedFlightIds(value.map(flight => flight.id));
+      }
+    }
+  }, [source, apiFlights.length, value]);
+
+  // Always hydrate selectedFlightIds from value on mount and when value changes
   useEffect(() => {
     if (value && value.length > 0) {
-      const flightIds = value.map(flight => flight.id);
-      setSelectedFlightIds(flightIds);
+      setSelectedFlightIds(value.map(flight => flight.id));
     } else {
       setSelectedFlightIds([]);
     }

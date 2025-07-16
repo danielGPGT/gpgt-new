@@ -1390,6 +1390,8 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                 onValueChange={roomId => {
                   const newRoom = getRoom(roomId);
                   if (!newRoom) return;
+                  const newMax = newRoom.is_provisional ? 1 : (newRoom.quantity_available || 1);
+                  const clampedQuantity = Math.max(1, Math.min(sel.quantity || 1, newMax));
                   const newRooms = [...selectedRooms];
                   newRooms[idx] = {
                     ...sel,
@@ -1397,6 +1399,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                     roomId: newRoom.id,
                     checkIn: newRoom.check_in,
                     checkOut: newRoom.check_out,
+                    quantity: clampedQuantity,
                   };
                   setValue('components.hotels', newRooms);
                 }}

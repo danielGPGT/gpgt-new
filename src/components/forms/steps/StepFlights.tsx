@@ -1092,7 +1092,7 @@ export function StepFlights({ adults, eventId, value, source, onSourceChange, on
                               {/* Return Flight Badge */}
                               <div className="flex items-center gap-2">
                                 <Badge variant="default" className="bg-primary/10 text-primary">
-                                  Return Flight
+                                  Select this flight
                                 </Badge>
                               </div>
                               

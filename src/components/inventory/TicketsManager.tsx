@@ -32,6 +32,8 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from '@/components/ui/pagination';
+import { Drawer as UIDrawer, DrawerContent as UIDrawerContent, DrawerHeader as UIDrawerHeader, DrawerTitle as UIDrawerTitle, DrawerDescription as UIDrawerDescription, DrawerFooter as UIDrawerFooter } from '@/components/ui/drawer';
+import { CategoryFormDrawer } from './VenuesManager';
 
 // Utility to calculate price with markup
 const calcPriceWithMarkup = (price: number, markup: number) =>
@@ -1437,6 +1439,7 @@ export function TicketsManager() {
             onFormReady={setFormRef}
             isConvertingCurrency={isConvertingCurrency}
             setIsConvertingCurrency={setIsConvertingCurrency}
+            venues={venues}
           />
           <DrawerFooter>
             <div className="flex justify-between items-center">
@@ -1603,7 +1606,8 @@ function TicketFormDrawer({
   isLoading, 
   onFormReady,
   isConvertingCurrency,
-  setIsConvertingCurrency
+  setIsConvertingCurrency,
+  venues
 }: {
   ticket?: Ticket;
   events: Event[];
@@ -1614,6 +1618,7 @@ function TicketFormDrawer({
   onFormReady: (form: any) => void;
   isConvertingCurrency: boolean;
   setIsConvertingCurrency: (loading: boolean) => void;
+  venues: any[];
 }) {
   const form = useForm<TicketFormData>({
     resolver: zodResolver(ticketFormSchema),
@@ -1752,6 +1757,32 @@ function TicketFormDrawer({
     onSubmit(submitData);
   };
 
+  const [categoryDrawerOpen, setCategoryDrawerOpen] = React.useState(false);
+  const [categoryLoading, setCategoryLoading] = React.useState(false);
+  const [localCategories, setLocalCategories] = React.useState<TicketCategory[]>(ticketCategories);
+
+  // When ticketCategories prop changes, update localCategories
+  React.useEffect(() => {
+    setLocalCategories(ticketCategories);
+  }, [ticketCategories]);
+
+  // Handler for adding a new category
+  const handleAddCategory = async (data: any) => {
+    setCategoryLoading(true);
+    try {
+      // Assume InventoryService.createTicketCategory exists and returns the new category
+      const newCat = await InventoryService.createTicketCategory(data);
+      setLocalCategories((prev: TicketCategory[]) => [...prev, newCat]);
+      form.setValue('ticket_category_id', newCat.id);
+      setCategoryDrawerOpen(false);
+    } catch (err) {
+      // Handle error (toast, etc.)
+      toast.error('Failed to create category');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
   return (
     <>
       <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -1808,7 +1839,12 @@ function TicketFormDrawer({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="ticket_category_id" className="text-sm font-medium text-muted-foreground">Ticket Category *</Label>
+                <Label htmlFor="ticket_category_id" className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  Ticket Category *
+                  <Button size="icon" variant="ghost" type="button" className="ml-1" onClick={() => setCategoryDrawerOpen(true)}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Label>
                 <Controller
                   name="ticket_category_id"
                   control={form.control}
@@ -1822,7 +1858,7 @@ function TicketFormDrawer({
                         <SelectValue placeholder={!selectedEventId ? "Select event first" : "Select category"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableTicketCategories.map(category => (
+                        {localCategories.filter(cat => !selectedEvent?.venue_id || cat.venue_id === selectedEvent.venue_id).map(category => (
                           <SelectItem key={category.id} value={category.id}>{category.category_name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -1832,6 +1868,22 @@ function TicketFormDrawer({
                 {form.formState.errors.ticket_category_id && (
                   <p className="text-xs text-destructive mt-1">{form.formState.errors.ticket_category_id.message}</p>
                 )}
+                {/* Category Drawer */}
+                <UIDrawer open={categoryDrawerOpen} onOpenChange={setCategoryDrawerOpen} direction="right">
+                  <UIDrawerContent className="!w-[500px] max-w-none">
+                    <UIDrawerHeader>
+                      <UIDrawerTitle>Add New Ticket Category</UIDrawerTitle>
+                      <UIDrawerDescription>Create a new ticket category for this venue</UIDrawerDescription>
+                    </UIDrawerHeader>
+                    <CategoryFormDrawer
+                      category={undefined}
+                      onSubmit={handleAddCategory}
+                      onCancel={() => setCategoryDrawerOpen(false)}
+                      isLoading={categoryLoading}
+                      venues={venues}
+                    />
+                  </UIDrawerContent>
+                </UIDrawer>
               </div>
 
               <div className="space-y-1.5">

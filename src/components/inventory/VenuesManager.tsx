@@ -17,6 +17,203 @@ import { Command, CommandInput, CommandList, CommandItem } from '@/components/ui
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { VenueForm } from '@/components/forms/VenueForm';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext, PaginationEllipsis } from '@/components/ui/pagination';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+
+export function CategoryFormDrawer({ category, onSubmit, onCancel, isLoading, venues = [] }: { category?: TicketCategory; onSubmit: (data: TicketCategoryInsert | TicketCategoryUpdate) => void; onCancel: () => void; isLoading: boolean; venues?: any[]; }) {
+    const [formData, setFormData] = useState<TicketCategoryInsert | TicketCategoryUpdate>({
+      venue_id: category?.venue_id || '',
+      category_name: category?.category_name || '',
+      category_type: category?.category_type || '',
+      sport_type: null,
+      description: category?.description ? (typeof category.description === 'string' ? category.description : JSON.stringify(category.description, null, 2)) : '',
+      ticket_delivery_days: category?.ticket_delivery_days || undefined,
+      media_files: category?.media_files || [],
+      options: category?.options || { video_wall: false, numbered_seating: false, covered_seating: false },
+    });
+    const [showMediaSelector, setShowMediaSelector] = useState(false);
+    const [selectedMedia, setSelectedMedia] = useState<any[]>(Array.isArray(formData.media_files) ? formData.media_files : []);
+    // Ensure options is always an object
+    let options: any = formData.options;
+    if (typeof options === 'string') {
+      try {
+        options = JSON.parse(options);
+      } catch {
+        options = {};
+      }
+    }
+    if (!options || typeof options !== 'object') options = {};
+    const [venuePopoverOpen, setVenuePopoverOpen] = useState(false);
+    const [venueSearch, setVenueSearch] = useState('');
+  const filteredVenues = venues.filter((v: any) => v.name.toLowerCase().includes(venueSearch.toLowerCase()));
+    return (
+      <form onSubmit={e => { e.preventDefault(); onSubmit({ ...formData, category_name: formData.category_name || '', media_files: selectedMedia, options, sport_type: null }); }} className="space-y-4 p-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2 col-span-2">
+            <Label htmlFor="venue_id">Venue *</Label>
+            <Popover open={venuePopoverOpen} onOpenChange={setVenuePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between"
+                  type="button"
+                  onClick={() => setVenuePopoverOpen((open) => !open)}
+                >
+                  {venues.find(v => v.id === formData.venue_id)?.name || 'Select venue'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0">
+                <Command>
+                  <CommandInput
+                    placeholder="Search venue..."
+                    value={venueSearch}
+                    onValueChange={setVenueSearch}
+                  />
+                  <CommandList>
+                    {filteredVenues.length === 0 ? (
+                      <div className="p-2 text-muted-foreground">No venues found</div>
+                    ) : (
+                      filteredVenues.map(v => (
+                        <CommandItem
+                          key={v.id}
+                          value={v.id}
+                          onSelect={() => {
+                            setFormData(prev => ({ ...prev, venue_id: v.id }));
+                            setVenuePopoverOpen(false);
+                          }}
+                        >
+                          {v.name}
+                        </CommandItem>
+                      ))
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="space-y-2 col-span-2">
+            <Label htmlFor="category_name">Category Name *</Label>
+            <Input id="category_name" value={formData.category_name as string} onChange={e => setFormData(prev => ({ ...prev, category_name: e.target.value }))} required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="category_type">Category Type</Label>
+            <Select
+              value={formData.category_type as string || ''}
+              onValueChange={val => setFormData(prev => ({ ...prev, category_type: val }))}
+              required
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Grandstand">Grandstand</SelectItem>
+                <SelectItem value="VIP">VIP</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 col-span-2">
+            <Label htmlFor="description">Description (JSON or text)</Label>
+            <Textarea id="description" value={formData.description as string || ''} onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} placeholder="Description as text or JSON..." />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ticket_delivery_days">Ticket Delivery Days</Label>
+            <Input id="ticket_delivery_days" type="number" value={formData.ticket_delivery_days as number || ''} onChange={e => setFormData(prev => ({ ...prev, ticket_delivery_days: e.target.value ? parseInt(e.target.value) : undefined }))} />
+          </div>
+          <div className="space-y-2 col-span-2">
+            <Label>Options</Label>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={typeof options === 'object' && !!options.video_wall}
+                  onChange={e => setFormData(prev => ({ ...prev, options: { ...options, video_wall: e.target.checked } }))}
+                />
+                Video Wall
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={typeof options === 'object' && !!options.numbered_seating}
+                  onChange={e => setFormData(prev => ({ ...prev, options: { ...options, numbered_seating: e.target.checked } }))}
+                />
+                Numbered Seating
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={typeof options === 'object' && !!options.covered_seating}
+                  onChange={e => setFormData(prev => ({ ...prev, options: { ...options, covered_seating: e.target.checked } }))}
+                />
+                Covered Seating
+              </label>
+            </div>
+          </div>
+          <div className="space-y-2 col-span-2">
+            <Label>Media Files</Label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {selectedMedia.length > 0 ? (
+                selectedMedia.map((img: any) => (
+                  <div key={img.id} className="relative group w-24 h-24 border rounded overflow-hidden">
+                    <img src={img.thumbnail_url || img.image_url} alt={img.description || ''} className="object-cover w-full h-full" />
+                    <button
+                      type="button"
+                      className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                      onClick={() => setSelectedMedia(prev => prev.filter((i: any) => i.id !== img.id))}
+                      aria-label="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <span className="text-muted-foreground text-sm">No media selected</span>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowMediaSelector(true)}
+            >
+              {selectedMedia.length > 0 ? 'Edit Media' : 'Select Media'}
+            </Button>
+            <Dialog open={showMediaSelector} onOpenChange={setShowMediaSelector}>
+              <DialogContent className="!max-w-6xl">
+                <DialogHeader>
+                  <DialogTitle>Select Media Files</DialogTitle>
+                </DialogHeader>
+                <MediaLibrarySelector
+                  selectedItems={selectedMedia}
+                  onSelect={item => {
+                    setSelectedMedia(prev => {
+                      const exists = prev.find((img: any) => img.id === item.id);
+                      if (exists) {
+                        return prev.filter((img: any) => img.id !== item.id);
+                      } else {
+                        return [...prev, item];
+                      }
+                    });
+                  }}
+                  multiple={true}
+                />
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    onClick={() => setShowMediaSelector(false)}
+                  >
+                    Confirm Selection
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+        <DrawerFooter>
+          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button type="submit" disabled={isLoading}>{isLoading ? 'Saving...' : category ? 'Update Category' : 'Create Category'}</Button>
+        </DrawerFooter>
+      </form>
+    );
+  }
 
 export function VenuesManager() {
   const queryClient = useQueryClient();
@@ -166,183 +363,6 @@ export function VenuesManager() {
   useEffect(() => { if (categoryPage > categoryTotalPages) setCategoryPage(1); }, [categoryTotalPages]);
   const paginatedCategories = sortedCategories.slice((categoryPage - 1) * categoriesPerPage, categoryPage * categoriesPerPage);
 
-
-  // Ticket Category Drawer Form
-  function CategoryFormDrawer({ category, onSubmit, onCancel, isLoading }: { category?: TicketCategory; onSubmit: (data: TicketCategoryInsert | TicketCategoryUpdate) => void; onCancel: () => void; isLoading: boolean; }) {
-    const [formData, setFormData] = useState<TicketCategoryInsert | TicketCategoryUpdate>({
-      venue_id: category?.venue_id || '',
-      category_name: category?.category_name || '',
-      category_type: category?.category_type || '',
-      sport_type: null,
-      description: category?.description ? (typeof category.description === 'string' ? category.description : JSON.stringify(category.description, null, 2)) : '',
-      ticket_delivery_days: category?.ticket_delivery_days || undefined,
-      media_files: category?.media_files || [],
-      options: category?.options || { video_wall: false, numbered_seating: false, covered_seating: false },
-    });
-    const [showMediaSelector, setShowMediaSelector] = useState(false);
-    const [selectedMedia, setSelectedMedia] = useState<any[]>(Array.isArray(formData.media_files) ? formData.media_files : []);
-    // Ensure options is always an object
-    const options: any = typeof formData.options === 'string' ? JSON.parse(formData.options) : (formData.options || {});
-    const [venuePopoverOpen, setVenuePopoverOpen] = useState(false);
-    const [venueSearch, setVenueSearch] = useState('');
-    const filteredVenues = venues.filter(v => v.name.toLowerCase().includes(venueSearch.toLowerCase()));
-    return (
-      <form onSubmit={e => { e.preventDefault(); onSubmit({ ...formData, media_files: selectedMedia, options, sport_type: null }); }} className="space-y-4 p-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2 col-span-2">
-            <Label htmlFor="venue_id">Venue *</Label>
-            <Popover open={venuePopoverOpen} onOpenChange={setVenuePopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  className="w-full justify-between"
-                  type="button"
-                  onClick={() => setVenuePopoverOpen((open) => !open)}
-                >
-                  {venues.find(v => v.id === formData.venue_id)?.name || 'Select venue'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[400px] p-0">
-                <Command>
-                  <CommandInput
-                    placeholder="Search venue..."
-                    value={venueSearch}
-                    onValueChange={setVenueSearch}
-                  />
-                  <CommandList>
-                    {filteredVenues.length === 0 ? (
-                      <div className="p-2 text-muted-foreground">No venues found</div>
-                    ) : (
-                      filteredVenues.map(v => (
-                        <CommandItem
-                          key={v.id}
-                          value={v.id}
-                          onSelect={() => {
-                            setFormData(prev => ({ ...prev, venue_id: v.id }));
-                            setVenuePopoverOpen(false);
-                          }}
-                        >
-                          {v.name}
-                        </CommandItem>
-                      ))
-                    )}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="space-y-2 col-span-2">
-            <Label htmlFor="category_name">Category Name *</Label>
-            <Input id="category_name" value={formData.category_name as string} onChange={e => setFormData(prev => ({ ...prev, category_name: e.target.value }))} required />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="category_type">Category Type</Label>
-            <Input id="category_type" value={formData.category_type as string || ''} onChange={e => setFormData(prev => ({ ...prev, category_type: e.target.value }))} />
-          </div>
-          <div className="space-y-2 col-span-2">
-            <Label htmlFor="description">Description (JSON or text)</Label>
-            <Textarea id="description" value={formData.description as string || ''} onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} placeholder="Description as text or JSON..." />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ticket_delivery_days">Ticket Delivery Days</Label>
-            <Input id="ticket_delivery_days" type="number" value={formData.ticket_delivery_days as number || ''} onChange={e => setFormData(prev => ({ ...prev, ticket_delivery_days: e.target.value ? parseInt(e.target.value) : undefined }))} />
-          </div>
-          <div className="space-y-2 col-span-2">
-            <Label>Options</Label>
-            <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={!!options.video_wall}
-                  onChange={e => setFormData(prev => ({ ...prev, options: { ...options, video_wall: e.target.checked } }))}
-                />
-                Video Wall
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={!!options.numbered_seating}
-                  onChange={e => setFormData(prev => ({ ...prev, options: { ...options, numbered_seating: e.target.checked } }))}
-                />
-                Numbered Seating
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={!!options.covered_seating}
-                  onChange={e => setFormData(prev => ({ ...prev, options: { ...options, covered_seating: e.target.checked } }))}
-                />
-                Covered Seating
-              </label>
-            </div>
-          </div>
-          <div className="space-y-2 col-span-2">
-            <Label>Media Files</Label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {selectedMedia.length > 0 ? (
-                selectedMedia.map((img: any) => (
-                  <div key={img.id} className="relative group w-24 h-24 border rounded overflow-hidden">
-                    <img src={img.thumbnail_url || img.image_url} alt={img.description || ''} className="object-cover w-full h-full" />
-                    <button
-                      type="button"
-                      className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition"
-                      onClick={() => setSelectedMedia(prev => prev.filter((i: any) => i.id !== img.id))}
-                      aria-label="Remove image"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <span className="text-muted-foreground text-sm">No media selected</span>
-              )}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowMediaSelector(true)}
-            >
-              {selectedMedia.length > 0 ? 'Edit Media' : 'Select Media'}
-            </Button>
-            <Dialog open={showMediaSelector} onOpenChange={setShowMediaSelector}>
-              <DialogContent className="!max-w-6xl">
-                <DialogHeader>
-                  <DialogTitle>Select Media Files</DialogTitle>
-                </DialogHeader>
-                <MediaLibrarySelector
-                  selectedItems={selectedMedia}
-                  onSelect={item => {
-                    setSelectedMedia(prev => {
-                      const exists = prev.find((img: any) => img.id === item.id);
-                      if (exists) {
-                        return prev.filter((img: any) => img.id !== item.id);
-                      } else {
-                        return [...prev, item];
-                      }
-                    });
-                  }}
-                  multiple={true}
-                />
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    onClick={() => setShowMediaSelector(false)}
-                  >
-                    Confirm Selection
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-        <DrawerFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" disabled={isLoading}>{isLoading ? 'Saving...' : category ? 'Update Category' : 'Create Category'}</Button>
-        </DrawerFooter>
-      </form>
-    );
-  }
 
   return (
     <div className="flex gap-6">
@@ -595,6 +615,7 @@ export function VenuesManager() {
             }}
             onCancel={() => setCategoryDrawerOpen(false)}
             isLoading={createCategoryMutation.isPending || updateCategoryMutation.isPending}
+            venues={venues}
           />
         </DrawerContent>
       </Drawer>

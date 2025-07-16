@@ -675,7 +675,41 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
           <div className="flex flex-col items-end">
             <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)] bg-[var(--color-muted)]/40 px-3 py-1 rounded-lg font-medium">
               <Users className="h-4 w-4 mr-1" />
-              {adults} adult{adults !== 1 ? 's' : ''}
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="w-6 h-6 p-0"
+                onClick={() => setValue('travelers.adults', Math.max(1, adults - 1))}
+                disabled={adults <= 1}
+                aria-label="Decrease adults"
+              >
+                -
+              </Button>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={adults}
+                onChange={e => {
+                  const val = parseInt(e.target.value, 10);
+                  setValue('travelers.adults', Math.max(1, Math.min(20, isNaN(val) ? 1 : val)));
+                }}
+                className="w-10 text-center mx-1 font-bold h-6 px-1 py-0 text-xs"
+                aria-label="Number of adults"
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="w-6 h-6 p-0"
+                onClick={() => setValue('travelers.adults', Math.min(20, adults + 1))}
+                disabled={adults >= 20}
+                aria-label="Increase adults"
+              >
+                +
+              </Button>
+              adult{adults !== 1 ? 's' : ''}
             </div>
           </div>
         </div>
@@ -1059,6 +1093,28 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
   const { watch } = useFormContext();
   const selectedRooms = watch('components.hotels') || [];
 
+  // Auto-adjust hotel room quantities based on adults and max_people
+  useEffect(() => {
+    if (!hotelRooms.length || !selectedRooms.length) return;
+    // Only auto-adjust if all selected rooms are not provisional
+    const updatedRooms = selectedRooms.map((sel: any) => {
+      const room = hotelRooms.find((r: any) => r.id === sel.roomId);
+      if (!room || room.is_provisional) return sel;
+      const maxPeople = room.max_people || 1;
+      const autoQty = Math.max(1, Math.ceil(adults / maxPeople));
+      const clampedQty = Math.min(autoQty, room.quantity_available || 1);
+      // Only auto-adjust if user hasn't changed it (i.e., if it's 1 or matches previous auto value)
+      if (sel.quantity === 1 || sel.quantity === autoQty || sel.quantity === clampedQty) {
+        return { ...sel, quantity: clampedQty };
+      }
+      return sel;
+    });
+    // Only update if changed
+    if (JSON.stringify(updatedRooms) !== JSON.stringify(selectedRooms)) {
+      setValue('components.hotels', updatedRooms);
+    }
+  }, [adults, hotelRooms, selectedRooms, setValue]);
+
   useEffect(() => {
     async function fetchData() {
       console.log('[HOTEL_ROOMS_DEBUG] Starting fetchData...');
@@ -1127,7 +1183,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
   }
 
   // UI for each hotel room card
-  function RoomCard({ hotel, room, selected, onChange, showPrices }: any) {
+  function RoomCard({ hotel, room, selected, onChange, showPrices, idx }: any) {
     const [calendarKey, setCalendarKey] = useState(0);
 
     // Helper: Parse as local date (no UTC)
@@ -1180,6 +1236,9 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
     const basePrice = (room.total_price_per_stay_gbp_with_markup || room.total_price_per_stay_gbp || 0) * (selected.quantity || 1);
     const extraNightPrice = (room.extra_night_price_gbp || 0) * (selected.quantity || 1);
     const total = basePrice + extraNights * extraNightPrice;
+    // Calculate the max quantity for this room: can't exceed room.quantity_available, and total across all rooms can't exceed adults
+    const otherRoomsTotal = selectedRooms.reduce((sum: number, r: any, i: number) => i === idx ? sum : sum + (r.quantity || 0), 0);
+    const maxForThisRoom = room.is_provisional ? 1 : Math.max(1, Math.min(room.quantity_available || 1, adults - otherRoomsTotal));
     return (
       <Card className="mb-8 bg-[var(--color-card)]/95 py-0 border border-[var(--color-border)] shadow-lg rounded-2xl overflow-hidden min-h-[340px] h-full">
         <div className="grid grid-cols-1 md:grid-cols-12 h-full min-h-[340px]">
@@ -1293,7 +1352,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                   <Button 
                     size="sm" 
                     variant="outline" 
-                    onClick={() => onChange({ ...selected, quantity: Math.max(1, selected.quantity - 1) })} 
+                    onClick={() => onChange({ ...selected, quantity: Math.max(1, (selected.quantity || 1) - 1) })} 
                     disabled={selected.quantity <= 1 || room.is_provisional}
                   >
                     -
@@ -1301,14 +1360,12 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                   <Input 
                     type="number" 
                     min={1} 
-                    max={room.is_provisional ? 1 : (room.quantity_available || 1)} 
-                    value={room.is_provisional ? 1 : selected.quantity} 
+                    max={maxForThisRoom} 
+                    value={selected.quantity || 1} 
                     onChange={e => {
-                      if (room.is_provisional) return; // Don't allow changes for provisional rooms
-                      onChange({ 
-                        ...selected, 
-                        quantity: Math.max(1, Math.min(room.quantity_available || 1, parseInt(e.target.value) || 1)) 
-                      })
+                      if (room.is_provisional) return;
+                      const val = parseInt(e.target.value, 10);
+                      onChange({ ...selected, quantity: Math.max(1, Math.min(maxForThisRoom, isNaN(val) ? 1 : val)) });
                     }} 
                     className="w-14 text-center font-bold text-lg" 
                     disabled={room.is_provisional}
@@ -1316,11 +1373,12 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                   <Button 
                     size="sm" 
                     variant="outline" 
-                    onClick={() => onChange({ ...selected, quantity: Math.min(room.quantity_available || 1, selected.quantity + 1) })} 
-                    disabled={selected.quantity >= (room.quantity_available || 1) || room.is_provisional}
+                    onClick={() => onChange({ ...selected, quantity: Math.min(maxForThisRoom, (selected.quantity || 1) + 1) })} 
+                    disabled={selected.quantity >= maxForThisRoom || room.is_provisional}
                   >
                     +
                   </Button>
+                  <span className="text-xs text-[var(--color-muted-foreground)] ml-2">Max: {maxForThisRoom}</span>
                 </div>
                 <div className="text-xs text-[var(--color-muted-foreground)]">
                   {room.is_provisional ? (
@@ -1456,6 +1514,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                 setValue('components.hotels', newRooms);
               }}
               showPrices={showPrices}
+              idx={idx}
             />
           </div>
         );
@@ -1956,6 +2015,30 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
   const { watch } = useFormContext();
   const selectedRooms = watch('components.hotels') || [];
 
+  // Helper: get transfer by id (always from allTransfers)
+  function getTransfer(transferId: string) {
+    return allTransfers.find((t: any) => t.id === transferId);
+  }
+
+  // Auto-adjust airport transfer quantities based on adults and max_capacity
+  useEffect(() => {
+    if (!safeSelectedTransfers.length || !adults) return;
+    const updatedTransfers = safeSelectedTransfers.map((sel: any) => {
+      const transfer = getTransfer(sel.id);
+      if (!transfer || !transfer.max_capacity) return sel;
+      const maxCapacity = transfer.max_capacity;
+      const autoQty = Math.max(1, Math.ceil(adults / maxCapacity));
+      // Only auto-adjust if user hasn't changed it (i.e., if it's 1 or matches previous auto value)
+      if (sel.quantity === 1 || sel.quantity === autoQty) {
+        return { ...sel, quantity: autoQty };
+      }
+      return sel;
+    });
+    if (JSON.stringify(updatedTransfers) !== JSON.stringify(safeSelectedTransfers)) {
+      setValue('components.airportTransfers', updatedTransfers);
+    }
+  }, [adults, safeSelectedTransfers, setValue]);
+
   // Fetch all available airport transfers for the event when tab is active or event changes
   useEffect(() => {
     let aborted = false;
@@ -2038,11 +2121,6 @@ function AirportTransfersTab({ adults, selectedEvent, selectedTier, setValue, en
   // Helper: get hotel for a transfer
   function getHotel(hotelId: string) {
     return hotels.find(h => h.id === hotelId);
-  }
-
-  // Helper: get transfer by id (always from allTransfers)
-  function getTransfer(transferId: string) {
-    return allTransfers.find((t: any) => t.id === transferId);
   }
 
   // Add another transfer type

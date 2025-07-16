@@ -1267,40 +1267,33 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
     }
   }
   
-  // Calculate payment dates based on new requirements
-  const today = new Date();
-  // Second payment: 2 months after deposit, on the 1st of the month
-  const secondPaymentDateObj = new Date(today.getTime() + 2 * 30 * 24 * 60 * 60 * 1000);
-  secondPaymentDateObj.setDate(1); // Set to 1st of the month
-  const secondPaymentDate = secondPaymentDateObj.toISOString().slice(0, 10);
-  
-  // Final payment: 2 months after second payment, on the 1st of the month
-  let finalPaymentDateObj = new Date(secondPaymentDateObj.getTime() + 2 * 30 * 24 * 60 * 60 * 1000);
-  finalPaymentDateObj.setDate(1); // Set to 1st of the month
-  let finalPaymentDate = finalPaymentDateObj.toISOString().slice(0, 10);
-  
-  // Handler for user changing payment dates
-  const handleSecondPaymentDateChange = (date: Date | null) => {
-    const newDate = date ? date.toISOString().slice(0, 10) : form.getValues('payments.secondPaymentDate');
-    form.setValue('payments.secondPaymentDate', newDate);
-  };
-  const handleFinalPaymentDateChange = (date: Date | null) => {
-    const newDate = date ? date.toISOString().slice(0, 10) : form.getValues('payments.finalPaymentDate');
-    form.setValue('payments.finalPaymentDate', newDate);
-  };
-
+  // --- Payment Dates: Only set defaults if not already set, allow user override ---
+  const didSetDefaultDates = useRef(false);
   useEffect(() => {
-    const currentSecondPaymentDate = form.watch('payments.secondPaymentDate');
-    const currentFinalPaymentDate = form.watch('payments.finalPaymentDate');
+    if (didSetDefaultDates.current) return;
+    didSetDefaultDates.current = true;
+    const today = new Date();
+    const defaultSecondPaymentDate = new Date(today.getTime() + 2 * 30 * 24 * 60 * 60 * 1000);
+    defaultSecondPaymentDate.setDate(1);
+    const defaultFinalPaymentDate = new Date(defaultSecondPaymentDate.getTime() + 2 * 30 * 24 * 60 * 60 * 1000);
+    defaultFinalPaymentDate.setDate(1);
+    const currentSecondPaymentDate = form.getValues('payments.secondPaymentDate');
+    const currentFinalPaymentDate = form.getValues('payments.finalPaymentDate');
     if (!currentSecondPaymentDate) {
-      form.setValue('payments.secondPaymentDate', secondPaymentDate);
+      form.setValue('payments.secondPaymentDate', defaultSecondPaymentDate.toISOString().slice(0, 10));
     }
     if (!currentFinalPaymentDate) {
-      form.setValue('payments.finalPaymentDate', finalPaymentDate);
+      form.setValue('payments.finalPaymentDate', defaultFinalPaymentDate.toISOString().slice(0, 10));
     }
-    // Only run on mount!
-    // eslint-disable-next-line
   }, []);
+
+  // Sync calculated payment values to form state so UI always shows correct values
+  useEffect(() => {
+    form.setValue('payments.deposit', paymentDeposit);
+    form.setValue('payments.secondPayment', paymentSecondPayment);
+    form.setValue('payments.finalPayment', paymentFinalPayment);
+    form.setValue('payments.total', paymentTotal);
+  }, [paymentDeposit, paymentSecondPayment, paymentFinalPayment, paymentTotal]);
 
   // --- UI ---
   return (
@@ -2171,8 +2164,11 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
               </div>
               <div className="flex items-center gap-2">
                 <DatePicker
-                  selected={data.payments.secondPaymentDate ? new Date(data.payments.secondPaymentDate) : null}
-                  onChange={handleSecondPaymentDateChange}
+                  selected={form.watch('payments.secondPaymentDate') ? new Date(form.watch('payments.secondPaymentDate')) : null}
+                  onChange={(date) => {
+                    const newDate = date ? date.toISOString().slice(0, 10) : form.watch('payments.secondPaymentDate');
+                    form.setValue('payments.secondPaymentDate', newDate);
+                  }}
                   dateFormat="yyyy-MM-dd"
                   minDate={new Date()}
                   className="w-full text-xs border rounded px-2 py-1"
@@ -2194,8 +2190,11 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
               </div>
               <div className="flex items-center gap-2">
                 <DatePicker
-                  selected={data.payments.finalPaymentDate ? new Date(data.payments.finalPaymentDate) : null}
-                  onChange={handleFinalPaymentDateChange}
+                  selected={form.watch('payments.finalPaymentDate') ? new Date(form.watch('payments.finalPaymentDate')) : null}
+                  onChange={(date) => {
+                    const newDate = date ? date.toISOString().slice(0, 10) : form.watch('payments.finalPaymentDate');
+                    form.setValue('payments.finalPaymentDate', newDate);
+                  }}
                   dateFormat="yyyy-MM-dd"
                   minDate={new Date()}
                   className="w-full text-xs border rounded px-2 py-1"
@@ -2227,9 +2226,7 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
 
       <div className="flex justify-end mt-8">
         {showPrices ? (
-          <Button onClick={() => handleGenerateQuote(form.getValues())} disabled={isGenerating}>
-            Generate Quote
-          </Button>
+          ""
         ) : (
           <Button onClick={handleRequest} disabled={isGenerating || requesting}>
             {requesting ? 'Sending...' : 'Send Request'}

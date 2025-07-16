@@ -272,14 +272,48 @@ export default function AirportTransfersManager() {
     return true;
   });
 
-  // Pagination logic (must come after filteredTransfers)
+  // Helper to safely get a property by key
+  function getProp(obj: any, key: string) {
+    return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : '';
+  }
+
+  // Sorting logic for columns
+  const sortedTransfers = React.useMemo(() => {
+    if (!sortKey) return filteredTransfers;
+    return [...filteredTransfers].sort((a, b) => {
+      let aValue: any = getProp(a, sortKey);
+      let bValue: any = getProp(b, sortKey);
+      // Special handling for event and hotel columns
+      if (sortKey === 'event') {
+        aValue = events.find(evt => evt.id === a.event_id)?.name || '';
+        bValue = events.find(evt => evt.id === b.event_id)?.name || '';
+      } else if (sortKey === 'hotel') {
+        aValue = hotels.find(h => h.id === a.hotel_id)?.name || '';
+        bValue = hotels.find(h => h.id === b.hotel_id)?.name || '';
+      } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+        // leave as is
+      } else if (aValue == null) {
+        aValue = '';
+      } else if (bValue == null) {
+        bValue = '';
+      }
+      if (aValue < bValue) return sortDir === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredTransfers, sortKey, sortDir, events, hotels]);
+
+  // Pagination logic (must come after sortedTransfers)
   const [page, setPage] = useState(1);
   const rowsPerPage = 10;
-  const totalPages = Math.max(1, Math.ceil(filteredTransfers.length / rowsPerPage));
+  const totalPages = Math.max(1, Math.ceil(sortedTransfers.length / rowsPerPage));
   useEffect(() => {
     if (page > totalPages) setPage(1);
   }, [totalPages, page]);
-  const paginatedTransfers = filteredTransfers.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+  const paginatedTransfers = sortedTransfers.slice((page - 1) * rowsPerPage, page * rowsPerPage);
 
   const toggleTransferSelection = (id: string) => {
     setSelectedTransfers(prev => {

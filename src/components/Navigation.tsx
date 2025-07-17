@@ -1,19 +1,37 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, Home, Calendar, Settings, PlaneTakeoff } from "lucide-react";
+import { Menu, X, Home, Calendar, Settings, PlaneTakeoff, FileText, Users } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { cn } from "@/lib/utils";
-
-const navigationItems = [
-  { name: "Home", href: "/", icon: Home },
-  { name: "New Trip", href: "/new-trip", icon: PlaneTakeoff },
-  { name: "Itineraries", href: "/itineraries", icon: Calendar },
-  { name: "Settings", href: "/settings", icon: Settings },
-];
+import { useTeamFeature } from '@/lib/teamUtils';
 
 export function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const isNotB2B = useTeamFeature('is_not_b2b');
+
+  // Add restricted items
+  const allNavigationItems = [
+    { name: 'Home', href: '/', icon: Home },
+    { name: 'New Trip', href: '/new-trip', icon: PlaneTakeoff },
+    { name: 'Itineraries', href: '/itineraries', icon: Calendar },
+    { name: 'Quotes', href: '/quotes', icon: FileText },
+    { name: 'Bookings', href: '/bookings', icon: Calendar },
+    { name: 'CRM', href: '/crm', icon: Users },
+    { name: 'Dashboard', href: '/dashboard', icon: Settings },
+    { name: 'Analytics', href: '/analytics', icon: Settings },
+    { name: 'Integrations', href: '/integrations', icon: Settings },
+    { name: 'Settings', href: '/settings', icon: Settings },
+  ];
+
+  // Only show restricted items if isNotB2B === true
+  const navigationItems = allNavigationItems.filter(item => {
+    const restricted = ['Quotes', 'Bookings', 'CRM', 'Dashboard', 'Analytics', 'Integrations'];
+    if (restricted.includes(item.name)) {
+      return isNotB2B === true;
+    }
+    return true;
+  });
 
   return (
     <>
@@ -27,7 +45,7 @@ export function Navigation() {
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
               <li>
                 <ul role="list" className="-mx-2 space-y-1">
-                  {navigationItems.map((item) => (
+                  {navigationItems.length === 0 ? null : navigationItems.map((item) => (
                     <li key={item.name}>
                       <Link
                         to={item.href}
@@ -76,7 +94,7 @@ export function Navigation() {
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
               <li>
                 <ul role="list" className="-mx-2 space-y-1">
-                  {navigationItems.map((item) => (
+                  {navigationItems.length === 0 ? null : navigationItems.map((item) => (
                     <li key={item.name}>
                       <Link
                         to={item.href}

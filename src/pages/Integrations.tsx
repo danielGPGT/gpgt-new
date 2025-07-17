@@ -77,6 +77,7 @@ import { FiSearch, FiUsers, FiGlobe, FiMessageCircle, FiCreditCard, FiTrendingUp
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { HubSpotService } from '@/lib/hubspotService';
 import { Link } from 'react-router-dom';
+import { useTeamFeature } from '@/lib/teamUtils';
 
 const floatingIcons = [
   { icon: SiHubspot, className: 'bg-white shadow-lg', style: { left: 0, top: 0 } },
@@ -243,6 +244,10 @@ const integrations = [
 ];
 
 export default function Integrations() {
+  const isNotB2B = useTeamFeature('is_not_b2b');
+  if (isNotB2B === false) {
+    return <div className="p-8 text-center text-lg">This feature is not available for B2B teams.</div>;
+  }
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [teamId, setTeamId] = useState<string | null>(null);
   const [integrationStates, setIntegrationStates] = useState<Record<string, any>>({});

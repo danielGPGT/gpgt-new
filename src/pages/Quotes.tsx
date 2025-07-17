@@ -44,10 +44,14 @@ import { downloadQuotePDF } from '@/lib/pdfService';
 import { Quote } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { hasTeamFeature } from '@/lib/teamUtils';
+import { hasTeamFeature, useTeamFeature } from '@/lib/teamUtils';
 import { supabase } from '@/lib/supabase';
 
 export function Quotes() {
+  const isNotB2B = useTeamFeature('is_not_b2b');
+  if (isNotB2B === false) {
+    return <div className="p-8 text-center text-lg">This feature is not available for B2B teams.</div>;
+  }
   const navigate = useNavigate();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);

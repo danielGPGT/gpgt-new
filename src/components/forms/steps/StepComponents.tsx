@@ -22,6 +22,8 @@ import { StepFlights, FlightSource, SelectedFlight } from './StepFlights';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { z } from 'zod';
 import { toast } from 'sonner';
+import CircuitTransfersTabV2 from './CircuitTransfersTabV2';
+import AirportTransfersTabV2 from './AirportTransfersTabV2';
 
 interface PackageComponent {
   id: string;
@@ -201,6 +203,40 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
   const [allCircuitTransfers, setAllCircuitTransfers] = useState<any[]>([]);
   const [allAirportTransfers, setAllAirportTransfers] = useState<any[]>([]);
 
+  // Add state for all hotels (for lookup)
+  const [allHotels, setAllHotels] = useState<any[]>([]);
+
+  // Add state for all hotel rooms (for robust global quantity logic)
+  const [allHotelRooms, setAllHotelRooms] = useState<any[]>([]);
+
+  // Fetch all hotels for the event (for lookup)
+  useEffect(() => {
+    if (!selectedEvent?.id) {
+      setAllHotels([]);
+      return;
+    }
+    supabase
+      .from('hotels')
+      .select('id, name')
+      .eq('event_id', selectedEvent.id)
+      .then(({ data }) => setAllHotels(data || []));
+  }, [selectedEvent?.id]);
+
+  // Fetch all hotel rooms for the event (for robust global quantity logic)
+  useEffect(() => {
+    if (!selectedEvent?.id) {
+      setAllHotelRooms([]);
+      return;
+    }
+    supabase
+      .from('hotel_rooms')
+      .select('*')
+      .eq('event_id', selectedEvent.id)
+      .eq('active', true)
+      .or('is_provisional.eq.true,quantity_available.gt.0')
+      .then(({ data }) => setAllHotelRooms(data || []));
+  }, [selectedEvent?.id]);
+
   // Memoize callback functions to prevent infinite re-renders
   const handleFlightSourceChange = useCallback((src: FlightSource) => {
     setValue('components.flightsSource', src);
@@ -352,7 +388,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
     }
 
     // --- CIRCUIT TRANSFERS (unchanged) ---
-    if (circuitTransfersEnabled && packageComponents.length > 0 && !components.circuitTransfers?.length) {
+    if (circuitTransfersEnabled && packageComponents.length > 0 && (!components.circuitTransfers || components.circuitTransfers.length === 0) && !components.noCircuitTransfer) {
       const circuitTransferComponents = packageComponents.filter(comp => comp.component_type === 'circuit_transfer');
       if (circuitTransferComponents.length > 0) {
         const transferIds = circuitTransferComponents.map(comp => comp.component_id);
@@ -378,7 +414,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
     }
 
     // --- AIRPORT TRANSFERS ---
-    if (airportTransfersEnabled && packageComponents.length > 0 && !components.airportTransfers?.length) {
+    if (airportTransfersEnabled && packageComponents.length > 0 && !components.airportTransfers?.length && !components.noAirportTransfer) {
       const airportTransferComponents = packageComponents.filter(comp => comp.component_type === 'airport_transfer');
       if (airportTransferComponents.length > 0) {
         const transferIds = airportTransferComponents.map(comp => comp.component_id);
@@ -389,21 +425,26 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
           .eq('active', true)
           .then(({ data: transfers }) => {
             if (transfers && transfers.length > 0) {
-              const initialTransfers = transfers.map(transfer => ({
-                id: transfer.id,
-                quantity: 1, // Default to 1 vehicle
-                price: transfer.price_per_car_gbp_markup || 0,
-                transferDirection: 'both' as const, // Default to both (outbound + return)
-                packageComponentId: airportTransferComponents.find(comp => comp.component_id === transfer.id)?.id,
-                hotel_id: transfer.hotel_id || (components.hotels && components.hotels[0] && components.hotels[0].hotelId) || null // fallback to selected hotel
-              }));
+              const initialTransfers = transfers.map(transfer => {
+                const quantity = (typeof transfer.max_capacity === 'number' && transfer.max_capacity > 0)
+                  ? Math.max(1, Math.ceil(adults / transfer.max_capacity))
+                  : Math.max(1, adults);
+                return {
+                  id: transfer.id,
+                  quantity,
+                  price: transfer.price_per_car_gbp_markup || 0,
+                  transferDirection: 'both' as const, // Default to both (outbound + return)
+                  packageComponentId: airportTransferComponents.find(comp => comp.component_id === transfer.id)?.id,
+                  hotel_id: transfer.hotel_id || (components.hotels && components.hotels[0] && components.hotels[0].hotelId) || null // fallback to selected hotel
+                };
+              });
               console.log('[AIRPORT TRANSFER INIT] Setting initial transfers:', initialTransfers);
               setValue('components.airportTransfers', initialTransfers);
             }
           });
       }
     }
-  }, [packageComponents, adults, components.tickets.length, components.hotels?.length, components.circuitTransfers?.length, components.airportTransfers?.length, setValue, circuitTransfersEnabled, airportTransfersEnabled]);
+  }, [packageComponents, adults, components.tickets.length, components.hotels?.length, components.circuitTransfers?.length, components.airportTransfers?.length, setValue, circuitTransfersEnabled, airportTransfersEnabled, components.noCircuitTransfer, components.noAirportTransfer]);
 
   // Fetch lounge passes for the selected event
   useEffect(() => {
@@ -643,6 +684,76 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Find selected hotelId (from selected hotel room)
+  const selectedHotelId = components.hotels && components.hotels.length > 0 ? components.hotels[0].hotelId : null;
+
+  // Centralized quantity auto-adjustment for all components when adults changes
+  useEffect(() => {
+    // --- TICKETS ---
+    if (Array.isArray(components.tickets)) {
+      const updatedTickets = components.tickets.map((ticket: any) => {
+        if (ticket.quantity !== adults) {
+          return { ...ticket, quantity: adults };
+        }
+        return ticket;
+      });
+      if (JSON.stringify(updatedTickets) !== JSON.stringify(components.tickets)) {
+        setValue('components.tickets', updatedTickets);
+      }
+    }
+    // --- HOTEL ROOMS ---
+    if (Array.isArray(components.hotels)) {
+      let remaining = adults;
+      const updatedRooms = components.hotels.map((roomSel: any) => {
+        // Find the real room data from allHotelRooms
+        const realRoom = allHotelRooms.find((r: any) => r.id === roomSel.roomId);
+        const maxQty = realRoom?.is_provisional ? 1 : (realRoom?.quantity_available ?? roomSel.quantity_available ?? 1);
+        const maxPeople = realRoom?.max_people ?? roomSel.max_people ?? 1;
+        const neededQty = Math.min(maxQty, Math.ceil(remaining / maxPeople));
+        const qty = Math.max(1, Math.min(neededQty, remaining > 0 ? neededQty : 0));
+        remaining -= qty * maxPeople;
+        if (roomSel.quantity !== qty) {
+          return { ...roomSel, quantity: qty };
+        }
+        return roomSel;
+      });
+      if (JSON.stringify(updatedRooms) !== JSON.stringify(components.hotels)) {
+        setValue('components.hotels', updatedRooms);
+      }
+    }
+    // --- CIRCUIT TRANSFERS ---
+    if (Array.isArray(components.circuitTransfers) && components.circuitTransfers.length > 0) {
+      const updatedCircuitTransfers = components.circuitTransfers.map((transfer: any) => {
+        if (transfer.quantity !== adults) {
+          return { ...transfer, quantity: adults };
+        }
+        return transfer;
+      });
+      if (JSON.stringify(updatedCircuitTransfers) !== JSON.stringify(components.circuitTransfers)) {
+        setValue('components.circuitTransfers', updatedCircuitTransfers);
+      }
+    }
+    // --- AIRPORT TRANSFERS ---
+    if (Array.isArray(components.airportTransfers) && components.airportTransfers.length > 0 && allAirportTransfers.length > 0) {
+      const updatedAirportTransfers = components.airportTransfers.map((transfer: any) => {
+        // Find the real transfer data
+        const realTransfer = allAirportTransfers.find((t: any) => t.id === transfer.id);
+        if (realTransfer && typeof realTransfer.max_capacity === 'number' && realTransfer.max_capacity > 0) {
+          const neededQty = Math.max(1, Math.ceil(adults / realTransfer.max_capacity));
+          if (transfer.quantity !== neededQty) {
+            console.log('[AirportTransfer global effect] Updating quantity to', neededQty, 'for adults', adults, 'max_capacity', realTransfer.max_capacity);
+            return { ...transfer, quantity: neededQty };
+          }
+        }
+        // If realTransfer is missing or max_capacity is invalid, do NOT update quantity (leave as-is)
+        return transfer;
+      });
+      if (JSON.stringify(updatedAirportTransfers) !== JSON.stringify(components.airportTransfers)) {
+        setValue('components.airportTransfers', updatedAirportTransfers);
+      }
+    }
+  }, [adults, allHotels, allHotelRooms, allAirportTransfers, allCircuitTransfers]);
 
   return (
     <div className="space-y-8">
@@ -1013,32 +1124,72 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
         )}
 
         {activeComponent === 'circuit_transfer' && (
-          <CircuitTransfersTab
+          <CircuitTransfersTabV2
+            selectedTierId={selectedTier?.id}
+            allHotels={allHotels}
+            circuitTransfers={allCircuitTransfers}
+            selectedHotelId={selectedHotelId}
             adults={adults}
-            selectedEvent={selectedEvent}
-            selectedTier={selectedTier}
-            setValue={setValue}
-            enabled={circuitTransfersEnabled}
-            onToggle={handleCircuitTransfersToggle}
-            showPrices={showPrices}
-            allTransfers={allCircuitTransfers}
-            selectedHotels={components.hotels || []}
-            selectedTransfers={components.circuitTransfers || []}
+            value={components.circuitTransfers && components.circuitTransfers.length > 0 ? {
+              id: components.circuitTransfers[0].id,
+              quantity: components.circuitTransfers[0].quantity
+            } : null}
+            onChange={val => {
+              if (!val) {
+                setValue('components.circuitTransfers', []);
+                setValue('components.noCircuitTransfer', true);
+              } else {
+                const transfer = allCircuitTransfers.find(t => t.id === val.id);
+                setValue('components.circuitTransfers', [{
+                  id: val.id,
+                  quantity: val.quantity,
+                  price: transfer?.sell_price_per_seat_gbp || 0,
+                  packageComponentId: null,
+                  hotel_id: transfer?.hotel_id
+                }]);
+                setValue('components.noCircuitTransfer', false);
+              }
+            }}
           />
         )}
 
         {activeComponent === 'airport_transfer' && (
-          <AirportTransfersTab
+          <AirportTransfersTabV2
+            allHotels={allHotels}
+            airportTransfers={allAirportTransfers}
+            selectedHotelId={selectedHotelId}
             adults={adults}
-            selectedEvent={selectedEvent}
-            selectedTier={selectedTier}
-            setValue={setValue}
-            enabled={airportTransfersEnabled}
-            onToggle={handleAirportTransfersToggle}
-            showPrices={showPrices}
-            allTransfers={allAirportTransfers}
-            selectedHotels={components.hotels || []}
-            selectedTransfers={components.airportTransfers || []}
+            value={components.airportTransfers && components.airportTransfers.length > 0 ? {
+              id: components.airportTransfers[0].id,
+              quantity: components.airportTransfers[0].quantity,
+              transferDirection: components.airportTransfers[0].transferDirection || 'both',
+            } : null}
+            onChange={val => {
+              if (!val) {
+                setValue('components.airportTransfers', []);
+                setValue('components.noAirportTransfer', true);
+              } else {
+                const transfer = allAirportTransfers.find(t => t.id === val.id);
+                let quantity = val.quantity;
+                if (transfer && typeof transfer.max_capacity === 'number' && transfer.max_capacity > 0) {
+                  quantity = Math.max(1, Math.ceil(adults / transfer.max_capacity));
+                  console.log('[AirportTransfer onChange] Setting quantity to', quantity, 'for adults', adults, 'max_capacity', transfer.max_capacity);
+                } else {
+                  quantity = Math.max(1, adults);
+                  console.log('[AirportTransfer onChange] Fallback quantity to', quantity, 'for adults', adults);
+                }
+                setValue('components.airportTransfers', [{
+                  id: val.id,
+                  quantity,
+                  price: transfer?.price_per_car_gbp_markup || 0,
+                  transferDirection: val.transferDirection || 'both',
+                  packageComponentId: null,
+                  hotel_id: transfer?.hotel_id
+                }]);
+                setValue('components.noAirportTransfer', false);
+              }
+            }}
+            noAirportTransfer={components.noAirportTransfer}
           />
         )}
 
@@ -1093,27 +1244,28 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
   const { watch } = useFormContext();
   const selectedRooms = watch('components.hotels') || [];
 
-  // Auto-adjust hotel room quantities based on adults and max_people
+  // Robust auto-fill: distribute adults across selected rooms
   useEffect(() => {
-    if (!hotelRooms.length || !selectedRooms.length) return;
-    // Only auto-adjust if all selected rooms are not provisional
-    const updatedRooms = selectedRooms.map((sel: any) => {
-      const room = hotelRooms.find((r: any) => r.id === sel.roomId);
-      if (!room || room.is_provisional) return sel;
+    if (!selectedRooms.length || !adults) return;
+    // Get room data for all selected rooms
+    const roomDatas = selectedRooms.map((sel: any) => getRoom(sel.roomId));
+    let remaining = adults;
+    const newSelectedRooms = selectedRooms.map((sel: any, idx: number) => {
+      const room = roomDatas[idx];
+      if (!room) return sel;
+      const maxQty = room.is_provisional ? 1 : (room.quantity_available || 1);
       const maxPeople = room.max_people || 1;
-      const autoQty = Math.max(1, Math.ceil(adults / maxPeople));
-      const clampedQty = Math.min(autoQty, room.quantity_available || 1);
-      // Only auto-adjust if user hasn't changed it (i.e., if it's 1 or matches previous auto value)
-      if (sel.quantity === 1 || sel.quantity === autoQty || sel.quantity === clampedQty) {
-        return { ...sel, quantity: clampedQty };
-      }
-      return sel;
+      // How many rooms do we need of this type?
+      const neededQty = Math.min(maxQty, Math.ceil(remaining / maxPeople));
+      const qty = Math.max(1, Math.min(neededQty, remaining > 0 ? neededQty : 0));
+      remaining -= qty * maxPeople;
+      return { ...sel, quantity: qty };
     });
     // Only update if changed
-    if (JSON.stringify(updatedRooms) !== JSON.stringify(selectedRooms)) {
-      setValue('components.hotels', updatedRooms);
+    if (JSON.stringify(newSelectedRooms) !== JSON.stringify(selectedRooms)) {
+      setValue('components.hotels', newSelectedRooms);
     }
-  }, [adults, hotelRooms, selectedRooms, setValue]);
+  }, [adults, selectedRooms.length, selectedRooms.map((r: any) => r.roomId).join(','), hotelRooms]);
 
   useEffect(() => {
     async function fetchData() {
@@ -1169,6 +1321,12 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
     const selectedIds = selectedRooms.map((r: any) => r.roomId);
     const nextRoom = hotelRooms.find((r: any) => !selectedIds.includes(r.id));
     if (!nextRoom) return;
+    // Calculate new total if we add this room
+    const newTotalRooms = selectedRooms.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0) + 1;
+    if (newTotalRooms > adults) {
+      toast.error('Total number of rooms cannot exceed number of adults.');
+      return;
+    }
     const newRooms = [
       ...selectedRooms,
       {
@@ -1352,7 +1510,10 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                   <Button 
                     size="sm" 
                     variant="outline" 
-                    onClick={() => onChange({ ...selected, quantity: Math.max(1, (selected.quantity || 1) - 1) })} 
+                    onClick={() => {
+                      if (selected.quantity <= 1) return;
+                      onChange({ ...selected, quantity: Math.max(1, (selected.quantity || 1) - 1) });
+                    }} 
                     disabled={selected.quantity <= 1 || room.is_provisional}
                   >
                     -
@@ -1365,7 +1526,14 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                     onChange={e => {
                       if (room.is_provisional) return;
                       const val = parseInt(e.target.value, 10);
-                      onChange({ ...selected, quantity: Math.max(1, Math.min(maxForThisRoom, isNaN(val) ? 1 : val)) });
+                      const newQty = Math.max(1, Math.min(room.quantity_available || 1, isNaN(val) ? 1 : val));
+                      // Calculate what the new total would be if this room's quantity is changed
+                      const otherRoomsTotal = selectedRooms.reduce((sum: number, r: any, i: number) => i === idx ? sum : sum + (r.quantity || 0), 0);
+                      if (otherRoomsTotal + newQty > adults) {
+                        toast.error('Total number of rooms cannot exceed number of adults.');
+                        return;
+                      }
+                      onChange({ ...selected, quantity: newQty });
                     }} 
                     className="w-14 text-center font-bold text-lg" 
                     disabled={room.is_provisional}
@@ -1373,45 +1541,43 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                   <Button 
                     size="sm" 
                     variant="outline" 
-                    onClick={() => onChange({ ...selected, quantity: Math.min(maxForThisRoom, (selected.quantity || 1) + 1) })} 
+                    onClick={() => {
+                      if (room.is_provisional) return;
+                      const otherRoomsTotal = selectedRooms.reduce((sum: number, r: any, i: number) => i === idx ? sum : sum + (r.quantity || 0), 0);
+                      if (otherRoomsTotal + (selected.quantity + 1) > adults) {
+                        toast.error('Total number of rooms cannot exceed number of adults.');
+                        return;
+                      }
+                      onChange({ ...selected, quantity: Math.min(maxForThisRoom, (selected.quantity || 1) + 1) });
+                    }} 
                     disabled={selected.quantity >= maxForThisRoom || room.is_provisional}
                   >
                     +
                   </Button>
-                  <span className="text-xs text-[var(--color-muted-foreground)] ml-2">Max: {maxForThisRoom}</span>
                 </div>
-                <div className="text-xs text-[var(--color-muted-foreground)]">
-                  {room.is_provisional ? (
-                    <span className="flex items-center gap-1">
-                      <span>PTO</span>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <HelpCircle className="h-3 w-3" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Purchased to order - provisional availability</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </span>
-                  ) : (
-                    `Available: ${room.quantity_available || 1}`
-                  )}
-                </div>
+                <div className="text-xs text-[var(--color-muted-foreground)]">Available: {room.quantity_available ?? 1}</div>
               </div>
             </div>
             {/* Price Breakdown */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mt-2 border-t border-[var(--color-border)] pt-4">
               <div className="flex-1">
                 <div className="text-xs text-[var(--color-muted-foreground)]">Base stay <span className="font-semibold">({baseNights} night{baseNights !== 1 ? 's' : ''})</span>:</div>
-                {showPrices && <div className="font-bold text-lg text-[var(--color-primary)]">£{basePrice.toLocaleString()}</div>}
+                <div className="flex items-center gap-2">
+                  {showPrices && <div className="font-bold text-lg text-[var(--color-primary)]">£{basePrice.toLocaleString()}</div>}
+                  <Badge variant="outline" className="text-xs px-2 py-0.5 text-[var(--color-primary)] font-semibold">
+                    £{(room.total_price_per_stay_gbp_with_markup || room.total_price_per_stay_gbp || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per room
+                  </Badge>
+                </div>
                 {extraNights > 0 && (
-                  <div className="text-xs text-[var(--color-muted-foreground)]">Extra nights ({extraNights}): <span className="font-semibold">£{(extraNightPrice * extraNights).toLocaleString()}</span></div>
+                  <div className="text-xs text-[var(--color-muted-foreground)] flex items-center gap-2">Extra nights ({extraNights}): <span className="font-semibold">£{(extraNightPrice * extraNights).toLocaleString()}</span>
+                    <Badge variant="outline" className="text-xs px-2 py-0.5 text-[var(--color-primary)] font-semibold">
+                      £{(room.extra_night_price_gbp || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per room per extra night
+                    </Badge>
+                  </div>
                 )}
               </div>
               <div className="flex flex-col items-end">
-                <div className="text-xs text-[var(--color-muted-foreground)]">Total for this room</div>
+                <div className="text-xs text-[var(--color-muted-foreground)]">Total amount</div>
                 {showPrices && <div className="text-2xl font-extrabold text-[var(--color-primary)]">£{total.toLocaleString()}</div>}
               </div>
             </div>
@@ -1528,463 +1694,6 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
         >
           <Plus className="h-4 w-4 mr-2" /> Add Another Room Type
         </Button>
-      )}
-    </div>
-  );
-}
-
-function CircuitTransfersTab({ adults, selectedEvent, selectedTier, setValue, enabled, onToggle, showPrices, allTransfers, selectedHotels, selectedTransfers }: { 
-  adults: number, 
-  selectedEvent: any, 
-  selectedTier: any,
-  setValue: any,
-  enabled: boolean,
-  onToggle: (enabled: boolean) => void,
-  showPrices: boolean,
-  allTransfers: any[],
-  selectedHotels: any[],
-  selectedTransfers: any[]
-}) {
-  const [availableTransfers, setAvailableTransfers] = useState<any[]>([]);
-  const [hotels, setHotels] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const fetchIdRef = useRef(0);
-  const isInitializingRef = useRef(false);
-  const safeSelectedTransfers = Array.isArray(selectedTransfers) ? selectedTransfers : [];
-  const [lastSelectedTransfers, setLastSelectedTransfers] = useState<any[]>([]);
-
-  // Always get selected hotel rooms from form context
-  const { watch } = useFormContext();
-  const selectedRooms = watch('components.hotels') || [];
-
-  // Fetch all available circuit transfers for the event when tab is active or event changes
-  useEffect(() => {
-    let aborted = false;
-    const fetchId = ++fetchIdRef.current;
-    setLoading(true);
-    setError(null);
-    if (!selectedEvent?.id) {
-      setAvailableTransfers([]);
-      setLoading(false);
-      return;
-    }
-    async function fetchTransfers() {
-      try {
-        const { data: transfers, error: trErr } = await supabase
-          .from('circuit_transfers')
-          .select('*')
-          .eq('event_id', selectedEvent.id)
-          .eq('active', true);
-        if (trErr) throw trErr;
-        if (aborted || fetchIdRef.current !== fetchId) return;
-        setAvailableTransfers(transfers || []);
-        setLoading(false);
-      } catch (err: any) {
-        if (aborted || fetchIdRef.current !== fetchId) return;
-        setError(err.message || 'Failed to load circuit transfers.');
-        setAvailableTransfers([]);
-        setLoading(false);
-      }
-    }
-    fetchTransfers();
-    return () => { aborted = true; };
-  }, [selectedEvent?.id]);
-
-  // Initialize circuit transfers only after availableTransfers and selectedRooms are loaded and enabled is true
-  useEffect(() => {
-    if (!enabled) {
-      setValue('components.circuitTransfers', []);
-      return;
-    }
-    if (selectedRooms.length > 0 && availableTransfers.length > 0) {
-      const currentTransfers = watch('components.circuitTransfers') || [];
-      if ((!currentTransfers || currentTransfers.length === 0) && lastSelectedTransfers.length > 0) {
-        // Restore previous selection if available
-        validateAndSetCircuitTransfers(lastSelectedTransfers, setValue);
-      } else if (!currentTransfers || currentTransfers.length === 0) {
-        // Otherwise, initialize as before
-        const initialTransfers = availableTransfers.map(transfer => ({
-          id: String(transfer.id),
-          quantity: adults || 1,
-          price: transfer.sell_price_per_seat_gbp || 0,
-          packageComponentId: null
-        }));
-        validateAndSetCircuitTransfers(initialTransfers, setValue);
-      }
-    }
-  }, [enabled, selectedRooms, availableTransfers, adults, setValue, watch, lastSelectedTransfers]);
-
-  // Filter available transfers based on selected hotel rooms
-  const getCompatibleTransfers = () => {
-    if (selectedRooms.length === 0) return [];
-    const selectedHotelIds = selectedRooms.map((room: any) => String(room.hotelId)).filter(Boolean);
-    return availableTransfers.filter(transfer => selectedHotelIds.includes(String(transfer.hotel_id)));
-  };
-
-  // Defensive debug logs
-  useEffect(() => {
-    console.log('[DEBUG] availableTransfers:', availableTransfers);
-    console.log('[DEBUG] selectedRooms:', selectedRooms);
-    console.log('[DEBUG] compatibleTransfers:', getCompatibleTransfers());
-  }, [availableTransfers, selectedRooms]);
-
-  // Helper: get hotel for a transfer
-  function getHotel(hotelId: string) {
-    return hotels.find((h: any) => h.id === hotelId);
-  }
-
-  // Helper: get transfer by id (always from allTransfers)
-  function getTransfer(transferId: string) {
-    return allTransfers.find((t: any) => t.id === transferId);
-  }
-
-  // Calculate total seats selected
-  const totalSeats = selectedTransfers.reduce((sum, t) => sum + (t.quantity || 0), 0);
-  const maxSeats = adults || 1;
-
-  // Add another transfer type (if not all adults are covered)
-  function handleAddTransfer() {
-    if (totalSeats >= maxSeats) return; // Prevent adding more than allowed
-    const compatibleTransfers = getCompatibleTransfers();
-    const selectedIds = selectedTransfers.map(t => t.id);
-    const nextTransfer = compatibleTransfers.find((t: any) => !selectedIds.includes(t.id));
-    if (!nextTransfer) return;
-    // Clamp quantity so we never exceed maxSeats
-    const remaining = maxSeats - totalSeats;
-    const newTransfer = {
-      id: nextTransfer.id,
-      quantity: remaining, // Only allow up to remaining seats
-      price: nextTransfer.sell_price_per_seat_gbp || 0,
-      packageComponentId: null,
-      hotel_id: nextTransfer.hotel_id || (selectedRooms.length === 1 ? selectedRooms[0].hotelId : null)
-    };
-    const updated = [...selectedTransfers, newTransfer];
-    setValue('components.circuitTransfers', updated);
-  }
-
-  // Handle transfer change (swapping)
-  function handleTransferChange(transferId: string, index: number) {
-    const selectedTransfer = allTransfers.find((t: any) => t.id === transferId);
-    console.log('[DEBUG] handleTransferChange called with:', transferId, 'at index', index, 'selectedTransfer:', selectedTransfer);
-    if (!selectedTransfer) return;
-
-    const updatedTransfers = [...selectedTransfers];
-    updatedTransfers[index] = {
-      ...updatedTransfers[index],
-      id: transferId,
-      price: selectedTransfer.sell_price_per_seat_gbp || 0,
-      hotelId: selectedTransfer.hotel_id,
-      transfer_type: selectedTransfer.transfer_type,
-      // Add any other fields you want to sync from the transfer object
-    };
-    console.log('[DEBUG] Updated transfers:', updatedTransfers);
-    setValue('components.circuitTransfers', updatedTransfers);
-  }
-
-  // Handle quantity change
-  function handleQuantityChange(quantity: number, index: number) {
-    // Clamp so total does not exceed maxSeats
-    const otherTotal = selectedTransfers.reduce((sum, t, i) => i === index ? sum : sum + (t.quantity || 0), 0);
-    const clamped = Math.max(1, Math.min(quantity, maxSeats - otherTotal));
-    const updatedTransfers = [...selectedTransfers];
-    updatedTransfers[index] = { ...updatedTransfers[index], quantity: clamped };
-    setValue('components.circuitTransfers', updatedTransfers);
-  }
-
-  // Handle toggle change
-  const handleToggleChange = (newEnabled: boolean) => {
-    if (!newEnabled) {
-      setLastSelectedTransfers(safeSelectedTransfers); // Save current selection
-      validateAndSetCircuitTransfers([], setValue);
-      isInitializingRef.current = false;
-    }
-    onToggle(newEnabled);
-  };
-
-  // UI for each circuit transfer card
-  function TransferCard({ transfer, selected, hotel, onChange, index, showPrices }: any) {
-    // Robustly handle hotel prop (object or array)
-    const resolvedHotel = Array.isArray(hotel) ? hotel[0] : hotel;
-    console.log('[DEBUG] TransferCard hotel prop:', hotel, 'resolvedHotel:', resolvedHotel);
-    const pricePerSeat = transfer.sell_price_per_seat_gbp || 0;
-    const totalPrice = pricePerSeat * (selected.quantity || 1);
-    const coachesRequired = Math.ceil((selected.quantity || 1) / transfer.coach_capacity);
-
-    // Calculate how many seats can be set for this transfer
-    const otherTotal = selectedTransfers.reduce((sum, t, i) => i === index ? sum : sum + (t.quantity || 0), 0);
-    const maxForThis = Math.max(1, maxSeats - otherTotal);
-
-    return (
-      <Card className="mb-6 bg-[var(--color-card)]/95 py-0 border border-[var(--color-border)] shadow-lg rounded-2xl overflow-hidden">
-        <div className="p-6">
-          {/* Top row: Transfer Type Dropdown (left), Price (right) */}
-          <div className="flex flex-row items-center justify-between mb-4 gap-3">
-            <div className="flex flex-row items-center gap-3 flex-1 min-w-0">
-              <Label className="text-sm font-semibold text-[var(--color-foreground)] mr-2 min-w-[90px]">Transfer Type</Label>
-              <Select
-                value={transfer.id}
-                onValueChange={(value) => onChange(value)}
-              >
-                <SelectTrigger className="w-full max-w-xs">
-                  <SelectValue placeholder="Select transfer type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allTransfers
-                    .filter((t: any) => {
-                      // Allow the current transfer id, but not any others already selected
-                      const selectedIds = selectedTransfers.map((tr: any, i: number) => i !== index && tr.id).filter(Boolean);
-                      return t.id === transfer.id || !selectedIds.includes(t.id);
-                    })
-                    .map((t: any) => {
-                      const tHotel = Array.isArray(t.gpgt_hotels) ? t.gpgt_hotels[0] : t.gpgt_hotels;
-                      return (
-                        <SelectItem key={t.id} value={t.id}>
-                          <div className="flex items-center justify-between w-full">
-                            <span>{tHotel?.name || 'Unknown Hotel'} - {t.transfer_type || t.transport_type}</span>
-                            {showPrices && <span className="text-[var(--color-muted-foreground)] ml-2">£{(t.sell_price_per_seat_gbp || t.price_per_car_gbp_markup)?.toFixed(2) || '0.00'}</span>}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                </SelectContent>
-              </Select>
-            </div>
-            {/* Price (top right) */}
-            <div className="flex flex-col items-end flex-shrink-0 min-w-[120px]">
-              <span className="text-xs font-semibold text-[var(--color-muted-foreground)] mb-1">Total Price</span>
-              {showPrices && <span className="text-2xl font-extrabold text-[var(--color-primary)]">£{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-              {showPrices && <span className="text-xs text-[var(--color-muted-foreground)]">£{pricePerSeat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per seat</span>}
-            </div>
-          </div>
-
-          {/* Second row: Transfer Info (left), Quantity, Remove (right) */}
-          <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 w-full justify-between">
-            {/* Left: Icon, hotel, details */}
-            <div className="flex flex-row items-center gap-3 flex-1 min-w-0">
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--color-primary-600)] to-[var(--color-primary-700)] flex items-center justify-center">
-                <Car className="h-5 w-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <div className="font-bold text-lg text-[var(--color-foreground)] truncate">
-                  {resolvedHotel?.name || 'Unknown Hotel'}
-                </div>
-                <div className="text-[var(--color-muted-foreground)] text-xs truncate">
-                  {transfer.transfer_type} • {transfer.supplier || 'Standard'}
-                </div>
-                <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)] mt-1">
-                  <Users className="h-3 w-3" />
-                  {transfer.coach_capacity} seats per coach
-                  <span className="mx-1">•</span>
-                  <Calendar className="h-3 w-3" />
-                  {transfer.days} day{transfer.days !== 1 ? 's' : ''}
-                  {transfer.expected_hours && (
-                    <>
-                      <span className="mx-1">•</span>
-                      <Clock className="h-3 w-3" />
-                      {transfer.expected_hours}h
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Quantity Selector, Remove */}
-            <div className="flex flex-row items-center gap-2 flex-shrink-0 justify-end">
-              <Label htmlFor={`quantity-${transfer.id}`} className="text-xs font-semibold text-[var(--color-muted-foreground)] mr-2">
-                Vehicles
-              </Label>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange((selected.quantity || 1) - 1, index)}
-                disabled={(selected.quantity || 1) <= 1}
-                className="w-8 h-8 p-0"
-                tabIndex={-1}
-              >
-                -
-              </Button>
-              <Input
-                id={`quantity-${transfer.id}`}
-                type="number"
-                value={selected.quantity || 1}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  handleQuantityChange(Number.isFinite(val) && val > 0 ? val : 1, index);
-                }}
-                min={1}
-                max={maxForThis}
-                className="w-12 text-center font-bold text-base bg-transparent border-none focus:ring-2 focus:ring-[var(--color-primary)]"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange((selected.quantity || 1) + 1, index)}
-                disabled={(selected.quantity || 1) >= maxForThis || totalSeats >= maxSeats}
-                className="w-8 h-8 p-0"
-                tabIndex={-1}
-              >
-                +
-              </Button>
-              <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
-                Max: {maxForThis}
-              </span>
-              {selectedTransfers.length > 1 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 p-0 text-destructive"
-                  aria-label="Remove transfer"
-                  onClick={() => {
-                    const updated = selectedTransfers.filter((_: any, i: number) => i !== index);
-                    setValue('components.circuitTransfers', updated);
-                  }}
-                >
-                  ×
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Bottom row: Price breakdown */}
-          {showPrices && (
-            <div className="mt-4 p-3 bg-[var(--color-muted)]/20 rounded-lg">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-[var(--color-muted-foreground)]">Price Breakdown:</span>
-                <div className="text-right">
-                  <div className="font-medium">
-                    {selected.quantity || 1} seat{(selected.quantity || 1) !== 1 ? 's' : ''} × £{pricePerSeat.toFixed(2)}
-                  </div>
-                  <div className="text-xs text-[var(--color-muted-foreground)]">
-                    {coachesRequired} coach{coachesRequired !== 1 ? 'es' : ''} required
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="text-center space-y-3">
-          <Loader2 className="animate-spin h-8 w-8 text-[var(--color-muted-foreground)] mx-auto" />
-          <p className="text-[var(--color-muted-foreground)]">Loading circuit transfers...</p>
-        </div>
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="text-center space-y-3">
-          <AlertCircle className="h-8 w-8 text-red-500 mx-auto" />
-          <p className="text-red-600">{error}</p>
-          <Button variant="outline" onClick={() => window.location.reload()}>Retry</Button>
-        </div>
-      </div>
-    );
-  }
-
-  const compatibleTransfers = getCompatibleTransfers();
-  const compatibleTransferIds = compatibleTransfers.map(t => t.id);
-  // Only render selected transfers that are still compatible
-  const filteredSelectedTransfers = selectedTransfers.filter(sel => compatibleTransferIds.includes(sel.id));
-
-  if (selectedRooms.length === 0) {
-    return (
-      <Card className="text-center py-16 border border-[var(--color-border)] bg-gradient-to-b from-[var(--color-card)] to-[var(--color-background)]">
-        <CardContent>
-          <div className="mx-auto w-16 h-16 bg-[var(--color-muted)] rounded-xl flex items-center justify-center mb-6">
-            <Hotel className="h-8 w-8 text-[var(--color-muted-foreground)]" />
-          </div>
-          <h3 className="text-lg font-semibold mb-3 text-[var(--color-foreground)]">Select Hotel Rooms First</h3>
-          <p className="text-[var(--color-muted-foreground)]">
-            Please select hotel rooms in the Hotel Rooms tab to see available circuit transfers.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (compatibleTransfers.length === 0) {
-    return (
-      <Card className="text-center py-16 border border-[var(--color-border)] bg-gradient-to-b from-[var(--color-card)] to-[var(--color-background)]">
-        <CardContent>
-          <div className="mx-auto w-16 h-16 bg-[var(--color-muted)] rounded-xl flex items-center justify-center mb-6">
-            <Car className="h-8 w-8 text-[var(--color-muted-foreground)]" />
-          </div>
-          <h3 className="text-lg font-semibold mb-3 text-[var(--color-foreground)]">No Circuit Transfers Available</h3>
-          <p className="text-[var(--color-muted-foreground)]">
-            No circuit transfers are available for the selected hotel rooms and event.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-4">
-        <Switch checked={enabled} onCheckedChange={handleToggleChange} />
-        <span className="font-medium">Include Circuit Transfers</span>
-      </div>
-      {!enabled ? (
-        <div className="p-4 text-center text-muted-foreground">
-          No transfers will be included in your package.
-        </div>
-      ) : (
-        <>
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <h4 className="text-lg font-semibold text-[var(--color-foreground)] flex items-center gap-2">
-              <Car className="h-5 w-5 text-[var(--color-primary-600)]" />
-              Circuit Transfers
-            </h4>
-            <Badge variant="secondary" className="text-sm">
-              {selectedTransfers.length} selected
-            </Badge>
-          </div>
-          {/* Transfer Cards */}
-          <div className="space-y-4">
-            {selectedTransfers.map((selectedTransfer: any, index: number) => {
-              const transfer = getTransfer(selectedTransfer.id);
-              const hotel = getHotelFromTransfer(transfer);
-              console.log('[DEBUG] Rendering card for selectedTransfer:', selectedTransfer, 'resolved transfer:', transfer, 'hotel:', hotel);
-              if (!transfer) return null;
-              return (
-                <TransferCard
-                  key={transfer.id}
-                  transfer={transfer}
-                  selected={selectedTransfer}
-                  hotel={hotel}
-                  onChange={(transferId: string) => handleTransferChange(transferId, index)}
-                  index={index}
-                  showPrices={showPrices}
-                />
-              );
-            })}
-          </div>
-          {/* Add/Remove Transfer Controls */}
-          <div className="flex flex-wrap items-center gap-3 pt-4">
-            {/* Add Another Transfer Type */}
-            {compatibleTransfers.length > selectedTransfers.length && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={totalSeats >= adults}
-                onClick={handleAddTransfer}
-                className="rounded-xl px-5 py-2"
-              >
-                + Add Another Transfer Type
-              </Button>
-            )}
-          </div>
-        </>
       )}
     </div>
   );

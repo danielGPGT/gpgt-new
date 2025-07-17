@@ -68,6 +68,7 @@ import { CurrencyService } from '@/lib/currencyService';
 import { FlightApiService } from '@/lib/flightApiService';
 import { hasTeamFeature } from '@/lib/teamUtils';
 import { ConsultantDetailsCard } from '@/components/ConsultantDetailsCard';
+import { TeamService } from '@/lib/teamService';
 
 // Package Intake Schema
 const packageIntakeSchema = z.object({
@@ -97,6 +98,7 @@ const packageIntakeSchema = z.object({
     location: z.string().optional(),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
+    consultantEmail: z.string().optional(),
   }).optional(),
   selectedPackage: z.object({
     id: z.string().optional(),
@@ -133,7 +135,7 @@ const packageIntakeSchema = z.object({
       price: z.number(),
       transferType: z.string().optional(),
       packageComponentId: z.string().optional(),
-    })).default([]),
+    })).optional(),
     airportTransfers: z.array(z.object({
       id: z.string(),
       quantity: z.number().min(1),
@@ -177,7 +179,6 @@ const packageIntakeSchema = z.object({
   }).default({
     tickets: [],
     hotels: [],
-    circuitTransfers: [],
     airportTransfers: [],
     flights: [],
     flightsSource: 'none',
@@ -426,7 +427,7 @@ function roundUpHundredMinusTwo(n: number) {
     };
 
     return (
-      <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
+      <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm sticky top-20 z-10">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -568,7 +569,21 @@ export function PackageIntakeTest() {
   const [circuitTransfers, setCircuitTransfers] = useState<any[]>([]);
   const [airportTransfers, setAirportTransfers] = useState<any[]>([]);
 
-  const totalSteps = 6;
+  const [isNotB2B, setIsNotB2B] = useState<boolean | null>(null);
+  useEffect(() => {
+    hasTeamFeature('is_not_b2b').then(setIsNotB2B);
+  }, []);
+
+  // Conditionally define steps
+  const stepConfig = [
+    ...(isNotB2B === false ? [] : [{ id: 1, title: "Client Selection", icon: Users, color: "var(--color-primary-500)" }]),
+    { id: 2, title: "Traveler Count", icon: Users, color: "var(--color-secondary-600)" },
+    { id: 3, title: "Select Event", icon: Calendar, color: "var(--color-primary-600)" },
+    { id: 4, title: "Package & Tier", icon: Ticket, color: "var(--color-secondary-700)" },
+    { id: 5, title: "Components", icon: Settings, color: "var(--color-primary-700)" },
+    { id: 6, title: "Summary", icon: FileText, color: "var(--color-secondary-900)" }
+  ];
+  const totalSteps = stepConfig.length;
 
   // Create form instance for validation
   const form = useForm<PackageIntake>({
@@ -600,7 +615,7 @@ export function PackageIntakeTest() {
       components: {
         tickets: [],
         hotels: [],
-        circuitTransfers: [],
+        circuitTransfers: undefined,
         airportTransfers: [],
         flights: [],
         flightsSource: 'none',
@@ -644,10 +659,16 @@ export function PackageIntakeTest() {
     const transfers = form.getValues('components.airportTransfers') || [];
     const selectedRooms = form.getValues('components.hotels') || [];
     const selectedHotelId = selectedRooms.length === 1 ? selectedRooms[0].hotelId : null;
-    const patchedTransfers = transfers.map(t => ({
-      ...t,
-      hotel_id: t.hotel_id || selectedHotelId
-    }));
+    // Only patch if hotel_id exists on the transfer object
+    const patchedTransfers = transfers.map((t: any) => {
+      if ('hotel_id' in t || selectedHotelId) {
+        return {
+          ...t,
+          hotel_id: t.hotel_id || selectedHotelId
+        };
+      }
+      return t;
+    });
     if (JSON.stringify(transfers) !== JSON.stringify(patchedTransfers)) {
       form.setValue('components.airportTransfers', patchedTransfers);
     }
@@ -659,14 +680,13 @@ export function PackageIntakeTest() {
   const handleNext = async () => {
     // Define which fields to validate for each step
     const stepValidationFields = {
-      0: ['client.firstName', 'client.lastName', 'client.email'], // Client Selection
-      1: ['travelers.adults', 'travelers.total'], // Traveler Count
-      2: [], // Event Selection
-      3: [], // Package & Tier Selection
-      4: [], // Components
-      5: [], // Summary
+      0: isNotB2B === false ? ['travelers.adults', 'travelers.total'] : ['client.firstName', 'client.lastName', 'client.email'],
+      1: ['travelers.adults', 'travelers.total'],
+      2: [],
+      3: [],
+      4: [],
+      5: [],
     };
-
     const fieldsToValidate = stepValidationFields[currentStep as keyof typeof stepValidationFields] || [];
     
     // Only validate if there are fields to validate for this step
@@ -912,21 +932,139 @@ export function PackageIntakeTest() {
     })();
   }, []);
 
+  // Define handleRequest in the parent
+  const [consultantEmail, setConsultantEmail] = useState<string | null>(null);
+  const [consultantLoading, setConsultantLoading] = useState(false);
+
+  // Fetch primary consultant email when selectedEvent.id changes
+  useEffect(() => {
+    const fetchConsultantEmail = async () => {
+      const event = form.getValues('selectedEvent');
+      if (event && event.id) {
+        setConsultantLoading(true);
+        try {
+          // Step 1: Get event to find primary_consultant_id
+          const { data: eventData, error: eventError } = await supabase
+            .from('events')
+            .select('primary_consultant_id')
+            .eq('id', event.id)
+            .single();
+          if (eventError || !eventData?.primary_consultant_id) throw eventError || new Error('No primary consultant');
+          // Step 2: Get team member email
+          const { data: memberData, error: memberError } = await supabase
+            .from('team_members')
+            .select('email')
+            .eq('id', eventData.primary_consultant_id)
+            .single();
+          if (memberError) throw memberError;
+          setConsultantEmail(memberData?.email || null);
+        } catch (err) {
+          setConsultantEmail(null);
+        } finally {
+          setConsultantLoading(false);
+        }
+      } else {
+        setConsultantEmail(null);
+      }
+    };
+    fetchConsultantEmail();
+  }, [form.watch('selectedEvent.id')]);
+
+  function handleRequest() {
+    const data = form.getValues();
+    const email = consultantEmail || 'consultant@example.com';
+    const subject = encodeURIComponent(`New Package Request for ${data.selectedEvent?.name || 'Event'}`);
+
+    // --- Tickets ---
+    const ticketsSummary = (data.components.tickets || [])
+      .map(t => {
+        let line = `- ${t.category}`;
+        if ('ticket_type' in t && t.ticket_type) line += ` • ${t.ticket_type}`;
+        if ('ticket_days' in t && t.ticket_days) line += ` • ${t.ticket_days}`;
+        line += ` × ${t.quantity}`;
+        return line;
+      })
+      .join('\n');
+
+    // --- Hotels ---
+    const hotelsSummary = (data.components.hotels || [])
+      .map(h => {
+        const hotel = hotels.find((ht: any) => ht.id === h.hotelId);
+        const room = hotelRooms.find((rm: any) => rm.id === h.roomId);
+        let line = `- ${hotel?.name || 'Hotel'}`;
+        if (room?.room_type_id) line += ` • ${room.room_type_id}`;
+        line += ` × ${h.quantity}`;
+        line += ` • ${h.checkIn} to ${h.checkOut}`;
+        if (hotel?.city || hotel?.country) line += ` • ${hotel?.city || ''}${hotel?.city && hotel?.country ? ', ' : ''}${hotel?.country || ''}`;
+        return line;
+      })
+      .join('\n');
+
+    // --- Circuit Transfers ---
+    const circuitTransfersSummary = (data.components.circuitTransfers || [])
+      .map(c => {
+        const transfer = circuitTransfers.find((t: any) => t.id === c.id);
+        const hotel = transfer && transfer.hotel_id ? hotels.find((h: any) => h.id === transfer.hotel_id) : undefined;
+        let line = `- ${transfer?.transfer_type || 'Transfer'}`;
+        if (hotel) line += ` • ${hotel.name}`;
+        line += ` × ${c.quantity}`;
+        if ('transferDirection' in c && c.transferDirection) line += ` ${c.transferDirection}`;
+        return line;
+      })
+      .join('\n');
+
+    // --- Airport Transfers ---
+    const airportTransfersSummary = (data.components.airportTransfers || [])
+      .map(a => {
+        const transfer = airportTransfers.find((t: any) => t.id === a.id);
+        const hotel = transfer && transfer.hotel_id ? hotels.find((h: any) => h.id === transfer.hotel_id) : undefined;
+        let line = `- ${transfer?.transport_type || 'Transfer'}`;
+        if (hotel) line += ` • ${hotel.name}`;
+        line += ` × ${a.quantity}`;
+        if ('transferDirection' in a && a.transferDirection) line += ` ${a.transferDirection}`;
+        return line;
+      })
+      .join('\n');
+
+    // --- Flights ---
+    const flightsSummary = (data.components.flights || [])
+      .map(f => `- ${f.origin} → ${f.destination} × ${f.passengers} passengers`)
+      .join('\n');
+
+    const body = encodeURIComponent(
+      `Travelers: ${data.travelers.adults} adult${data.travelers.adults !== 1 ? 's' : ''}${data.travelers.children > 0 ? `, ${data.travelers.children} child${data.travelers.children !== 1 ? 'ren' : ''}` : ''}\n` +
+      `Total: ${data.travelers.total}\n` +
+      `Event: ${data.selectedEvent?.name || ''}\n` +
+      `Location: ${data.selectedEvent?.location || ''}\n` +
+      (data.selectedEvent?.startDate ? `Dates: ${data.selectedEvent.startDate}${data.selectedEvent.endDate ? ` - ${data.selectedEvent.endDate}` : ''}\n` : '') +
+      `Package: ${data.selectedPackage?.name || ''}\n` +
+      `Tier: ${data.selectedTier?.name || ''}\n` +
+      `\n--- Tickets ---\n${ticketsSummary || 'None'}\n` +
+      `\n--- Hotels ---\n${hotelsSummary || 'None'}\n` +
+      `\n--- Circuit Transfers ---\n${circuitTransfersSummary || 'None'}\n` +
+      `\n--- Airport Transfers ---\n${airportTransfersSummary || 'None'}\n` +
+      `\n--- Flights ---\n${flightsSummary || 'None'}\n` +
+      `\nTotal: £${form.getValues('payments.total')}`
+    );
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+  }
+
   const renderStep = () => {
-    switch (currentStep) {
+    let stepIdx = currentStep;
+    if (isNotB2B === false) stepIdx += 1; // shift index if client step is removed
+    switch (stepIdx) {
       case 0:
-        return <StepClientSelection showPrices={showPrices} />;
+        return isNotB2B === false ? <StepTravelerCount /> : <StepClientSelection />;
       case 1:
-        return <StepTravelerCount showPrices={showPrices} />;
+        return <StepTravelerCount />;
       case 2:
-        return <StepEventSelection setCurrentStep={setCurrentStep} currentStep={currentStep} showPrices={showPrices} />;
+        return <StepEventSelection setCurrentStep={setCurrentStep} currentStep={currentStep} />;
       case 3:
-        return <StepPackageAndTierSelection setCurrentStep={setCurrentStep} currentStep={currentStep} showPrices={showPrices} />;
+        return <StepPackageAndTierSelection setCurrentStep={setCurrentStep} currentStep={currentStep} />;
       case 4:
         return <StepComponents setCurrentStep={setCurrentStep} currentStep={currentStep} showPrices={showPrices} />;
       case 5:
-        // --- SUMMARY STEP ---
-        return <SummaryStep form={form} isGenerating={isGenerating} showPrices={showPrices} />;
+        return <SummaryStep form={form} isGenerating={isGenerating} showPrices={showPrices} handleRequest={handleRequest} consultantEmail={consultantEmail} consultantLoading={consultantLoading} />;
       default:
         return <div className="p-6 text-center">
           <h3 className="text-lg font-semibold mb-2">Step Not Found</h3>
@@ -1003,11 +1141,13 @@ export function PackageIntakeTest() {
                       className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md px-8"
                       onClick={
                         currentStep === totalSteps - 1
-                          ? () => handleGenerateQuote(form.getValues())
+                          ? (showPrices ? () => handleGenerateQuote(form.getValues()) : handleRequest)
                           : handleNext
                       }
                     >
-                      {currentStep === totalSteps - 1 ? 'Generate Quote' : 'Next'}
+                      {currentStep === totalSteps - 1
+                        ? (showPrices ? 'Generate Quote' : (isGenerating ? 'Sending...' : 'Send Request'))
+                        : 'Next'}
                       <ChevronRight className="h-4 w-4 ml-2" />
                     </Button>
                   </div>
@@ -1026,7 +1166,7 @@ export function PackageIntakeTest() {
             )}
 
             {/* Pro Tips Card */}
-            <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
+            {/*<Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
                   <Lightbulb className="h-5 w-5" style={{ color: 'var(--color-primary-500)' }} />
@@ -1058,7 +1198,7 @@ export function PackageIntakeTest() {
               </CardContent>
             </Card>
 
-            {/* Quick Stats */}
+           
             <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
@@ -1088,7 +1228,7 @@ export function PackageIntakeTest() {
               </CardContent>
             </Card>
 
-            {/* Help & Resources */}
+            
             <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
@@ -1110,7 +1250,7 @@ export function PackageIntakeTest() {
                   Support
                 </Button>
               </CardContent>
-            </Card>
+            </Card>*/}
           </div>
         </div>
         </FormProvider>
@@ -1119,7 +1259,7 @@ export function PackageIntakeTest() {
   );
 }
 
-export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isGenerating: boolean, showPrices: boolean }) {
+export function SummaryStep({ form, isGenerating, showPrices, handleRequest, consultantEmail, consultantLoading }: { form: any, isGenerating: boolean, showPrices: boolean, handleRequest: () => void, consultantEmail?: string | null, consultantLoading?: boolean }) {
   const data = form.getValues();
   const { client, travelers, selectedEvent, selectedPackage, selectedTier, components } = data;
   // --- Fetch hotel, room, and transfer details for display ---
@@ -1427,7 +1567,7 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
             <h4 className="font-semibold mb-1 flex items-center gap-2">
               <Car className="h-4 w-4 text-[var(--color-primary-500)]" /> Circuit Transfers
             </h4>
-            {components.circuitTransfers.length > 0 ? (
+            {components.circuitTransfers?.length > 0 ? (
               <ul className="ml-4 space-y-1">
                 {components.circuitTransfers.map((c: any, i: number) => {
                   const transfer = getCircuitTransfer(c.id);
@@ -2224,15 +2364,7 @@ export function SummaryStep({ form, isGenerating, showPrices }: { form: any, isG
       </Card>
       {/* Price Summary */}
 
-      <div className="flex justify-end mt-8">
-        {showPrices ? (
-          ""
-        ) : (
-          <Button onClick={handleRequest} disabled={isGenerating || requesting}>
-            {requesting ? 'Sending...' : 'Send Request'}
-          </Button>
-        )}
-      </div>
+      
     </div>
   );
 } 

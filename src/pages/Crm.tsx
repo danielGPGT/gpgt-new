@@ -38,8 +38,13 @@ import { CRMService } from '@/lib/crmService';
 import type { Client, ClientStats, ClientFilters } from '@/types/crm';
 import { ClientsTable } from '@/components/crm/ClientsTable';
 import { supabase } from '@/lib/supabase';
+import { useTeamFeature } from '@/lib/teamUtils';
 
 export default function CRM() {
+  const isNotB2B = useTeamFeature('is_not_b2b');
+  if (isNotB2B === false) {
+    return <div className="p-8 text-center text-lg">This feature is not available for B2B teams.</div>;
+  }
   const [clients, setClients] = useState<Client[]>([]);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [stats, setStats] = useState<ClientStats | null>(null);

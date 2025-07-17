@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthProvider";
+import { hasTeamFeature } from '@/lib/teamUtils';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,20 @@ export default function Login() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [isNotB2B, setIsNotB2B] = useState<boolean | null>(null);
 
-  if (user) navigate("/dashboard");
+  useEffect(() => {
+    if (user) {
+      hasTeamFeature('is_not_b2b').then((enabled) => {
+        setIsNotB2B(enabled);
+        if (enabled === false) {
+          navigate("/package-intake-test");
+        } else {
+          navigate("/dashboard");
+        }
+      });
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -69,6 +69,7 @@ import {
 import * as React from "react";
 import { UndrawMakeItRain } from 'react-undraw-illustrations';
 import { SiStripe } from 'react-icons/si';
+import { useTeamFeature } from '@/lib/teamUtils';
 
 // Interactive chart data and config for the Today summary section
 // Generate real chart data from quotes and bookings
@@ -89,6 +90,10 @@ const chartConfig = {
 
 export function Dashboard() {
   const { user } = useAuth();
+  const isNotB2B = useTeamFeature('is_not_b2b');
+  if (isNotB2B === false) {
+    return <div className="p-8 text-center text-lg">This feature is not available for B2B teams.</div>;
+  }
   const [quotes, setQuotes] = useState<QuoteResponse[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingStats, setBookingStats] = useState<BookingStats | null>(null);

@@ -15,7 +15,7 @@ import { BookingService, Booking } from '@/lib/bookingService';
 import { Calendar, MapPin, Users, DollarSign, Clock, Search, Filter, Download, Eye, Phone, Mail, CalendarDays, TrendingUp, ArrowUpRight, ArrowDownRight, CheckCircle, XCircle, AlertCircle, Edit, Trash2, MoreHorizontal, Plus, FileText, User, Building, CreditCard, Plane, Hotel, Car, Ticket, Grid3X3, List } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { hasTeamFeature } from '@/lib/teamUtils';
+import { hasTeamFeature, useTeamFeature } from '@/lib/teamUtils';
 
 interface BookingWithDetails {
   id: string;
@@ -95,6 +95,10 @@ interface BookingWithDetails {
 }
 
 export default function Bookings() {
+  const isNotB2B = useTeamFeature('is_not_b2b');
+  if (isNotB2B === false) {
+    return <div className="p-8 text-center text-lg">This feature is not available for B2B teams.</div>;
+  }
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<BookingWithDetails[]>([]);

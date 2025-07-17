@@ -65,6 +65,7 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
   const [canSeeBookings, setCanSeeBookings] = useState(false);
   const [canSeeItineraries, setCanSeeItineraries] = useState(false);
   const [canSeeMediaLibrary, setCanSeeMediaLibrary] = useState(false);
+  const [isNotB2B, setIsNotB2B] = useState<boolean | null>(null);
 
   useEffect(() => {
     hasTeamFeature('inventory_access').then(setCanSeeInventory);
@@ -72,6 +73,7 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
     hasTeamFeature('bookings_access').then(setCanSeeBookings);
     hasTeamFeature('itineraries_access').then(setCanSeeItineraries);
     hasTeamFeature('media_library_access').then(setCanSeeMediaLibrary);
+    hasTeamFeature('is_not_b2b').then(setIsNotB2B);
   }, []);
 
   const handleToggleCollapse = () => {
@@ -82,11 +84,11 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
 
   // Main navigation
   const navItems = [
-    { label: "Dashboard", icon: Home, href: "/dashboard" },
-    { label: "Analytics", icon: BarChart3, href: "/analytics" },
+    { label: "Dashboard", icon: Home, href: "/dashboard", restricted: true },
+    { label: "Analytics", icon: BarChart3, href: "/analytics", restricted: true },
     { label: "New Proposal", icon: FilePlus2, href: "/package-intake-test" },
-    { label: "Quotes", icon: FileText, href: "/quotes" },
-    { label: "Bookings", icon: CheckCircle, href: "/bookings" },
+    { label: "Quotes", icon: FileText, href: "/quotes", restricted: true },
+    { label: "Bookings", icon: CheckCircle, href: "/bookings", restricted: true },
     { label: "Itineraries", icon: Calendar, href: "/itineraries" },
     {
       label: "Media Library",
@@ -98,8 +100,8 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
 
   // CRM section
   const crmItems = [
-    { label: "Clients", icon: Users, href: "/crm" },
-    { label: "Integrations", icon: Building2, href: "/integrations" },
+    { label: "Clients", icon: Users, href: "/crm", restricted: true },
+    { label: "Integrations", icon: Building2, href: "/integrations", restricted: true },
   ];
 
   // Documents section
@@ -127,6 +129,7 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
       <nav className="flex-1 px-2 py-4">
         <div className="space-y-1">
           {navItems.map((item) => {
+            if (item.restricted && isNotB2B === false) return null;
             if (item.label === "Bookings" && !canSeeBookings) return null;
             if (item.label === "Itineraries" && !canSeeItineraries) return null;
             if (item.label === "Media Library" && !canSeeMediaLibrary) return null;
@@ -154,13 +157,14 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
 
         {/* CRM Section */}
         <div className="mt-6">
-          {!collapsed && (
+          {(!collapsed && crmItems.some(item => !(item.restricted && isNotB2B === false))) && (
             <div className="px-3 py-1 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
               CRM
             </div>
           )}
           <div className="space-y-1 mt-1">
             {crmItems.map((item) => {
+              if (item.restricted && isNotB2B === false) return null;
               const active = location.pathname === item.href;
               return (
                 <Link to={item.href} key={item.href} tabIndex={collapsed ? -1 : 0}>

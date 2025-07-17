@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { useEffect, useState } from 'react';
 
 export interface TeamInfo {
   id: string;
@@ -196,4 +197,14 @@ export async function hasTeamFeature(featureName: string): Promise<boolean> {
     console.error('Error in hasTeamFeature:', error);
     return false;
   }
+} 
+
+export function useTeamFeature(featureName: string) {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  useEffect(() => {
+    (async () => {
+      setEnabled(await hasTeamFeature(featureName));
+    })();
+  }, [featureName]);
+  return enabled;
 } 

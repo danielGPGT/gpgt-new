@@ -6,8 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { QuoteService, type QuoteResponse } from '@/lib/quoteService';
 import { BookingService, type BookingStats } from '@/lib/bookingService';
 import { DollarSign, FileText, CheckCircle, TrendingUp } from 'lucide-react';
+import { useTeamFeature } from '@/lib/teamUtils';
 
 export default function Analytics() {
+  const isNotB2B = useTeamFeature('is_not_b2b');
+  if (isNotB2B === false) {
+    return <div className="p-8 text-center text-lg">This feature is not available for B2B teams.</div>;
+  }
   const [quotes, setQuotes] = useState<QuoteResponse[]>([]);
   const [conversionData, setConversionData] = useState<{ date: string; conversion: number; totalQuotes: number }[]>([]);
   const [timeRange, setTimeRange] = useState('90d');

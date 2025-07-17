@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useRole } from '@/lib/RoleContext';
 import { useEffect } from 'react';
+import { hasTeamFeature } from '@/lib/teamUtils';
 
 interface HeaderProps {
   showNavigation?: boolean;
@@ -36,6 +37,11 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
   // const { role, setRole, loading: roleLoading } = useRole();
   const [teamMemberRole, setTeamMemberRole] = useState<string | null>(null);
   const [loadingTeamRole, setLoadingTeamRole] = useState(false);
+  const [isNotB2B, setIsNotB2B] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    hasTeamFeature('is_not_b2b').then(setIsNotB2B);
+  }, []);
 
   // Fetch team member role
   useEffect(() => {
@@ -126,7 +132,7 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button asChild size="xs" className="p-1 bg-primary rounded-full hover:bg-primary/80 text-primary-foreground ml-1">
+              <Button asChild size="sm" className="p-1 bg-primary rounded-full hover:bg-primary/80 text-primary-foreground ml-1">
                 <Link to="/package-intake-test">
                   <Plus className="h-6 w-6" />
                 </Link>
@@ -135,7 +141,7 @@ export function Header({ showNavigation = true, sidebarCollapsed, onSidebarColla
             <TooltipContent variant="default">+ New Proposal</TooltipContent>
           </Tooltip>
           {/* Team Member Role Badge - Switchable for Testing */}
-          {user && (
+          {user && (isNotB2B !== false) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="px-3 py-1 shadow-sm font-semibold uppercase gap-1 flex items-center">

@@ -76,6 +76,21 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
     hasTeamFeature('is_not_b2b').then(setIsNotB2B);
   }, []);
 
+  // Wait for all permissions to load before rendering sidebar
+  const permissionsLoading = [
+    isNotB2B,
+    canSeeInventory,
+    canSeePackageManager,
+    canSeeBookings,
+    canSeeItineraries,
+    canSeeMediaLibrary
+  ].some(v => v === null || v === undefined);
+
+  if (permissionsLoading) {
+    // Optionally, show a spinner or skeleton here
+    return <div className="w-72 h-screen bg-[var(--sidebar)] border-r border-[var(--sidebar-border)] flex items-center justify-center"><span>Loading...</span></div>;
+  }
+
   const handleToggleCollapse = () => {
     if (onCollapsedChange) {
       onCollapsedChange(!collapsed);

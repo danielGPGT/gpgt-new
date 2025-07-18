@@ -300,7 +300,7 @@ function roundUpHundredMinusTwo(n: number) {
 }
 
 // --- PRICE SUMMARY CARD COMPONENT ---
-  function PriceSummaryCardContent() {
+  function PriceSummaryCardContent({ isNotB2B }: { isNotB2B: boolean | null }) {
     const { watch, setValue } = useFormContext();
     const components = watch('components') || { tickets: [], hotels: [], circuitTransfers: [], airportTransfers: [], flights: [], loungePass: {}, flightsSource: 'none' };
     const selectedCurrency = watch('summary.currency') || 'GBP';
@@ -364,24 +364,7 @@ function roundUpHundredMinusTwo(n: number) {
   const originalTotal = ticketsTotal + hotelsTotal + circuitTransfersTotal + airportTransfersTotal + flightsTotal + loungePassTotal;
   
   // Apply hidden 10% markup for teams other than the specific team ID
-  const [teamId, setTeamId] = useState<string | null>(null);
-  
-  useEffect(() => {
-    const getTeamId = async () => {
-      try {
-        const { getCurrentUserTeamId } = await import('@/lib/teamUtils');
-        const id = await getCurrentUserTeamId();
-        setTeamId(id);
-      } catch (error) {
-        console.error('Error getting team ID:', error);
-        setTeamId(null);
-      }
-    };
-    getTeamId();
-  }, []);
-  
-  // Apply 10% markup for all teams except the specific team ID
-  const markupMultiplier = teamId && teamId !== '0cef0867-1b40-4de1-9936-16b867a753d7' ? 1.10 : 1.00;
+  const markupMultiplier = isNotB2B === false ? 1.10 : 1.00;
   const totalWithMarkup = originalTotal * markupMultiplier;
   const roundedTotal = roundUpHundredMinusTwo(totalWithMarkup);
 
@@ -1102,7 +1085,7 @@ export function PackageIntakeTest() {
       case 3:
         return <StepComponents setCurrentStep={setCurrentStep} currentStep={currentStep} showPrices={showPrices} tickets={tickets} hotelRooms={hotelRooms} />;
       case 4:
-        return <SummaryStep form={form} isGenerating={isGenerating} showPrices={showPrices} handleRequest={handleRequest} consultantEmail={consultantEmail} consultantLoading={consultantLoading} />;
+        return <SummaryStep form={form} isGenerating={isGenerating} showPrices={showPrices} handleRequest={handleRequest} consultantEmail={consultantEmail} consultantLoading={consultantLoading} isNotB2B={isNotB2B} />;
       default:
         return <div className="p-6 text-center">
           <h3 className="text-lg font-semibold mb-2">Step Not Found</h3>
@@ -1258,12 +1241,12 @@ export function PackageIntakeTest() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Price Summary - only show during components step and when showPrices is enabled */}
-            {currentStep === 3 && (
-              showPrices
-                ? <PriceSummaryCardContent />
-                : <ConsultantDetailsCard eventId={form.getValues('selectedEvent')?.id} />
+            {currentStep === 2 && (
+              <ConsultantDetailsCard eventId={(() => { const ev = form.getValues('selectedEvent'); return ev && typeof ev === 'object' && 'id' in ev && typeof ev.id === 'string' ? ev.id : undefined; })()} />
             )}
-
+            {currentStep === 3 && showPrices && (
+              <PriceSummaryCardContent isNotB2B={isNotB2B} />
+            )}
             {/* Pro Tips Card */}
             {/*<Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
               <CardHeader className="pb-4">
@@ -1358,7 +1341,7 @@ export function PackageIntakeTest() {
   );
 }
 
-export function SummaryStep({ form, isGenerating, showPrices, handleRequest, consultantEmail, consultantLoading }: { form: any, isGenerating: boolean, showPrices: boolean, handleRequest: () => void, consultantEmail?: string | null, consultantLoading?: boolean }) {
+export function SummaryStep({ form, isGenerating, showPrices, handleRequest, consultantEmail, consultantLoading, isNotB2B }: { form: any, isGenerating: boolean, showPrices: boolean, handleRequest: () => void, consultantEmail?: string | null, consultantLoading?: boolean, isNotB2B: boolean | null }) {
   const data = form.getValues();
   const { client, travelers, selectedEvent, selectedPackage, selectedTier, components } = data;
   // --- Fetch hotel, room, and transfer details for display ---
@@ -1442,61 +1425,43 @@ export function SummaryStep({ form, isGenerating, showPrices, handleRequest, con
   const loungePassTotal = loungePass && loungePass.id ? (loungePass.price || 0) * (loungePass.quantity || 1) : 0;
   const originalTotal = ticketsTotal + hotelsTotal + circuitTransfersTotal + airportTransfersTotal + flightsTotal + loungePassTotal;
   
-  // Apply hidden 10% markup for teams other than the specific team ID
-  const [teamId, setTeamId] = useState<string | null>(null);
-  
-  useEffect(() => {
-    const getTeamId = async () => {
-      try {
-        const { getCurrentUserTeamId } = await import('@/lib/teamUtils');
-        const id = await getCurrentUserTeamId();
-        setTeamId(id);
-      } catch (error) {
-        console.error('Error getting team ID:', error);
-        setTeamId(null);
-      }
-    };
-    getTeamId();
-  }, []);
-  
-  // Apply 10% markup for all teams except the specific team ID
-  const markupMultiplier = teamId && teamId !== '0cef0867-1b40-4de1-9936-16b867a753d7' ? 1.10 : 1.00;
-  const totalWithMarkup = originalTotal * markupMultiplier;
-  const roundedTotal = roundUpHundredMinusTwo(totalWithMarkup);
+  // First round up, then apply markup
+  const roundedTotal = roundUpHundredMinusTwo(originalTotal);
+  const markupMultiplier = isNotB2B === false ? 1.10 : 1.00;
+  const totalWithMarkup = roundedTotal * markupMultiplier;
 
   // Debug log (only in development)
   if (process.env.NODE_ENV === 'development' && markupMultiplier > 1.00) {
     console.log('💰 Team markup applied (SummaryStep):', {
-      teamId,
+      isNotB2B,
       originalTotal: originalTotal.toFixed(2),
       markupMultiplier,
       totalWithMarkup: totalWithMarkup.toFixed(2),
       roundedTotal: roundedTotal.toFixed(2)
     });
   }
-  
-  // Calculate payment breakdown - ensure they add up exactly to total
-  const deposit = Math.round((roundedTotal / 3) * 100) / 100;
-  const secondPayment = Math.round((roundedTotal / 3) * 100) / 100;
-  let finalPayment = Math.round((roundedTotal - deposit - secondPayment) * 100) / 100;
+
+  // Calculate payment breakdown - ensure they add up exactly to totalWithMarkup
+  const deposit = Math.round((totalWithMarkup / 3) * 100) / 100;
+  const secondPayment = Math.round((totalWithMarkup / 3) * 100) / 100;
+  let finalPayment = Math.round((totalWithMarkup - deposit - secondPayment) * 100) / 100;
   // Fix any floating point error by adjusting finalPayment
   const sum = Math.round((deposit + secondPayment + finalPayment) * 100) / 100;
-  if (sum !== Math.round(roundedTotal * 100) / 100) {
-    finalPayment = Math.round((roundedTotal - deposit - secondPayment) * 100) / 100 + (Math.round(roundedTotal * 100) / 100 - sum);
+  if (sum !== Math.round(totalWithMarkup * 100) / 100) {
+    finalPayment = Math.round((totalWithMarkup - deposit - secondPayment) * 100) / 100 + (Math.round(totalWithMarkup * 100) / 100 - sum);
     finalPayment = Math.round(finalPayment * 100) / 100;
   }
-  
+
   // Get the converted total if currency is not GBP
   const currentCurrency = form.getValues('summary.currency');
-  const convertedTotal = form.getValues('summary.convertedPrice') || roundedTotal;
+  const convertedTotal = form.getValues('summary.convertedPrice') || totalWithMarkup;
   const exchangeRate = form.getValues('summary.exchangeRate') || 1;
-  
+
   // Use converted amounts for payments if currency is not GBP
-  const paymentTotal = currentCurrency === 'GBP' ? roundedTotal : convertedTotal;
+  const paymentTotal = currentCurrency === 'GBP' ? totalWithMarkup : convertedTotal;
   const paymentDeposit = currentCurrency === 'GBP' ? deposit : Math.round((convertedTotal / 3) * 100) / 100;
   const paymentSecondPayment = currentCurrency === 'GBP' ? secondPayment : Math.round((convertedTotal / 3) * 100) / 100;
   let paymentFinalPayment = currentCurrency === 'GBP' ? finalPayment : Math.round((convertedTotal - paymentDeposit - paymentSecondPayment) * 100) / 100;
-  
   // Fix any floating point error for converted payments
   if (currentCurrency !== 'GBP') {
     const convertedSum = Math.round((paymentDeposit + paymentSecondPayment + paymentFinalPayment) * 100) / 100;
@@ -1505,7 +1470,7 @@ export function SummaryStep({ form, isGenerating, showPrices, handleRequest, con
       paymentFinalPayment = Math.round(paymentFinalPayment * 100) / 100;
     }
   }
-  
+
   // --- Payment Dates: Only set defaults if not already set, allow user override ---
   const didSetDefaultDates = useRef(false);
   useEffect(() => {
@@ -2375,11 +2340,22 @@ export function SummaryStep({ form, isGenerating, showPrices, handleRequest, con
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex items-center gap-4">
+        <Badge className="text-xl">
+            Total: {data.summary.currency === 'GBP' 
+              ? `£${data.payments.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              : CurrencyService.formatCurrency(data.payments.total, data.summary.currency)
+            }
+          </Badge>
+          {isNotB2B === false && (
+              <div className="text-lg font-semibold">10% commission payable</div>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Deposit */}
             <div className="p-4 border border-[var(--color-border)] rounded-lg bg-[var(--color-muted)]/20">
               <div className="text-sm font-semibold text-[var(--color-foreground)] mb-1">Deposit</div>
-              <div className="text-2xl font-bold text-[var(--color-primary)] mb-2">
+              <div className="text-xl font-bold text-[var(--color-primary)] mb-2">
                 {data.summary.currency === 'GBP' 
                   ? `£${data.payments.deposit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : CurrencyService.formatCurrency(data.payments.deposit, data.summary.currency)
@@ -2392,7 +2368,7 @@ export function SummaryStep({ form, isGenerating, showPrices, handleRequest, con
             {/* Second Payment */}
             <div className="p-4 border border-[var(--color-border)] rounded-lg bg-[var(--color-muted)]/20">
               <div className="text-sm font-semibold text-[var(--color-foreground)] mb-1">Second Payment</div>
-              <div className="text-2xl font-bold text-[var(--color-primary)] mb-2">
+              <div className="text-xl font-bold text-[var(--color-primary)] mb-2">
                 {data.summary.currency === 'GBP' 
                   ? `£${data.payments.secondPayment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : CurrencyService.formatCurrency(data.payments.secondPayment, data.summary.currency)
@@ -2418,7 +2394,7 @@ export function SummaryStep({ form, isGenerating, showPrices, handleRequest, con
             {/* Final Payment */}
             <div className="p-4 border border-[var(--color-border)] rounded-lg bg-[var(--color-muted)]/20">
               <div className="text-sm font-semibold text-[var(--color-foreground)] mb-1">Final Payment</div>
-              <div className="text-2xl font-bold text-[var(--color-primary)] mb-2">
+              <div className="text-xl font-bold text-[var(--color-primary)] mb-2">
                 {data.summary.currency === 'GBP' 
                   ? `£${data.payments.finalPayment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : CurrencyService.formatCurrency(data.payments.finalPayment, data.summary.currency)
@@ -2442,12 +2418,7 @@ export function SummaryStep({ form, isGenerating, showPrices, handleRequest, con
               </div>
             </div>
           </div>
-          <div className="text-center text-sm text-[var(--color-muted-foreground)]">
-            Total: {data.summary.currency === 'GBP' 
-              ? `£${data.payments.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              : CurrencyService.formatCurrency(data.payments.total, data.summary.currency)
-            }
-          </div>
+
           {/* Payment Schedule Info */}
           <div className="mt-4 p-3 bg-[var(--color-muted)]/20 rounded-lg">
             <div className="text-xs text-[var(--color-muted-foreground)]">

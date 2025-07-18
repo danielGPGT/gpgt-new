@@ -273,7 +273,8 @@ export class InventoryService {
       .from('tickets')
       .select(`
         *,
-        event:events(*)
+        event:events(*),
+        ticket_category:ticket_categories(*)
       `);
 
     if (filters?.event_id) {
@@ -336,7 +337,8 @@ export class InventoryService {
       .from('tickets')
       .select(`
         *,
-        event:events(*)
+        event:events(*),
+        ticket_category:ticket_categories(*)
       `)
       .eq('id', id)
       .single();

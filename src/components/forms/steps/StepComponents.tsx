@@ -342,10 +342,8 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
           .then(({ data: tickets }) => {
             if (tickets && tickets.length > 0) {
               const initialTickets = tickets.map(ticket => ({
-                id: ticket.id,
+                ...ticket, // preserve all fields including ticket_category
                 quantity: adults || 1,
-                price: ticket.price_with_markup || 0,
-                category: ticket.ticket_category?.category_name || 'General',
                 packageComponentId: ticketComponents.find(comp => comp.component_id === ticket.id)?.id
               }));
               setValue('components.tickets', initialTickets);
@@ -537,15 +535,8 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
     if (ticket.ticket_days) {
       info.push({ label: 'Valid Days', value: ticket.ticket_days });
     }
-    if (ticket.refundable !== null) {
-      info.push({ label: 'Refundable', value: ticket.refundable ? 'Yes' : 'No' });
-    }
-    if (ticket.resellable !== null) {
-      info.push({ label: 'Resellable', value: ticket.resellable ? 'Yes' : 'No' });
-    }
-    if (ticket.supplier) {
-      info.push({ label: 'Supplier', value: ticket.supplier });
-    }
+
+
 
     return info;
   };
@@ -967,11 +958,12 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
                                 <Ticket className="h-5 w-5 text-white" />
                               </div>
                               <div className="min-w-0">
+                                {(() => { console.log('[TICKET CARD]', ticket); return null; })()}
                                 <div className="font-bold text-lg text-[var(--color-foreground)] truncate">
-                                  {ticket.ticket_category?.category_name || 'Ticket'}
+                                  {ticket.ticket_category?.category_name || ticket.category || 'Ticket'}
                                 </div>
                                 <div className="text-[var(--color-muted-foreground)] text-xs truncate">
-                                  {ticket.ticket_category?.category_type || 'General'}
+                                  {ticket.ticket_category?.category_type || ticket.category_type || 'General'}
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)] mt-1">
                                   <Tag className="h-3 w-3" />
@@ -1168,6 +1160,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
                 setValue('components.noCircuitTransfer', false);
               }
             }}
+            showPrices={showPrices}
           />
         )}
 
@@ -1188,17 +1181,9 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
                 setValue('components.noAirportTransfer', true);
               } else {
                 const transfer = allAirportTransfers.find(t => t.id === val.id);
-                let quantity = val.quantity;
-                if (transfer && typeof transfer.max_capacity === 'number' && transfer.max_capacity > 0) {
-                  quantity = Math.max(1, Math.ceil(adults / transfer.max_capacity));
-                  console.log('[AirportTransfer onChange] Setting quantity to', quantity, 'for adults', adults, 'max_capacity', transfer.max_capacity);
-                } else {
-                  quantity = Math.max(1, adults);
-                  console.log('[AirportTransfer onChange] Fallback quantity to', quantity, 'for adults', adults);
-                }
                 setValue('components.airportTransfers', [{
                   id: val.id,
-                  quantity,
+                  quantity: val.quantity,
                   price: transfer?.price_per_car_gbp_markup || 0,
                   transferDirection: val.transferDirection || 'both',
                   packageComponentId: null,
@@ -1207,7 +1192,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
                 setValue('components.noAirportTransfer', false);
               }
             }}
-            noAirportTransfer={components.noAirportTransfer}
+            showPrices={showPrices}
           />
         )}
 
@@ -1581,24 +1566,29 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices, hotelsWith
             {/* Price Breakdown */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mt-2 border-t border-[var(--color-border)] pt-4">
               <div className="flex-1">
-                <div className="text-xs text-[var(--color-muted-foreground)]">Base stay <span className="font-semibold">({baseNights} night{baseNights !== 1 ? 's' : ''})</span>:</div>
-                <div className="flex items-center gap-2">
-                  {showPrices && <div className="font-bold text-lg text-[var(--color-primary)]">£{basePrice.toLocaleString()}</div>}
-                  <Badge variant="outline" className="text-xs px-2 py-0.5 text-[var(--color-primary)] font-semibold">
-                    £{(room.total_price_per_stay_gbp_with_markup || room.total_price_per_stay_gbp || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per room
-                  </Badge>
-                </div>
-                {extraNights > 0 && (
-                  <div className="text-xs text-[var(--color-muted-foreground)] flex items-center gap-2">Extra nights ({extraNights}): <span className="font-semibold">£{(extraNightPrice * extraNights).toLocaleString()}</span>
-                    <Badge variant="outline" className="text-xs px-2 py-0.5 text-[var(--color-primary)] font-semibold">
-                      £{(room.extra_night_price_gbp || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per room per extra night
-                    </Badge>
-                  </div>
+                {showPrices && (
+                  <>
+                    <div className="text-xs text-[var(--color-muted-foreground)]">Base stay <span className="font-semibold">({baseNights} night{baseNights !== 1 ? 's' : ''})</span>:</div>
+                    <div className="flex items-center gap-2">
+                      <div className="font-bold text-lg text-[var(--color-primary)]">£{basePrice.toLocaleString()}</div>
+                      <Badge variant="outline" className="text-xs px-2 py-0.5 text-[var(--color-primary)] font-semibold">
+                        £{(room.total_price_per_stay_gbp_with_markup || room.total_price_per_stay_gbp || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per room
+                      </Badge>
+                    </div>
+                    {extraNights > 0 && (
+                      <div className="text-xs text-[var(--color-muted-foreground)] flex items-center gap-2">Extra nights ({extraNights}): <span className="font-semibold">£{(extraNightPrice * extraNights).toLocaleString()}</span>
+                        <Badge variant="outline" className="text-xs px-2 py-0.5 text-[var(--color-primary)] font-semibold">
+                        </Badge>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               <div className="flex flex-col items-end">
-                <div className="text-xs text-[var(--color-muted-foreground)]">Total amount</div>
-                {showPrices && <div className="text-2xl font-extrabold text-[var(--color-primary)]">£{total.toLocaleString()}</div>}
+                {showPrices && <>
+                  <div className="text-xs text-[var(--color-muted-foreground)]">Total amount</div>
+                  <div className="text-2xl font-extrabold text-[var(--color-primary)]">£{total.toLocaleString()}</div>
+                </>}
               </div>
             </div>
           </div>

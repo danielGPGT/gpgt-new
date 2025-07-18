@@ -27,7 +27,7 @@ export const EventConsultantSelector: React.FC<EventConsultantSelectorProps> = (
 }) => {
   const { user } = useAuth();
   const [consultants, setConsultants] = useState<TeamMember[]>([]);
-  const [eventConsultants, setEventConsultants] = useState<EventConsultant[]>([]);
+  const [assignedConsultant, setAssignedConsultant] = useState<TeamMember | null>(null);
   const [selectedConsultant, setSelectedConsultant] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -41,7 +41,6 @@ export const EventConsultantSelector: React.FC<EventConsultantSelectorProps> = (
   const loadData = async () => {
     try {
       setLoading(true);
-      
       // Get user's team
       const { data: teamMember } = await supabase
         .from('team_members')
@@ -49,26 +48,21 @@ export const EventConsultantSelector: React.FC<EventConsultantSelectorProps> = (
         .eq('user_id', user?.id)
         .eq('status', 'active')
         .single();
-
       if (teamMember) {
         setUserTeamId(teamMember.team_id);
         const canManageConsultants = ['owner', 'admin'].includes(teamMember.role);
         setCanManage(canManageConsultants);
-
         if (canManageConsultants) {
-          console.log('🔍 Loading consultants for team:', teamMember.team_id);
-          
           // Load team consultants
           const teamConsultants = await TeamService.getTeamConsultants(teamMember.team_id);
-          console.log('📋 Found consultants:', teamConsultants.length, teamConsultants);
           setConsultants(teamConsultants);
-
-          // Load event consultants
-          const eventConsultants = await TeamService.getEventConsultants(eventId);
-          console.log('🎯 Event consultants:', eventConsultants.length, eventConsultants);
-          setEventConsultants(eventConsultants);
-        } else {
-          console.log('❌ User cannot manage consultants. Role:', teamMember.role);
+          // Load event and its primary consultant
+          const { data: eventData } = await supabase
+            .from('events')
+            .select('*, team_member:primary_consultant_id(*)')
+            .eq('id', eventId)
+            .single();
+          setAssignedConsultant(eventData?.team_member || null);
         }
       }
     } catch (error) {
@@ -83,18 +77,16 @@ export const EventConsultantSelector: React.FC<EventConsultantSelectorProps> = (
       toast.error('Please select a consultant');
       return;
     }
-
     try {
       setLoading(true);
-      await TeamService.assignConsultantToEvent(eventId, selectedConsultant, notes);
-      
+      await supabase
+        .from('events')
+        .update({ primary_consultant_id: selectedConsultant })
+        .eq('id', eventId);
       toast.success('Consultant assigned successfully');
       setSelectedConsultant('');
       setNotes('');
-      
-      // Reload data
       await loadData();
-      
       if (onConsultantAssigned) {
         onConsultantAssigned();
       }
@@ -106,15 +98,13 @@ export const EventConsultantSelector: React.FC<EventConsultantSelectorProps> = (
     }
   };
 
-  const handleRemoveConsultant = async (consultantId: string) => {
-    if (!confirm('Are you sure you want to remove this consultant from the event?')) {
-      return;
-    }
-
+  const handleRemoveConsultant = async () => {
     try {
       setLoading(true);
-      await TeamService.removeConsultantFromEvent(eventId, consultantId);
-      
+      await supabase
+        .from('events')
+        .update({ primary_consultant_id: null })
+        .eq('id', eventId);
       toast.success('Consultant removed successfully');
       await loadData();
     } catch (error: any) {
@@ -125,256 +115,91 @@ export const EventConsultantSelector: React.FC<EventConsultantSelectorProps> = (
     }
   };
 
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'owner': return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'admin': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'sales': return 'bg-green-100 text-green-800 border-green-200';
-      case 'operations': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'member': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
+  if (!canManage) return null;
 
-  // Debug logging
-  console.log('🎯 EventConsultantSelector render:', {
-    canManage,
-    consultantsCount: consultants.length,
-    eventConsultantsCount: eventConsultants.length,
-    eventId,
-    loading
-  });
-
-  // If user can't manage consultants, don't show anything
-  if (!canManage) {
-    console.log('❌ Component hidden - user cannot manage consultants');
-    return null;
-  }
-
-  // Compact version for inline forms
-  if (compact) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-primary" />
-          <Label className="text-sm font-medium">Assign Consultant</Label>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Select value={selectedConsultant} onValueChange={setSelectedConsultant}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a consultant..." />
-              </SelectTrigger>
-              <SelectContent>
-                {consultants.map((consultant) => (
-                  <SelectItem key={consultant.id} value={consultant.id}>
-                    {consultant.name || consultant.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add notes (optional)..."
-              rows={1}
-            />
-          </div>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button
-            onClick={handleAssignConsultant}
-            disabled={!selectedConsultant || loading}
-            size="sm"
-          >
-            <UserPlus className="h-4 w-4 mr-2" />
-            Assign
-          </Button>
-        </div>
-
-        {/* Current Assignments */}
-        {eventConsultants.length > 0 && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Current Consultants</Label>
-            <div className="space-y-2">
-              {eventConsultants.map((assignment) => (
-                <div key={assignment.id} className="flex items-center justify-between p-2 border rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Avatar className="w-6 h-6">
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                        {assignment.consultant?.name?.charAt(0).toUpperCase() || 
-                         assignment.consultant?.email.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col">
-                      <span className="text-sm">
-                        {assignment.consultant?.name || assignment.consultant?.email}
-                      </span>
-                      {assignment.consultant?.phone && (
-                        <span className="text-xs text-muted-foreground">📞 {assignment.consultant.phone}</span>
-                      )}
-                      {assignment.notes && (
-                        <span className="text-xs text-muted-foreground">"{assignment.notes}"</span>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRemoveConsultant(assignment.consultant_id)}
-                    className="text-red-600 hover:text-red-700 h-6 px-2"
-                  >
-                    <UserMinus className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Full version
   return (
     <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Users className="h-5 w-5 text-primary" />
-          Event Consultants
+          Event Consultant
         </CardTitle>
         <CardDescription>
-          Assign sales consultants to manage this event
+          Assign a sales consultant to manage this event
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Assign New Consultant */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="consultant-select">Select Consultant</Label>
-            <Select value={selectedConsultant} onValueChange={setSelectedConsultant}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a consultant..." />
-              </SelectTrigger>
-              <SelectContent>
-                {consultants.map((consultant) => (
-                  <SelectItem key={consultant.id} value={consultant.id}>
-                    {consultant.name || consultant.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes (Optional)</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add any notes about this assignment..."
-              rows={2}
-            />
-          </div>
-        </div>
-        
-        <Button
-          onClick={handleAssignConsultant}
-          disabled={!selectedConsultant || loading}
-          className="w-full"
-        >
-          <UserPlus className="h-4 w-4 mr-2" />
-          Assign Consultant
-        </Button>
-
-        {/* Current Consultants */}
-        {eventConsultants.length > 0 && (
+        {assignedConsultant ? (
           <div className="space-y-3">
-            <Label className="text-sm font-medium">Assigned Consultants ({eventConsultants.length})</Label>
-            {eventConsultants.map((assignment) => (
-              <div key={assignment.id} className="flex items-center justify-between p-3 border rounded-xl">
-                <div className="flex items-center gap-3">
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                      {assignment.consultant?.name?.charAt(0).toUpperCase() || 
-                       assignment.consultant?.email.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium text-sm">
-                      {assignment.consultant?.name || assignment.consultant?.email}
-                    </p>
+            <Label className="text-sm font-medium">Assigned Consultant</Label>
+            <div className="flex items-center justify-between p-3 border rounded-xl">
+              <div className="flex items-center gap-3">
+                <Avatar className="w-8 h-8">
+                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                    {assignedConsultant.name?.charAt(0).toUpperCase() || assignedConsultant.email.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium text-sm">
+                    {assignedConsultant.name || assignedConsultant.email}
+                  </p>
+                  {assignedConsultant.phone && (
                     <p className="text-xs text-muted-foreground">
-                      Assigned {new Date(assignment.assigned_at).toLocaleDateString()}
+                      📞 {assignedConsultant.phone}
                     </p>
-                    {assignment.consultant?.phone && (
-                      <p className="text-xs text-muted-foreground">
-                        📞 {assignment.consultant.phone}
-                      </p>
-                    )}
-                    {assignment.notes && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        "{assignment.notes}"
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className={getRoleBadgeColor(assignment.consultant?.role || '')}>
-                    {assignment.consultant?.role}
-                  </Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRemoveConsultant(assignment.consultant_id)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <UserMinus className="h-4 w-4" />
-                  </Button>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Available Consultants */}
-        {consultants.length > 0 && (
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Available Consultants ({consultants.length})</Label>
-            <div className="space-y-2">
-              {consultants.map((consultant) => {
-                const isAssigned = eventConsultants.some(ec => ec.consultant_id === consultant.id);
-                return (
-                  <div key={consultant.id} className="flex items-center justify-between p-2 border rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-6 h-6">
-                        <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
-                          {consultant.name?.charAt(0).toUpperCase() || consultant.email.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium text-sm">
-                          {consultant.name || consultant.email}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{consultant.email}</p>
-                        {consultant.phone && (
-                          <p className="text-xs text-muted-foreground">📞 {consultant.phone}</p>
-                        )}
-                      </div>
-                    </div>
-                    {isAssigned && (
-                      <Badge variant="outline" className="text-xs">
-                        Assigned
-                      </Badge>
-                    )}
-                  </div>
-                );
-              })}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRemoveConsultant}
+                className="text-red-600 hover:text-red-700"
+                disabled={loading}
+              >
+                <UserMinus className="h-4 w-4" />
+              </Button>
             </div>
           </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="consultant-select">Select Consultant</Label>
+                <Select value={selectedConsultant} onValueChange={setSelectedConsultant} disabled={loading}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a consultant..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {consultants.map((consultant) => (
+                      <SelectItem key={consultant.id} value={consultant.id}>
+                        {consultant.name || consultant.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add any notes about this assignment..."
+                  rows={2}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <Button
+              onClick={handleAssignConsultant}
+              disabled={!selectedConsultant || loading}
+              className="w-full"
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Assign Consultant
+            </Button>
+          </>
         )}
       </CardContent>
     </Card>

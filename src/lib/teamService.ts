@@ -40,6 +40,7 @@ export interface EventConsultant {
   created_at: string;
   updated_at: string;
   consultant?: TeamMember;
+  team_member?: TeamMember; // Add this line to match the Supabase join
   event?: {
     id: string;
     name: string;

@@ -35,6 +35,7 @@ interface CircuitTransfersTabV2Props {
   adults: number;
   value: { id: string; quantity: number } | null;
   onChange: (val: { id: string; quantity: number } | null) => void;
+  showPrices: boolean;
 }
 
 const CircuitTransfersTabV2: React.FC<CircuitTransfersTabV2Props> = ({
@@ -45,6 +46,7 @@ const CircuitTransfersTabV2: React.FC<CircuitTransfersTabV2Props> = ({
   adults,
   value,
   onChange,
+  showPrices,
 }) => {
   const hotelTransfers = useMemo(
     () => circuitTransfers.filter((t) => t.hotel_id === selectedHotelId),
@@ -159,9 +161,11 @@ const CircuitTransfersTabV2: React.FC<CircuitTransfersTabV2Props> = ({
                           <span className="flex items-center gap-1 text-xs text-muted-foreground mr-4">
                             <Calendar className="h-4 w-4" />{t.days} day{t.days !== 1 ? 's' : ''}
                           </span>
-                          <span className="flex items-center gap-1 text-xs text-[var(--color-primary)] font-semibold ml-auto">
-                            £{t.sell_price_per_seat_gbp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-muted-foreground font-normal">/seat</span>
-                          </span>
+                          {showPrices && (
+                            <span className="flex items-center gap-1 text-xs text-[var(--color-primary)] font-semibold ml-auto">
+                              £{t.sell_price_per_seat_gbp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-muted-foreground font-normal">/seat</span>
+                            </span>
+                          )}
                         </div>
                       </SelectItem>
                     ))}
@@ -203,14 +207,18 @@ const CircuitTransfersTabV2: React.FC<CircuitTransfersTabV2Props> = ({
                 {/* Right: Price, Quantity, Total */}
                 <div className="flex flex-col justify-center items-end gap-4 p-6 md:w-1/3 w-full">
                   <div className="flex flex-row items-end gap-8 justify-end w-full">
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Per Seat Price</span>
-                      <span className="text-base font-semibold text-[var(--color-primary)]">£{(selectedTransfer.sell_price_per_seat_gbp || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="text-xs font-medium text-[var(--color-muted-foreground)] mt-2">Total</span>
-                      <span className="text-base font-semibold text-[var(--color-primary)]">£{((selectedTransfer.sell_price_per_seat_gbp || 0) * (value.quantity || adults)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
+                    {showPrices && (
+                      <>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Per Seat Price</span>
+                          <span className="text-base font-semibold text-[var(--color-primary)]">£{(selectedTransfer.sell_price_per_seat_gbp || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-xs font-medium text-[var(--color-muted-foreground)] mt-2">Total</span>
+                          <span className="text-base font-semibold text-[var(--color-primary)]">£{((selectedTransfer.sell_price_per_seat_gbp || 0) * (value.quantity || adults)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                   <div className="flex flex-row items-center gap-5 w-full justify-end mt-4">
                     <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Quantity</span>

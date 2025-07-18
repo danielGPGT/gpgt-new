@@ -34,6 +34,7 @@ interface AirportTransfersTabV2Props {
   value: { id: string; quantity: number; transferDirection?: 'outbound' | 'return' | 'both' } | null;
   onChange: (val: { id: string; quantity: number; transferDirection?: 'outbound' | 'return' | 'both' } | null) => void;
   noAirportTransfer?: boolean;
+  showPrices: boolean;
 }
 
 const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
@@ -44,6 +45,7 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
   value,
   onChange,
   noAirportTransfer,
+  showPrices,
 }) => {
   const hotelTransfers = useMemo(
     () => airportTransfers.filter((t) => t.hotel_id === selectedHotelId),
@@ -147,9 +149,11 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
                           <span className="flex items-center gap-1 text-xs text-muted-foreground mr-4">
                             <ArrowRightLeft className="h-4 w-4" />{t.transferDirection || 'both'}
                           </span>
-                          <span className="flex items-center gap-1 text-xs text-[var(--color-primary)] font-semibold ml-auto">
-                            £{t.price_per_car_gbp_markup.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-muted-foreground font-normal">/car</span>
-                          </span>
+                          {showPrices && (
+                            <span className="flex items-center gap-1 text-xs text-[var(--color-primary)] font-semibold ml-auto">
+                              £{t.price_per_car_gbp_markup.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-muted-foreground font-normal">/car</span>
+                            </span>
+                          )}
                         </div>
                       </SelectItem>
                     ))}
@@ -190,72 +194,76 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
                 <div className="hidden md:block w-px bg-[var(--color-border)] my-6" />
                 {/* Right: Price, Quantity, Total */}
                 <div className="flex flex-col justify-center items-end gap-4 p-6 md:w-1/3 w-full">
-                  <div className="flex flex-row items-end gap-8 justify-end w-full">
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Per Car Price</span>
-                      <span className="text-base font-semibold text-[var(--color-primary)]">£{(selectedTransfer.price_per_car_gbp_markup || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="text-xs font-medium text-[var(--color-muted-foreground)] mt-2">Total</span>
-                      <span className="text-base font-semibold text-[var(--color-primary)]">£{((selectedTransfer.price_per_car_gbp_markup || 0) * (value.quantity || adults) * (value.transferDirection === 'both' ? 2 : 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-row items-center gap-5 w-full justify-end mt-4">
-                    <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Quantity</span>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => value.quantity > 1 && onChange({ ...value, quantity: value.quantity - 1 })}
-                        disabled={value.quantity <= 1}
-                        aria-label="Decrease quantity"
-                      >
-                        -
-                      </Button>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={value.quantity}
-                        onChange={e => {
-                          const qty = Math.max(1, parseInt(e.target.value) || 1);
-                          onChange({ ...value, quantity: qty });
-                        }}
-                        className="w-16 text-center"
-                        aria-label="Quantity"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => onChange({ ...value, quantity: value.quantity + 1 })}
-                        aria-label="Increase quantity"
-                      >
-                        +
-                      </Button>
-                    </div>
-                  </div>
-                 {/* Direction Selector */}
-                 <div className="flex flex-row items-center gap-4 mt-4">
-                   <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Direction</span>
-                   <Select
-                     value={value.transferDirection || 'both'}
-                     onValueChange={dir => onChange({ ...value, transferDirection: dir as 'outbound' | 'return' | 'both' })}
-                   >
-                     <SelectTrigger className="w-32">
-                       <SelectValue />
-                     </SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="outbound">Outbound</SelectItem>
-                       <SelectItem value="return">Return</SelectItem>
-                       <SelectItem value="both">Both Ways</SelectItem>
-                     </SelectContent>
-                   </Select>
-                 </div>
-                {/* Capacity Warning */}
-                {selectedTransfer.max_capacity && (selectedTransfer.max_capacity * value.quantity < adults) && (
-                  <div className="mt-4 text-xs text-orange-600 font-medium text-right">
-                    ⚠️ Not enough vehicles for all passengers. Increase quantity or select a larger vehicle.
-                  </div>
-                )}
+                  {showPrices && (
+                    <>
+                      <div className="flex flex-row items-end gap-8 justify-end w-full">
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Per Car Price</span>
+                          <span className="text-base font-semibold text-[var(--color-primary)]">£{(selectedTransfer.price_per_car_gbp_markup || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-xs font-medium text-[var(--color-muted-foreground)] mt-2">Total</span>
+                          <span className="text-base font-semibold text-[var(--color-primary)]">£{((selectedTransfer.price_per_car_gbp_markup || 0) * (value.quantity || adults) * (value.transferDirection === 'both' ? 2 : 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-row items-center gap-5 w-full justify-end mt-4">
+                        <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Quantity</span>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => value.quantity > 1 && onChange({ ...value, quantity: value.quantity - 1 })}
+                            disabled={value.quantity <= 1}
+                            aria-label="Decrease quantity"
+                          >
+                            -
+                          </Button>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={value.quantity}
+                            onChange={e => {
+                              const qty = Math.max(1, parseInt(e.target.value) || 1);
+                              onChange({ ...value, quantity: qty });
+                            }}
+                            className="w-16 text-center"
+                            aria-label="Quantity"
+                          />
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => onChange({ ...value, quantity: value.quantity + 1 })}
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </Button>
+                        </div>
+                      </div>
+                     {/* Direction Selector */}
+                     <div className="flex flex-row items-center gap-4 mt-4">
+                       <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Direction</span>
+                       <Select
+                         value={value.transferDirection || 'both'}
+                         onValueChange={dir => onChange({ ...value, transferDirection: dir as 'outbound' | 'return' | 'both' })}
+                       >
+                         <SelectTrigger className="w-32">
+                           <SelectValue />
+                         </SelectTrigger>
+                         <SelectContent>
+                           <SelectItem value="outbound">Outbound</SelectItem>
+                           <SelectItem value="return">Return</SelectItem>
+                           <SelectItem value="both">Both Ways</SelectItem>
+                         </SelectContent>
+                       </Select>
+                     </div>
+                    {/* Capacity Warning */}
+                    {selectedTransfer.max_capacity && (selectedTransfer.max_capacity * value.quantity < adults) && (
+                      <div className="mt-4 text-xs text-orange-600 font-medium text-right">
+                        ⚠️ Not enough vehicles for all passengers. Increase quantity or select a larger vehicle.
+                      </div>
+                    )}
+                    </>
+                  )}
                 </div>
               </Card>
             )}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -79,12 +79,23 @@ export function Quotes() {
     totalValue: 0
   });
   const [hasTeamAccess, setHasTeamAccess] = useState(false);
+  // Add a ref to track the latest request
+  const latestRequestId = useRef(0);
 
   const itemsPerPage = 20;
 
+  // Reset page to 1 when viewScope changes
   useEffect(() => {
-    loadQuotes();
-    loadStats();
+    setCurrentPage(1);
+  }, [viewScope]);
+
+  useEffect(() => {
+    const requestId = ++latestRequestId.current;
+    const fetchData = async () => {
+      await loadQuotes(requestId);
+      await loadStats();
+    };
+    fetchData();
   }, [currentPage, statusFilter, viewScope]);
 
   useEffect(() => {
@@ -100,18 +111,18 @@ export function Quotes() {
 
   useEffect(() => {
     // Debounce search
+    const requestId = ++latestRequestId.current;
     const timer = setTimeout(() => {
       if (searchTerm) {
-        performSearch();
+        performSearch(requestId);
       } else {
-        loadQuotes();
+        loadQuotes(requestId);
       }
     }, 500);
-
     return () => clearTimeout(timer);
   }, [searchTerm, viewScope]);
 
-  const loadQuotes = async () => {
+  const loadQuotes = async (requestId?: number) => {
     try {
       setLoading(true);
       const offset = (currentPage - 1) * itemsPerPage;
@@ -123,36 +134,65 @@ export function Quotes() {
         result = await QuoteService.getTeamQuotes(statusFilter === 'all' ? undefined : statusFilter, itemsPerPage, offset);
       }
       
-      setQuotes(result.quotes);
-      setTotalQuotes(result.total);
-      setSelectedQuotes(new Set()); // Clear selections when loading new data
+      // Only update state if this is the latest request
+      if (requestId === undefined || requestId === latestRequestId.current) {
+        setQuotes(result.quotes);
+        setTotalQuotes(result.total);
+        setSelectedQuotes(new Set()); // Clear selections when loading new data
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load quotes');
+      if (requestId === undefined || requestId === latestRequestId.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load quotes');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === undefined || requestId === latestRequestId.current) {
+        setLoading(false);
+      }
     }
   };
 
+  // Update: load stats based on viewScope
   const loadStats = async () => {
     try {
-      const quoteStats = await QuoteService.getQuoteStats();
+      let quoteStats;
+      if (viewScope === 'user') {
+        // Fallback: filter getUserQuotes and compute stats client-side
+        const { quotes } = await QuoteService.getUserQuotes();
+        quoteStats = {
+          total: quotes.length,
+          draft: quotes.filter(q => q.status === 'draft').length,
+          sent: quotes.filter(q => q.status === 'sent').length,
+          accepted: quotes.filter(q => q.status === 'accepted').length,
+          declined: quotes.filter(q => q.status === 'declined').length,
+          expired: quotes.filter(q => q.status === 'expired').length,
+          totalValue: quotes.reduce((sum, q) => sum + (q.totalPrice || 0), 0)
+        };
+      } else {
+        quoteStats = await QuoteService.getQuoteStats();
+      }
       setStats(quoteStats);
     } catch (err) {
       console.error('Failed to load stats:', err);
     }
   };
 
-  const performSearch = async () => {
+  const performSearch = async (requestId?: number) => {
     try {
       setLoading(true);
       const result = await QuoteService.searchQuotes(searchTerm, statusFilter === 'all' ? undefined : statusFilter, itemsPerPage, 0, viewScope);
-      setQuotes(result.quotes);
-      setTotalQuotes(result.total);
-      setSelectedQuotes(new Set()); // Clear selections when searching
+      if (requestId === undefined || requestId === latestRequestId.current) {
+        setQuotes(result.quotes);
+        setTotalQuotes(result.total);
+        setSelectedQuotes(new Set()); // Clear selections when searching
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to search quotes');
+      if (requestId === undefined || requestId === latestRequestId.current) {
+        setError(err instanceof Error ? err.message : 'Failed to search quotes');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === undefined || requestId === latestRequestId.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -587,9 +627,9 @@ export function Quotes() {
       </div>
 
       {/* Filters and Bulk Actions */}
-      <Card className="bg-gradient-to-b from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
+      <Card className="bg-gradient-to-b py-0 from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
         <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -610,8 +650,6 @@ export function Quotes() {
                 <SelectItem value="accepted">Accepted</SelectItem>
                 <SelectItem value="declined">Declined</SelectItem>
                 <SelectItem value="expired">Expired</SelectItem>
-                <SelectItem value="confirmed">Confirmed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -682,13 +720,13 @@ export function Quotes() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
+        <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center space-y-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 mx-auto">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
             <p className="text-foreground font-medium">Loading quotes...</p>
-            <p className="text-sm text-muted-foreground">Please wait while we fetch your data</p>
+            <p className="text-sm text-muted-foreground">Please wait while we fetch your quotes</p>
           </div>
         </div>
       ) : quotes.length === 0 ? (

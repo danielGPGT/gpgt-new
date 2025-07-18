@@ -542,6 +542,54 @@ export function HotelRoomManager({ hotelId, hotelName, onBack }: HotelRoomManage
         </CardContent>
       </Card>
 
+      {/* Dynamic Stats Row (like TicketsManager) */}
+      <div className="flex flex-wrap gap-4 mt-6">
+        {/* Total Cost GBP */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Cost (GBP)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              £{filteredRooms.reduce((sum, r) => sum + ((r.total_price_per_night_gbp_with_markup || 0) * (r.quantity_total || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </CardContent>
+        </Card>
+        {/* Total Rooms */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Rooms</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              {filteredRooms.reduce((sum, r) => sum + (r.quantity_total || 0), 0)}
+            </div>
+          </CardContent>
+        </Card>
+        {/* Total Reserved */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Reserved</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              {filteredRooms.reduce((sum, r) => sum + (r.quantity_reserved || 0), 0)}
+            </div>
+          </CardContent>
+        </Card>
+        {/* Total Available */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Available</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              {filteredRooms.reduce((sum, r) => sum + (typeof r.quantity_available === 'number' ? r.quantity_available : (r.quantity_total || 0) - (r.quantity_reserved || 0)), 0)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Room Form Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

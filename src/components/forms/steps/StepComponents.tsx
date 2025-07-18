@@ -175,7 +175,7 @@ function validateAndSetAirportTransfers(transfers: any[], setValue: any) {
   }
 }
 
-export function StepComponents({ setCurrentStep, currentStep, showPrices }: { setCurrentStep: (step: number) => void; currentStep: number; showPrices: boolean }) {
+export function StepComponents({ setCurrentStep, currentStep, showPrices, tickets, hotelRooms }: { setCurrentStep: (step: number) => void; currentStep: number; showPrices: boolean; tickets: any[]; hotelRooms: any[] }) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _unused = { setCurrentStep, currentStep };
   const { watch, setValue } = useFormContext();
@@ -425,19 +425,14 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
           .eq('active', true)
           .then(({ data: transfers }) => {
             if (transfers && transfers.length > 0) {
-              const initialTransfers = transfers.map(transfer => {
-                const quantity = (typeof transfer.max_capacity === 'number' && transfer.max_capacity > 0)
-                  ? Math.max(1, Math.ceil(adults / transfer.max_capacity))
-                  : Math.max(1, adults);
-                return {
-                  id: transfer.id,
-                  quantity,
-                  price: transfer.price_per_car_gbp_markup || 0,
-                  transferDirection: 'both' as const, // Default to both (outbound + return)
-                  packageComponentId: airportTransferComponents.find(comp => comp.component_id === transfer.id)?.id,
-                  hotel_id: transfer.hotel_id || (components.hotels && components.hotels[0] && components.hotels[0].hotelId) || null // fallback to selected hotel
-                };
-              });
+              const initialTransfers = transfers.map(transfer => ({
+                id: String(transfer.id),
+                quantity: 1,
+                price: transfer.price_per_car_gbp_markup || 0,
+                transferDirection: 'both' as const, // Default to both (outbound + return)
+                packageComponentId: airportTransferComponents.find(comp => comp.component_id === transfer.id)?.id,
+                hotel_id: transfer.hotel_id || (components.hotels && components.hotels[0] && components.hotels[0].hotelId) || null // fallback to selected hotel
+              }));
               console.log('[AIRPORT TRANSFER INIT] Setting initial transfers:', initialTransfers);
               setValue('components.airportTransfers', initialTransfers);
             }
@@ -755,6 +750,22 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
     }
   }, [adults, allHotels, allHotelRooms, allAirportTransfers, allCircuitTransfers]);
 
+  // Use the live tickets prop for rendering ticket info
+  // Map form-selected tickets to live ticket data
+  const ticketsWithLiveData = (components.tickets || []).map((sel: any) => ({
+    ...sel,
+    ...tickets.find((t: any) => t.id === sel.id)
+  }));
+
+  // Use the live hotelRooms prop for rendering hotel room info
+  const hotelsWithLiveData = (components.hotels || []).map((sel: any) => ({
+    ...sel,
+    ...hotelRooms.find((r: any) => r.id === sel.roomId)
+  }));
+
+  // Debug: log hotelsWithLiveData to verify live data
+  console.log('[StepComponents] hotelsWithLiveData:', hotelsWithLiveData);
+
   return (
     <div className="space-y-8">
 
@@ -791,7 +802,10 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
                 size="icon"
                 variant="outline"
                 className="w-6 h-6 p-0"
-                onClick={() => setValue('travelers.adults', Math.max(1, adults - 1))}
+                onClick={() => {
+                  setValue('travelers.adults', Math.max(1, adults - 1));
+                  setValue('travelers.total', Math.max(1, adults - 1));
+                }}
                 disabled={adults <= 1}
                 aria-label="Decrease adults"
               >
@@ -804,7 +818,9 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
                 value={adults}
                 onChange={e => {
                   const val = parseInt(e.target.value, 10);
-                  setValue('travelers.adults', Math.max(1, Math.min(20, isNaN(val) ? 1 : val)));
+                  const newVal = Math.max(1, Math.min(20, isNaN(val) ? 1 : val));
+                  setValue('travelers.adults', newVal);
+                  setValue('travelers.total', newVal);
                 }}
                 className="w-10 text-center mx-1 font-bold h-6 px-1 py-0 text-xs"
                 aria-label="Number of adults"
@@ -814,7 +830,10 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
                 size="icon"
                 variant="outline"
                 className="w-6 h-6 p-0"
-                onClick={() => setValue('travelers.adults', Math.min(20, adults + 1))}
+                onClick={() => {
+                  setValue('travelers.adults', Math.min(20, adults + 1));
+                  setValue('travelers.total', Math.min(20, adults + 1));
+                }}
                 disabled={adults >= 20}
                 aria-label="Increase adults"
               >
@@ -892,15 +911,13 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {components.tickets.map((ticket: any, index: number) => {
-                    const ticketData = availableTickets.find((t: any) => t.id === ticket.id);
-                    // Defensive defaults
-                    const available = ticketData?.quantity_available ?? 1;
+                  {ticketsWithLiveData.map((ticket: any, index: number) => {
+                    // Use the live ticket data for rendering
+                    const available = ticket.quantity_available ?? 1;
                     const maxQuantityRaw = Math.max(1, Math.min(adults || 1, available || 1));
                     const maxQuantity = Number.isFinite(maxQuantityRaw) ? maxQuantityRaw : 1;
-                    const ticketInfo = ticketData ? getTicketInfo(ticketData) : [];
-                    // Always use ticketData.price_with_markup if available, fallback to ticket.price
-                    const priceEach = ticketData && Number.isFinite(ticketData.price_with_markup) ? ticketData.price_with_markup : (Number.isFinite(ticket.price) ? ticket.price : 0);
+                    const ticketInfo = ticket ? getTicketInfo(ticket) : [];
+                    const priceEach = Number.isFinite(ticket.price_with_markup) ? ticket.price_with_markup : (Number.isFinite(ticket.price) ? ticket.price : 0);
                     const quantity = Number.isFinite(ticket.quantity) && ticket.quantity > 0 ? ticket.quantity : 1;
                     const totalPrice = priceEach * quantity;
 
@@ -951,18 +968,18 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
                               </div>
                               <div className="min-w-0">
                                 <div className="font-bold text-lg text-[var(--color-foreground)] truncate">
-                                  {ticketData?.ticket_category?.category_name || 'Ticket'}
+                                  {ticket.ticket_category?.category_name || 'Ticket'}
                                 </div>
                                 <div className="text-[var(--color-muted-foreground)] text-xs truncate">
-                                  {ticketData?.ticket_category?.category_type || 'General'}
+                                  {ticket.ticket_category?.category_type || 'General'}
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)] mt-1">
                                   <Tag className="h-3 w-3" />
-                                  {ticketData?.ticket_type || 'Standard'}
-                                  {ticketData?.ticket_days && (
+                                  {ticket.ticket_type || 'Standard'}
+                                  {ticket.ticket_days && (
                                     <>
                                       <span className="mx-1">•</span>
-                                      <Calendar className="h-3 w-3" /> {ticketData.ticket_days}
+                                      <Calendar className="h-3 w-3" /> {ticket.ticket_days}
                                     </>
                                   )}
                                 </div>
@@ -1008,7 +1025,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
                               </Button>
                               <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
                                 Max: {maxQuantity} <span className="">
-                                  {ticketData?.is_provisional ? (
+                                  {ticket.is_provisional ? (
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
@@ -1022,7 +1039,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
                                   )}
                                 </span>
                               </span>
-                              {ticketData && ticketInfo.length > 0 && (
+                              {ticket && ticketInfo.length > 0 && (
                                 <HoverCard>
                                   <HoverCardTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 p-0" aria-label="Ticket info">
@@ -1032,7 +1049,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
                                   <HoverCardContent className="w-80">
                                     <div className="space-y-3">
                                       <h4 className="font-semibold text-[var(--color-foreground)]">
-                                        {ticketData.ticket_category?.category_name || 'Ticket'} Details
+                                        {ticket.ticket_category?.category_name || 'Ticket'} Details
                                       </h4>
                                       <div className="space-y-2">
                                         {ticketInfo.map((info: any, i: number) => (
@@ -1120,6 +1137,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
             selectedEvent={selectedEvent}
             setValue={setValue}
             showPrices={showPrices}
+            hotelsWithLiveData={hotelsWithLiveData}
           />
         )}
 
@@ -1235,7 +1253,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices }: { se
   );
 }
 
-function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults: number, selectedEvent: any, setValue: any, showPrices: boolean }) {
+function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices, hotelsWithLiveData }: { adults: number, selectedEvent: any, setValue: any, showPrices: boolean, hotelsWithLiveData: any[] }) {
   const [hotels, setHotels] = useState<any[]>([]);
   const [hotelRooms, setHotelRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1341,7 +1359,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
   }
 
   // UI for each hotel room card
-  function RoomCard({ hotel, room, selected, onChange, showPrices, idx }: any) {
+  function RoomCard({ hotel, room, selected, onChange, showPrices, idx, hotelsWithLiveData }: any) {
     const [calendarKey, setCalendarKey] = useState(0);
 
     // Helper: Parse as local date (no UTC)
@@ -1397,6 +1415,8 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
     // Calculate the max quantity for this room: can't exceed room.quantity_available, and total across all rooms can't exceed adults
     const otherRoomsTotal = selectedRooms.reduce((sum: number, r: any, i: number) => i === idx ? sum : sum + (r.quantity || 0), 0);
     const maxForThisRoom = room.is_provisional ? 1 : Math.max(1, Math.min(room.quantity_available || 1, adults - otherRoomsTotal));
+    // Use live data if available
+    const liveRoom = hotelsWithLiveData?.find((r: any) => r.roomId === room.id || r.id === room.id) || room;
     return (
       <Card className="mb-8 bg-[var(--color-card)]/95 py-0 border border-[var(--color-border)] shadow-lg rounded-2xl overflow-hidden min-h-[340px] h-full">
         <div className="grid grid-cols-1 md:grid-cols-12 h-full min-h-[340px]">
@@ -1555,7 +1575,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
                     +
                   </Button>
                 </div>
-                <div className="text-xs text-[var(--color-muted-foreground)]">Available: {room.quantity_available ?? 1}</div>
+                <div className="text-xs text-[var(--color-muted-foreground)]">Available: {liveRoom.quantity_available ?? 1}</div>
               </div>
             </div>
             {/* Price Breakdown */}
@@ -1681,6 +1701,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices }: { adults
               }}
               showPrices={showPrices}
               idx={idx}
+              hotelsWithLiveData={hotelsWithLiveData}
             />
           </div>
         );

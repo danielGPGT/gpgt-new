@@ -445,8 +445,6 @@ export function ViewQuote() {
       case 'accepted': return 'bg-green-500';
       case 'declined': return 'bg-red-500';
       case 'expired': return 'bg-orange-500';
-      case 'confirmed': return 'bg-purple-500';
-      case 'cancelled': return 'bg-red-600';
       default: return 'bg-gray-500';
     }
   };
@@ -458,8 +456,6 @@ export function ViewQuote() {
       case 'accepted': return <CheckCircle className="h-4 w-4" />;
       case 'declined': return <XCircle className="h-4 w-4" />;
       case 'expired': return <Clock className="h-4 w-4" />;
-      case 'confirmed': return <CheckCircle className="h-4 w-4" />;
-      case 'cancelled': return <XCircle className="h-4 w-4" />;
       default: return <FileText className="h-4 w-4" />;
     }
   };
@@ -603,17 +599,6 @@ export function ViewQuote() {
               <History className="h-4 w-4" />
               Create Revision
             </Button>
-
-            {quote.status === 'accepted' && (
-              <Button 
-                variant="default" 
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-                onClick={() => setConfirmQuoteDialogOpen(true)}
-              >
-                <CheckSquare className="h-4 w-4" />
-                Confirm Quote
-              </Button>
-            )}
 
             {(quote.status === 'accepted' || quote.status === 'sent') && (
               <Button 
@@ -1966,8 +1951,6 @@ export function ViewQuote() {
                         <SelectItem value="accepted">Accepted</SelectItem>
                         <SelectItem value="declined">Declined</SelectItem>
                         <SelectItem value="expired">Expired</SelectItem>
-                        <SelectItem value="confirmed">Confirmed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
                       </SelectContent>
                     </Select>
                     {updatingStatus && <Loader2 className="h-4 w-4 animate-spin" />}

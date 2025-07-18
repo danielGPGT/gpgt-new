@@ -1350,10 +1350,10 @@ export class BookingService {
     for (const ticketComponent of ticketComponents) {
       if (ticketComponent.component_type === 'ticket' && ticketComponent.component_id) {
         try {
-          // Get current ticket data
+          // Get current ticket data, including is_provisional
           const { data: ticketData, error: fetchError } = await supabase
             .from('tickets')
-            .select('quantity_reserved, quantity_total, quantity_available')
+            .select('quantity_reserved, quantity_total, quantity_available, is_provisional')
             .eq('id', ticketComponent.component_id)
             .single();
 
@@ -1362,12 +1362,12 @@ export class BookingService {
             continue;
           }
 
+          // Always increment reserved, even for provisional
           const newReservedQuantity = (ticketData.quantity_reserved || 0) + ticketComponent.quantity;
-          
-          // Check if we have enough available tickets
-          if (newReservedQuantity > ticketData.quantity_total) {
-            throw new Error(`Cannot reserve ${ticketComponent.quantity} tickets. Only ${ticketData.quantity_available} available.`);
-          }
+          // Check if we have enough available tickets (optional: you may want to allow overbooking for PTO)
+          // if (newReservedQuantity > ticketData.quantity_total) {
+          //   throw new Error(`Cannot reserve ${ticketComponent.quantity} tickets. Only ${ticketData.quantity_available} available.`);
+          // }
 
           // Update the reserved quantity
           const { error: updateError } = await supabase
@@ -1400,10 +1400,10 @@ export class BookingService {
     for (const roomComponent of hotelRoomComponents) {
       if (roomComponent.component_type === 'hotel_room' && roomComponent.component_id) {
         try {
-          // Get current hotel room data
+          // Get current hotel room data, including is_provisional
           const { data: roomData, error: fetchError } = await supabase
             .from('hotel_rooms')
-            .select('quantity_reserved, quantity_total, quantity_available')
+            .select('quantity_reserved, quantity_total, quantity_available, is_provisional')
             .eq('id', roomComponent.component_id)
             .single();
 
@@ -1412,12 +1412,12 @@ export class BookingService {
             continue;
           }
 
+          // Always increment reserved, even for provisional
           const newReservedQuantity = (roomData.quantity_reserved || 0) + roomComponent.quantity;
-          
-          // Check if we have enough available rooms
-          if (newReservedQuantity > roomData.quantity_total) {
-            throw new Error(`Cannot reserve ${roomComponent.quantity} hotel rooms. Only ${roomData.quantity_available} available.`);
-          }
+          // Check if we have enough available rooms (optional: you may want to allow overbooking for PTO)
+          // if (newReservedQuantity > roomData.quantity_total) {
+          //   throw new Error(`Cannot reserve ${roomComponent.quantity} hotel rooms. Only ${roomData.quantity_available} available.`);
+          // }
 
           // Update the reserved quantity
           const { error: updateError } = await supabase

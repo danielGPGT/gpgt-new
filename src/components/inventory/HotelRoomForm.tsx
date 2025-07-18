@@ -866,9 +866,15 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                 // Room price (raw)
                 const roomPriceSupplier = (formData.supplier_price_per_night ?? 0) * nights;
                 const roomPriceGbp = supplierPriceGbp * nights;
-                // VAT (supplier)
+                // Commission (negative, based on raw room price)
+                const commissionAmountSupplier = roomPriceSupplier * (commission / 100);
+                const commissionAmountGbp = roomPriceGbp * (commission / 100);
+                // VAT (based on raw room price)
                 const vatAmountSupplier = roomPriceSupplier * (vat / 100);
                 const vatAmountGbp = roomPriceGbp * (vat / 100);
+                // Room price after commission, then add VAT
+                const roomAfterCommissionAndVatSupplier = roomPriceSupplier - commissionAmountSupplier + vatAmountSupplier;
+                const roomAfterCommissionAndVatGbp = roomPriceGbp - commissionAmountGbp + vatAmountGbp;
                 // City tax
                 let cityTaxTotalSupplier = 0;
                 let cityTaxTotalGbp = 0;
@@ -893,18 +899,15 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                 const breakfastTotalSupplier = breakfastPerPersonPerNight * maxPeople * nights;
                 const breakfastTotalGbp = breakfastTotalSupplier * (supplierCurrency === 'GBP' ? 1 : supplierPriceGbp / (formData.supplier_price_per_night || 1));
                 // Subtotal (your total cost)
-                const subtotalSupplier = roomPriceSupplier + vatAmountSupplier + cityTaxTotalSupplier + resortFeeTotalSupplier + breakfastTotalSupplier;
-                const subtotalGbp = roomPriceGbp + vatAmountGbp + cityTaxTotalGbp + resortFeeTotalGbp + breakfastTotalGbp;
+                const subtotalSupplier = roomAfterCommissionAndVatSupplier + cityTaxTotalSupplier + resortFeeTotalSupplier + breakfastTotalSupplier;
+                const subtotalGbp = roomAfterCommissionAndVatGbp + cityTaxTotalGbp + resortFeeTotalGbp + breakfastTotalGbp;
                 // Markup
                 const markupAmountSupplier = subtotalSupplier * (markup / 100);
                 const markupAmountGbp = subtotalGbp * (markup / 100);
-                // Commission
-                const commissionAmountSupplier = subtotalSupplier * (commission / 100);
-                const commissionAmountGbp = subtotalGbp * (commission / 100);
                 // Total (what you charge the customer)
-                const totalSupplier = subtotalSupplier + markupAmountSupplier + commissionAmountSupplier;
-                const totalGbp = subtotalGbp + markupAmountGbp + commissionAmountGbp;
-                // Per night breakdown
+                const totalSupplier = subtotalSupplier + markupAmountSupplier;
+                const totalGbp = subtotalGbp + markupAmountGbp;
+                // Per night breakdown (same logic, per night)
                 const perNight = nights > 0 ? {
                   room: { supplier: (formData.supplier_price_per_night ?? 0), gbp: supplierPriceGbp },
                   vat: { supplier: vatAmountSupplier / nights, gbp: vatAmountGbp / nights },
@@ -920,55 +923,45 @@ export function HotelRoomForm({ hotelId, room, onClose, onSuccess }: HotelRoomFo
                 return (
                   <>
                     <div className="space-y-2">
-                      <div className="flex justify-between"><span>Room Price:</span>
-                        <span className="font-semibold">
-                          {showBoth ? `${supplierSymbol}${roomPriceSupplier.toFixed(2)} | ` : ''}£{roomPriceGbp.toFixed(2)}
-                        </span>
+                      <div className="flex justify-between font-medium text-base border-b pb-1 mb-1">
+                        <span>Raw Room Price:</span>
+                        <span>{showBoth ? `${supplierSymbol}${roomPriceSupplier.toFixed(2)} | ` : ''}£{roomPriceGbp.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between"><span>VAT (supplier):</span>
-                        <span className="font-semibold">
-                          {showBoth ? `${supplierSymbol}${vatAmountSupplier.toFixed(2)} | ` : ''}£{vatAmountGbp.toFixed(2)}
-                        </span>
+                      <div className="flex justify-between text-base">
+                        <span>- Commission ({commission}%):</span>
+                        <span className="text-destructive">{showBoth ? `-${supplierSymbol}${commissionAmountSupplier.toFixed(2)} | ` : ''}-£{commissionAmountGbp.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between"><span>City Tax:</span>
-                        <span className="font-semibold">
-                          {showBoth ? `${supplierSymbol}${cityTaxTotalSupplier.toFixed(2)} | ` : ''}£{cityTaxTotalGbp.toFixed(2)}
-                        </span>
+                      <div className="flex justify-between">
+                        <span>+ VAT ({vat}%):</span>
+                        <span>{showBoth ? `${supplierSymbol}${vatAmountSupplier.toFixed(2)} | ` : ''}£{vatAmountGbp.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between"><span>Resort Fee:</span>
-                        <span className="font-semibold">
-                          {showBoth ? `${supplierSymbol}${resortFeeTotalSupplier.toFixed(2)} | ` : ''}£{resortFeeTotalGbp.toFixed(2)}
-                        </span>
+                      <div className="flex justify-between font-semibold border-b pb-1 mb-1">
+                        <span>Room Price After Commission & VAT:</span>
+                        <span>{showBoth ? `${supplierSymbol}${roomAfterCommissionAndVatSupplier.toFixed(2)} | ` : ''}£{roomAfterCommissionAndVatGbp.toFixed(2)}</span>
                       </div>
-                      {!breakfastIncluded && breakfastPerPersonPerNight > 0 && (
-                        <div className="flex justify-between items-center">
-                          <span>Breakfast ({maxPeople} guests × {supplierSymbol}{breakfastPerPersonPerNight} × {nights} nights):</span>
-                          <span className="font-semibold">
-                            {showBoth ? `${supplierSymbol}${breakfastTotalSupplier.toFixed(2)} | ` : ''}£{breakfastTotalGbp.toFixed(2)}
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex justify-between">
+                        <span>+ City Tax:</span>
+                        <span>{showBoth ? `${supplierSymbol}${cityTaxTotalSupplier.toFixed(2)} | ` : ''}£{cityTaxTotalGbp.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>+ Resort Fee:</span>
+                        <span>{showBoth ? `${supplierSymbol}${resortFeeTotalSupplier.toFixed(2)} | ` : ''}£{resortFeeTotalGbp.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>+ Breakfast:</span>
+                        <span>{showBoth ? `${supplierSymbol}${breakfastTotalSupplier.toFixed(2)} | ` : ''}£{breakfastTotalGbp.toFixed(2)}</span>
+                      </div>
                       <div className="flex justify-between border-t pt-2 mt-2 font-bold">
-                        <span>Subtotal (our total cost):</span>
-                        <span>
-                          {showBoth ? `${supplierSymbol}${subtotalSupplier.toFixed(2)} | ` : ''}£{subtotalGbp.toFixed(2)}
-                        </span>
+                        <span>Subtotal (Our Cost):</span>
+                        <span>{showBoth ? `${supplierSymbol}${subtotalSupplier.toFixed(2)} | ` : ''}£{subtotalGbp.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between"><span>Markup ({markup}%):</span>
-                        <span className="font-semibold">
-                          {showBoth ? `${supplierSymbol}${markupAmountSupplier.toFixed(2)} | ` : ''}£{markupAmountGbp.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between"><span>Commission ({commission}%):</span>
-                        <span className="font-semibold">
-                          {showBoth ? `${supplierSymbol}${commissionAmountSupplier.toFixed(2)} | ` : ''}£{commissionAmountGbp.toFixed(2)}
-                        </span>
+                      <div className="flex justify-between">
+                        <span>+ Markup ({markup}%):</span>
+                        <span>{showBoth ? `${supplierSymbol}${markupAmountSupplier.toFixed(2)} | ` : ''}£{markupAmountGbp.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between border-t pt-2 mt-2 font-bold text-lg">
                         <span>Total (what we charge the customer):</span>
-                        <span>
-                          {showBoth ? `${supplierSymbol}${totalSupplier.toFixed(2)} | ` : ''}£{totalGbp.toFixed(2)}
-                        </span>
+                        <span>{showBoth ? `${supplierSymbol}${totalSupplier.toFixed(2)} | ` : ''}£{totalGbp.toFixed(2)}</span>
                       </div>
                     </div>
                     {perNight && (

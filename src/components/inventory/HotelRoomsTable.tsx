@@ -42,6 +42,7 @@ import { HotelRoomForm } from './HotelRoomForm';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { supabase } from '@/lib/supabase';
 
 interface HotelRoomsTableProps {
   hotelId: string;
@@ -109,8 +110,42 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
   // Fetch rooms
   const { data: rooms = [], isLoading } = useQuery({
     queryKey: ['hotel-rooms', hotelId],
-    queryFn: () => HotelRoomService.getHotelRooms(hotelId),
+    queryFn: () => {
+      console.log('[DEBUG] Fetching hotel rooms for hotelId:', hotelId, 'at', new Date().toISOString());
+      return HotelRoomService.getHotelRooms(hotelId);
+    },
   });
+
+  // Supabase Realtime subscription for hotel_rooms table
+  useEffect(() => {
+    if (!hotelId) return;
+    console.log('[Supabase Realtime] Setting up hotel_rooms subscription for hotelId:', hotelId);
+    const channel = supabase
+      .channel('public:hotel_rooms')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'hotel_rooms', filter: `hotel_id=eq.${hotelId}` },
+        (payload: any) => {
+          console.log('[Supabase Realtime] Payload received for hotel_rooms:', payload);
+          queryClient.invalidateQueries({ queryKey: ['hotel-rooms', hotelId], exact: true });
+          queryClient.refetchQueries({ queryKey: ['hotel-rooms', hotelId], exact: true });
+          console.log('[DEBUG] Forced refetch of hotel-rooms for hotelId:', hotelId, 'at', new Date().toISOString());
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Supabase Realtime] Successfully subscribed to hotel_rooms for hotelId:', hotelId);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Supabase Realtime] Channel error on hotel_rooms for hotelId:', hotelId);
+        } else if (status === 'TIMED_OUT') {
+          console.error('[Supabase Realtime] Subscription timed out for hotel_rooms for hotelId:', hotelId);
+        }
+      });
+    return () => {
+      console.log('[Supabase Realtime] Removing hotel_rooms subscription for hotelId:', hotelId);
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, hotelId]);
 
   // Fetch events for filter
   const { data: events = [] } = useQuery({
@@ -897,6 +932,54 @@ export function HotelRoomsTable({ hotelId, hotelName, onBack }: HotelRoomsTableP
           ))}
         </div>
       )}
+
+      {/* Dynamic Stats Row (like TicketsManager) */}
+      <div className="flex flex-wrap gap-4 mt-6">
+        {/* Total Cost GBP */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Cost (GBP)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              £{filteredRooms.reduce((sum, r) => sum + ((r.total_price_per_night_gbp_with_markup || 0) * (r.quantity_total || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </CardContent>
+        </Card>
+        {/* Total Rooms */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Rooms</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              {filteredRooms.reduce((sum, r) => sum + (r.quantity_total || 0), 0)}
+            </div>
+          </CardContent>
+        </Card>
+        {/* Total Reserved */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Reserved</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              {filteredRooms.reduce((sum, r) => sum + (r.quantity_reserved || 0), 0)}
+            </div>
+          </CardContent>
+        </Card>
+        {/* Total Available */}
+        <Card className="flex-1 min-w-[180px]">
+          <CardHeader>
+            <CardTitle className="text-xs font-semibold text-muted-foreground">Total Available</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">
+              {filteredRooms.reduce((sum, r) => sum + (typeof r.quantity_available === 'number' ? r.quantity_available : (r.quantity_total || 0) - (r.quantity_reserved || 0)), 0)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Room Form Drawer */}
       <Drawer open={isFormOpen} onOpenChange={setIsFormOpen} direction="right">

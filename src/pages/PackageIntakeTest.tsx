@@ -210,14 +210,13 @@ const packageIntakeSchema = z.object({
 
 type PackageIntake = z.infer<typeof packageIntakeSchema>;
 
-// Step configuration
+// Step configuration (removed Traveler Count step)
 const stepConfig = [
   { id: 1, title: "Client Selection", icon: Users, color: "var(--color-primary-500)" },
-  { id: 2, title: "Traveler Count", icon: Users, color: "var(--color-secondary-600)" },
-  { id: 3, title: "Select Event", icon: Calendar, color: "var(--color-primary-600)" },
-  { id: 4, title: "Package & Tier", icon: Ticket, color: "var(--color-secondary-700)" },
-  { id: 5, title: "Components", icon: Settings, color: "var(--color-primary-700)" },
-  { id: 6, title: "Summary", icon: FileText, color: "var(--color-secondary-900)" }
+  { id: 2, title: "Select Event", icon: Calendar, color: "var(--color-primary-600)" },
+  { id: 3, title: "Package & Tier", icon: Ticket, color: "var(--color-secondary-700)" },
+  { id: 4, title: "Components", icon: Settings, color: "var(--color-primary-700)" },
+  { id: 5, title: "Summary", icon: FileText, color: "var(--color-secondary-900)" }
 ];
 
 // Pro Tips Data
@@ -574,14 +573,13 @@ export function PackageIntakeTest() {
     hasTeamFeature('is_not_b2b').then(setIsNotB2B);
   }, []);
 
-  // Conditionally define steps
+  // Conditionally define steps (removed Traveler Count step)
   const stepConfig = [
     ...(isNotB2B === false ? [] : [{ id: 1, title: "Client Selection", icon: Users, color: "var(--color-primary-500)" }]),
-    { id: 2, title: "Traveler Count", icon: Users, color: "var(--color-secondary-600)" },
-    { id: 3, title: "Select Event", icon: Calendar, color: "var(--color-primary-600)" },
-    { id: 4, title: "Package & Tier", icon: Ticket, color: "var(--color-secondary-700)" },
-    { id: 5, title: "Components", icon: Settings, color: "var(--color-primary-700)" },
-    { id: 6, title: "Summary", icon: FileText, color: "var(--color-secondary-900)" }
+    { id: 2, title: "Select Event", icon: Calendar, color: "var(--color-primary-600)" },
+    { id: 3, title: "Package & Tier", icon: Ticket, color: "var(--color-secondary-700)" },
+    { id: 4, title: "Components", icon: Settings, color: "var(--color-primary-700)" },
+    { id: 5, title: "Summary", icon: FileText, color: "var(--color-secondary-900)" }
   ];
   const totalSteps = stepConfig.length;
 
@@ -642,7 +640,12 @@ export function PackageIntakeTest() {
     },
   });
 
-  // Add this useEffect after the useState declarations in the main component:
+  // Track current hotelRoomIds in a ref for use in the Realtime handler
+  const hotelRoomIds = form.getValues('components.hotels').map((h: any) => h.roomId).filter(Boolean);
+  const hotelRoomIdsRef = useRef(hotelRoomIds);
+  hotelRoomIdsRef.current = hotelRoomIds;
+
+  // Existing effect to fetch hotel rooms
   useEffect(() => {
     const hotelIds = form.getValues('components.hotels').map((h: any) => h.hotelId).filter(Boolean);
     const roomIds = form.getValues('components.hotels').map((h: any) => h.roomId).filter(Boolean);
@@ -653,6 +656,43 @@ export function PackageIntakeTest() {
       supabase.from('hotel_rooms').select('*').in('id', roomIds).then(({ data }) => setHotelRooms(data || []));
     }
   }, [JSON.stringify(form.getValues('components.hotels'))]);
+
+  // Supabase Realtime subscription for hotel_rooms
+  useEffect(() => {
+    if (!hotelRoomIdsRef.current.length) return;
+    console.log('[Supabase Realtime] Setting up hotel_rooms subscription for PackageIntakeTest:', hotelRoomIdsRef.current);
+    const channel = supabase
+      .channel('public:hotel_rooms')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'hotel_rooms', filter: `id=in.(${hotelRoomIdsRef.current.join(',')})` },
+        payload => {
+          console.log('[Supabase Realtime] hotel_rooms change detected:', payload);
+          // Re-fetch hotel rooms for the selected IDs
+          supabase
+            .from('hotel_rooms')
+            .select('*')
+            .in('id', hotelRoomIdsRef.current)
+            .then(({ data }) => {
+              setHotelRooms(data || []);
+              console.log('[Supabase Realtime] Updated hotelRooms state after realtime event.');
+            });
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Supabase Realtime] Subscribed to hotel_rooms changes for PackageIntakeTest');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Supabase Realtime] Channel error for hotel_rooms in PackageIntakeTest');
+        } else if (status === 'TIMED_OUT') {
+          console.error('[Supabase Realtime] Subscription timed out for hotel_rooms in PackageIntakeTest');
+        }
+      });
+    return () => {
+      console.log('[Supabase Realtime] Removing hotel_rooms subscription for PackageIntakeTest');
+      supabase.removeChannel(channel);
+    };
+  }, [JSON.stringify(hotelRoomIds)]);
 
   // Migration step: ensure all airport transfers in form state have hotel_id
   useEffect(() => {
@@ -1056,14 +1096,12 @@ export function PackageIntakeTest() {
       case 0:
         return isNotB2B === false ? <StepTravelerCount /> : <StepClientSelection />;
       case 1:
-        return <StepTravelerCount />;
-      case 2:
         return <StepEventSelection setCurrentStep={setCurrentStep} currentStep={currentStep} />;
-      case 3:
+      case 2:
         return <StepPackageAndTierSelection setCurrentStep={setCurrentStep} currentStep={currentStep} />;
+      case 3:
+        return <StepComponents setCurrentStep={setCurrentStep} currentStep={currentStep} showPrices={showPrices} tickets={tickets} hotelRooms={hotelRooms} />;
       case 4:
-        return <StepComponents setCurrentStep={setCurrentStep} currentStep={currentStep} showPrices={showPrices} />;
-      case 5:
         return <SummaryStep form={form} isGenerating={isGenerating} showPrices={showPrices} handleRequest={handleRequest} consultantEmail={consultantEmail} consultantLoading={consultantLoading} />;
       default:
         return <div className="p-6 text-center">
@@ -1072,6 +1110,67 @@ export function PackageIntakeTest() {
         </div>;
     }
   };
+
+  // Track current ticketIds in a ref for use in the Realtime handler
+  const ticketIds = form.getValues('components.tickets').map((t: any) => t.id).filter(Boolean);
+  const ticketIdsRef = useRef(ticketIds);
+  ticketIdsRef.current = ticketIds;
+
+  // Existing effect to fetch tickets (add this if not present)
+  const [tickets, setTickets] = useState<any[]>([]);
+  useEffect(() => {
+    const ids = form.getValues('components.tickets').map((t: any) => t.id).filter(Boolean);
+    if (ids.length > 0) {
+      supabase.from('tickets').select('*').in('id', ids).then(({ data }) => setTickets(data || []));
+    }
+  }, [JSON.stringify(form.getValues('components.tickets'))]);
+
+  // Supabase Realtime subscription for tickets
+  useEffect(() => {
+    if (!ticketIdsRef.current.length) return;
+    console.log('[Supabase Realtime] Setting up tickets subscription for PackageIntakeTest:', ticketIdsRef.current);
+    const channel = supabase
+      .channel('public:tickets')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tickets', filter: `id=in.(${ticketIdsRef.current.join(',')})` },
+        payload => {
+          console.log('[Supabase Realtime] tickets change detected:', payload);
+          // Immediately update the relevant ticket in state using the payload
+          setTickets((prevTickets: any[]) => {
+            const updated = prevTickets
+              .filter((t: any) => t && typeof t === 'object' && typeof t.id === 'string')
+              .map((t: { id: string; [key: string]: any }) => t.id === payload.new.id ? { ...t, ...payload.new } : t);
+            console.log('[Supabase Realtime] Updated tickets state after realtime event (from payload):', updated);
+            return updated;
+          });
+          // Delayed refetch for eventual consistency
+          setTimeout(() => {
+            supabase
+              .from('tickets')
+              .select('*')
+              .in('id', ticketIdsRef.current)
+              .then(({ data }) => {
+                setTickets(data || []);
+                console.log('[Supabase Realtime] Updated tickets state after delayed refetch.');
+              });
+          }, 500);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Supabase Realtime] Subscribed to tickets changes for PackageIntakeTest');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Supabase Realtime] Channel error for tickets in PackageIntakeTest');
+        } else if (status === 'TIMED_OUT') {
+          console.error('[Supabase Realtime] Subscription timed out for tickets in PackageIntakeTest');
+        }
+      });
+    return () => {
+      console.log('[Supabase Realtime] Removing tickets subscription for PackageIntakeTest');
+      supabase.removeChannel(channel);
+    };
+  }, [JSON.stringify(ticketIds)]);
 
   return (
     <div className="mx-auto px-8 pt-0 pb-8 space-y-8">
@@ -1159,7 +1258,7 @@ export function PackageIntakeTest() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Price Summary - only show during components step and when showPrices is enabled */}
-            {currentStep === 4 && (
+            {currentStep === 3 && (
               showPrices
                 ? <PriceSummaryCardContent />
                 : <ConsultantDetailsCard eventId={form.getValues('selectedEvent')?.id} />

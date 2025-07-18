@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/pagination';
 import { Drawer as UIDrawer, DrawerContent as UIDrawerContent, DrawerHeader as UIDrawerHeader, DrawerTitle as UIDrawerTitle, DrawerDescription as UIDrawerDescription, DrawerFooter as UIDrawerFooter } from '@/components/ui/drawer';
 import { CategoryFormDrawer } from './VenuesManager';
+import { supabase } from '@/lib/supabase';
 
 // Utility to calculate price with markup
 const calcPriceWithMarkup = (price: number, markup: number) =>
@@ -369,6 +370,7 @@ export function TicketsManager() {
       const filters: any = {};
       if (selectedEvent) filters.event_id = selectedEvent.id;
       if (selectedCategory) filters.ticket_category_id = selectedCategory.id;
+      console.log('[DEBUG] Fetching tickets with filters:', filters, 'at', new Date().toISOString());
       return InventoryService.getTickets(filters);
     },
   });
@@ -755,6 +757,37 @@ export function TicketsManager() {
       setIsImporting(false);
     }
   }, [importFile, events, ticketCategories, createTicketMutation]);
+
+  // Realtime subscription for tickets table
+  useEffect(() => {
+    console.log('[Supabase Realtime] Setting up tickets subscription...');
+    const channel = supabase
+      .channel('public:tickets')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tickets' },
+        payload => {
+          console.log('[Supabase Realtime] Payload received:', payload);
+          // Refetch tickets data when any change occurs
+          queryClient.invalidateQueries({ queryKey: ['tickets'], exact: false });
+          queryClient.refetchQueries({ queryKey: ['tickets'], exact: false });
+          console.log('[DEBUG] Forced refetch of tickets queries at', new Date().toISOString());
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Supabase Realtime] Successfully subscribed to tickets table.');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Supabase Realtime] Channel error on tickets table.');
+        } else if (status === 'TIMED_OUT') {
+          console.error('[Supabase Realtime] Subscription timed out for tickets table.');
+        }
+      });
+    return () => {
+      console.log('[Supabase Realtime] Removing tickets subscription...');
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   return (
     <div className="space-y-6">

@@ -210,15 +210,6 @@ const packageIntakeSchema = z.object({
 
 type PackageIntake = z.infer<typeof packageIntakeSchema>;
 
-// Step configuration (removed Traveler Count step)
-const stepConfig = [
-  { id: 1, title: "Client Selection", icon: Users, color: "var(--color-primary-500)" },
-  { id: 2, title: "Select Event", icon: Calendar, color: "var(--color-primary-600)" },
-  { id: 3, title: "Package & Tier", icon: Ticket, color: "var(--color-secondary-700)" },
-  { id: 4, title: "Components", icon: Settings, color: "var(--color-primary-700)" },
-  { id: 5, title: "Summary", icon: FileText, color: "var(--color-secondary-900)" }
-];
-
 // Pro Tips Data
 const proTips = [
   {
@@ -556,13 +547,13 @@ export function PackageIntakeTest() {
     hasTeamFeature('is_not_b2b').then(setIsNotB2B);
   }, []);
 
-  // Conditionally define steps (removed Traveler Count step)
+  // Step configuration (removed Traveler Count step)
   const stepConfig = [
-    ...(isNotB2B === false ? [] : [{ id: 1, title: "Client Selection", icon: Users, color: "var(--color-primary-500)" }]),
-    { id: 2, title: "Select Event", icon: Calendar, color: "var(--color-primary-600)" },
-    { id: 3, title: "Package & Tier", icon: Ticket, color: "var(--color-secondary-700)" },
-    { id: 4, title: "Components", icon: Settings, color: "var(--color-primary-700)" },
-    { id: 5, title: "Summary", icon: FileText, color: "var(--color-secondary-900)" }
+    ...(isNotB2B === false ? [] : [{ id: 1, title: "Client Selection", icon: Users, color: "var(--color-primary-500)", description: "Select or create a client for this package proposal." }]),
+    { id: 2, title: "Select Event", icon: Calendar, color: "var(--color-primary-600)", description: "Select the event for this package." },
+    { id: 3, title: "Package & Tier", icon: Ticket, color: "var(--color-secondary-700)", description: "Choose the package type and tier." },
+    { id: 4, title: "Components", icon: Settings, color: "var(--color-primary-700)", description: "Configure package components (tickets, hotels, transfers)." },
+    { id: 5, title: "Summary", icon: FileText, color: "var(--color-secondary-900)", description: "Review and submit the package proposal." }
   ];
   const totalSteps = stepConfig.length;
 
@@ -1177,12 +1168,7 @@ export function PackageIntakeTest() {
                   <div className="flex-1">
                     <h2 className="text-xl font-semibold text-foreground">{currentStepConfig.title}</h2>
                     <p className="text-sm text-muted-foreground">
-                      {currentStep === 0 && "Select or create a client for this package proposal"}
-                      {currentStep === 1 && "Define the number of travelers for this package"}
-                      {currentStep === 2 && "Select the event for this package"}
-                      {currentStep === 3 && "Choose the package type and tier"}
-                      {currentStep === 4 && "Configure package components (tickets, hotels, transfers)"}
-                      {currentStep === 5 && "Review and submit the package proposal"}
+                      {currentStepConfig.description || "Complete this step to continue."}
                     </p>
                   </div>
                 </div>

@@ -98,6 +98,16 @@ export function StepEventSelection({ setCurrentStep, currentStep }: StepEventSel
     return filtered;
   }, [events, searchTerm, sportFilter, venueFilter, sortOrder]);
 
+  // Group filtered events by year
+  const eventsByYear = useMemo(() => {
+    return filteredEvents.reduce((acc, event) => {
+      const year = event.start_date ? new Date(event.start_date).getFullYear() : 'Unknown';
+      if (!acc[year]) acc[year] = [];
+      acc[year].push(event);
+      return acc;
+    }, {} as Record<string, typeof filteredEvents>);
+  }, [filteredEvents]);
+
   return (
     <div className="space-y-6">
       {/* Filter/Sort Bar */}
@@ -167,25 +177,37 @@ export function StepEventSelection({ setCurrentStep, currentStep }: StepEventSel
       ) : filteredEvents.length === 0 ? (
         <div className="text-center text-muted-foreground py-12">No events found.</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredEvents.map(event => (
-            <EventCard
-              key={event.id}
-              event={event}
-              selected={selectedEventId === event.id}
-              onSelect={() => {
-                // Map database fields to form schema fields
-                const mappedEvent = {
-                  id: event.id,
-                  name: event.name,
-                  location: event.venue?.name || event.location || '',
-                  startDate: event.start_date || '',
-                  endDate: event.end_date || event.start_date || ''
-                };
-                setValue('selectedEvent', mappedEvent);
-                setCurrentStep(currentStep + 1);
-              }}
-            />
+        <div className="space-y-10">
+          {Object.entries(eventsByYear).sort(([a], [b]) => Number(a) - Number(b)).map(([year, events]) => (
+            <div key={year}>
+              <div className="flex items-center mb-4">
+                <div className="h-6 w-1 rounded bg-[var(--primary)] mr-2" />
+                <h2 className="text-2xl font-extrabold tracking-tight px-3 py-1 rounded">
+                  {year}
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {events.map(event => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    selected={selectedEventId === event.id}
+                    onSelect={() => {
+                      // Map database fields to form schema fields
+                      const mappedEvent = {
+                        id: event.id,
+                        name: event.name,
+                        location: event.venue?.name || event.location || '',
+                        startDate: event.start_date || '',
+                        endDate: event.end_date || event.start_date || ''
+                      };
+                      setValue('selectedEvent', mappedEvent);
+                      setCurrentStep(currentStep + 1);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

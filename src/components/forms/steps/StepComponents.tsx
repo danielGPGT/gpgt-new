@@ -412,7 +412,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
     }
 
     // --- AIRPORT TRANSFERS ---
-    if (airportTransfersEnabled && packageComponents.length > 0 && !components.airportTransfers?.length && !components.noAirportTransfer) {
+    if (airportTransfersEnabled && packageComponents.length > 0 && !components.airportTransfers?.length) {
       const airportTransferComponents = packageComponents.filter(comp => comp.component_type === 'airport_transfer');
       if (airportTransferComponents.length > 0) {
         const transferIds = airportTransferComponents.map(comp => comp.component_id);
@@ -423,14 +423,17 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
           .eq('active', true)
           .then(({ data: transfers }) => {
             if (transfers && transfers.length > 0) {
-              const initialTransfers = transfers.map(transfer => ({
-                id: String(transfer.id),
-                quantity: 1,
-                price: transfer.price_per_car_gbp_markup || 0,
-                transferDirection: 'both' as const, // Default to both (outbound + return)
-                packageComponentId: airportTransferComponents.find(comp => comp.component_id === transfer.id)?.id,
-                hotel_id: transfer.hotel_id || (components.hotels && components.hotels[0] && components.hotels[0].hotelId) || null // fallback to selected hotel
-              }));
+              const initialTransfers = transfers.map(transfer => {
+                const maxCapacity = Number(transfer.max_capacity);
+                const neededQty = !isNaN(maxCapacity) && maxCapacity > 0 ? Math.max(1, Math.ceil(adults / maxCapacity)) : adults;
+                return {
+                  id: transfer.id,
+                  quantity: neededQty, // Set to correct number of vehicles
+                  price: transfer.price_per_car_gbp_markup || 0,
+                  transferDirection: 'both' as const, // Default to both (outbound + return)
+                  packageComponentId: airportTransferComponents.find(comp => comp.component_id === transfer.id)?.id
+                };
+              });
               console.log('[AIRPORT TRANSFER INIT] Setting initial transfers:', initialTransfers);
               setValue('components.airportTransfers', initialTransfers);
             }
@@ -723,19 +726,29 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
     // --- AIRPORT TRANSFERS ---
     if (Array.isArray(components.airportTransfers) && components.airportTransfers.length > 0 && allAirportTransfers.length > 0) {
       const updatedAirportTransfers = components.airportTransfers.map((transfer: any) => {
-        // Find the real transfer data
         const realTransfer = allAirportTransfers.find((t: any) => t.id === transfer.id);
-        if (realTransfer && typeof realTransfer.max_capacity === 'number' && realTransfer.max_capacity > 0) {
-          const neededQty = Math.max(1, Math.ceil(adults / realTransfer.max_capacity));
+        const maxCapacity = realTransfer ? Number(realTransfer.max_capacity) : NaN;
+        if (!isNaN(maxCapacity) && maxCapacity > 0) {
+          const neededQty = Math.max(1, Math.ceil(adults / maxCapacity));
+          console.log('[GLOBAL] Checking transfer', {
+            transfer,
+            realTransfer,
+            max_capacity: maxCapacity,
+            adults,
+            neededQty,
+            currentQty: transfer.quantity
+          });
           if (transfer.quantity !== neededQty) {
-            console.log('[AirportTransfer global effect] Updating quantity to', neededQty, 'for adults', adults, 'max_capacity', realTransfer.max_capacity);
+            console.log('[GLOBAL] Updating quantity to', neededQty, 'for transfer', transfer.id, 'adults', adults, 'max_capacity', maxCapacity);
             return { ...transfer, quantity: neededQty };
           }
+        } else {
+          console.log('[GLOBAL] Skipping update for transfer', transfer, 'realTransfer:', realTransfer);
         }
-        // If realTransfer is missing or max_capacity is invalid, do NOT update quantity (leave as-is)
         return transfer;
       });
       if (JSON.stringify(updatedAirportTransfers) !== JSON.stringify(components.airportTransfers)) {
+        console.log('[GLOBAL] setValue called with:', updatedAirportTransfers, 'previous:', components.airportTransfers);
         setValue('components.airportTransfers', updatedAirportTransfers);
       }
     }

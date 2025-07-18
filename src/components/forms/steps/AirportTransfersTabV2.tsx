@@ -88,7 +88,9 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
             hotelTransfers[0]
           );
         }
-        onChange({ id: toSelect.id, quantity: adults, transferDirection: toSelect.transferDirection || 'both' });
+        const maxCapacity = Number(toSelect.max_capacity);
+        const neededQty = !isNaN(maxCapacity) && maxCapacity > 0 ? Math.max(1, Math.ceil(adults / maxCapacity)) : adults;
+        onChange({ id: toSelect.id, quantity: neededQty, transferDirection: toSelect.transferDirection || 'both' });
       } else {
         onChange(null);
       }
@@ -129,7 +131,12 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
                   value={value ? value.id : ''}
                   onValueChange={id => {
                     const transfer = hotelTransfers.find(t => t.id === id);
-                    if (transfer) onChange({ id, quantity: adults, transferDirection: transfer.transferDirection || 'both' });
+                    if (transfer) {
+                      const maxCapacity = Number(transfer.max_capacity);
+                      const neededQty = !isNaN(maxCapacity) && maxCapacity > 0 ? Math.max(1, Math.ceil(adults / maxCapacity)) : adults;
+                      console.log('[LOCAL] onValueChange: setting transfer', { id, quantity: neededQty, transferDirection: transfer.transferDirection || 'both' });
+                      onChange({ id, quantity: neededQty, transferDirection: transfer.transferDirection || 'both' });
+                    }
                   }}
                 >
                   <SelectTrigger className="w-full max-w-xl">
@@ -212,7 +219,11 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => value.quantity > 1 && onChange({ ...value, quantity: value.quantity - 1 })}
+                            onClick={() => {
+                              const newQty = value.quantity > 1 ? value.quantity - 1 : 1;
+                              console.log('[LOCAL] - button: setting quantity', newQty);
+                              onChange({ ...value, quantity: newQty });
+                            }}
                             disabled={value.quantity <= 1}
                             aria-label="Decrease quantity"
                           >
@@ -224,15 +235,21 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
                             value={value.quantity}
                             onChange={e => {
                               const qty = Math.max(1, parseInt(e.target.value) || 1);
+                              console.log('[LOCAL] quantity input onChange: setting quantity', qty);
                               onChange({ ...value, quantity: qty });
                             }}
                             className="w-16 text-center"
                             aria-label="Quantity"
+                            onBlur={() => { console.log('[LOCAL] quantity input blur, value:', value.quantity); }}
                           />
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => onChange({ ...value, quantity: value.quantity + 1 })}
+                            onClick={() => {
+                              const newQty = value.quantity + 1;
+                              console.log('[LOCAL] + button: setting quantity', newQty);
+                              onChange({ ...value, quantity: newQty });
+                            }}
                             aria-label="Increase quantity"
                           >
                             +

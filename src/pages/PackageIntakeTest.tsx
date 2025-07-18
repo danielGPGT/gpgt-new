@@ -1240,11 +1240,12 @@ export function PackageIntakeTest() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Price Summary - only show during components step and when showPrices is enabled */}
-            {currentStep === 2 && (
+            {/* Consultant card: show on step 2 and 3 if isNotB2B === false */}
+            {(currentStep === 2 || currentStep === 3) && isNotB2B === false && (
               <ConsultantDetailsCard eventId={(() => { const ev = form.getValues('selectedEvent'); return ev && typeof ev === 'object' && 'id' in ev && typeof ev.id === 'string' ? ev.id : undefined; })()} />
             )}
-            {currentStep === 3 && showPrices && (
+            {/* Price summary: only on step 3 and isNotB2B === true */}
+            {currentStep === 3 && showPrices && isNotB2B === true && (
               <PriceSummaryCardContent isNotB2B={isNotB2B} />
             )}
             {/* Pro Tips Card */}
@@ -1508,16 +1509,18 @@ export function SummaryStep({ form, isGenerating, showPrices, handleRequest, con
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Client Info */}
-            <div>
-              <h4 className="font-semibold mb-2">Client</h4>
-              <div className="text-sm text-muted-foreground">
-                {client.firstName} {client.lastName}<br />
-                {client.email}<br />
-                {client.phone && <>{client.phone}<br /></>}
-                {client.company && <>{client.company}<br /></>}
+            {/* Client Info: only show if isNotB2B is true */}
+            {isNotB2B === true && (
+              <div>
+                <h4 className="font-semibold mb-2">Client</h4>
+                <div className="text-sm text-muted-foreground">
+                  {client.firstName} {client.lastName}<br />
+                  {client.email}<br />
+                  {client.phone && <>{client.phone}<br /></>}
+                  {client.company && <>{client.company}<br /></>}
+                </div>
               </div>
-            </div>
+            )}
             {/* Travelers */}
             <div>
               <h4 className="font-semibold mb-2">Travelers</h4>

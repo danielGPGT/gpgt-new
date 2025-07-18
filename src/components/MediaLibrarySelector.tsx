@@ -242,10 +242,10 @@ export default function MediaLibrarySelector({
           </div>
           <Select value={selectedCategory} onValueChange={setSelectedCategory}>
             <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="All Categories" />
+              <SelectValue placeholder="All Folders" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="all">All Folders</SelectItem>
               {categories.map(category => (
                 <SelectItem key={category} value={category}>
                   {category.charAt(0).toUpperCase() + category.slice(1)}

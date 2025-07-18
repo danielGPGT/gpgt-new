@@ -212,7 +212,10 @@ export default function MediaLibrary() {
   };
 
   return (
-    <div className="p-6">
+    <div className="flex p-6 gap-6">
+        
+        {/* Main Content */}
+        <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold">Media Library</h1>
@@ -250,6 +253,31 @@ export default function MediaLibrary() {
             </div>
           </div>
         </div>
+        <div className="flex flex-row min-w-0">{/* Sidebar for Folders */}
+        <div className="hidden md:flex flex-col w-full min-w-[180px] max-w-xs border-r pr-4 mr-4 sticky top-12">
+          <h2 className="text-lg font-semibold mb-4">Folders</h2>
+          <ul className="flex-1 space-y-1">
+            <li>
+              <button
+                className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${selectedCategory === 'all' ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted text-muted-foreground'}`}
+                onClick={() => setSelectedCategory('all')}
+              >
+                All Folders
+              </button>
+            </li>
+            {categories.map(category => (
+              <li key={category}>
+                <button
+                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${selectedCategory === category ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted text-muted-foreground'}`}
+                  onClick={() => setSelectedCategory(category)}
+                >
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">
@@ -261,19 +289,6 @@ export default function MediaLibrary() {
               className="pl-10"
             />
           </div>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map(category => (
-                <SelectItem key={category} value={category}>
-                  {category.charAt(0).toUpperCase() + category.slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
         {loading ? (
@@ -367,7 +382,7 @@ export default function MediaLibrary() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-sm font-medium">Category</Label>
+                    <Label className="text-sm font-medium">Folder</Label>
                     <p className="text-sm text-muted-foreground mt-1 capitalize">
                       {selectedItem.category}
                     </p>
@@ -427,10 +442,10 @@ export default function MediaLibrary() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category">Folder</Label>
                   <Select name="category" defaultValue={editingItem.category}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
+                      <SelectValue placeholder="Select folder" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="general">General</SelectItem>
@@ -471,6 +486,9 @@ export default function MediaLibrary() {
           onOpenChange={setShowUnsplashSearch}
           onImageAdded={handleImageAdded}
         />
+        </div> {/* End Main Content */}
+        </div>
+        </div>
       </div>
     
   );

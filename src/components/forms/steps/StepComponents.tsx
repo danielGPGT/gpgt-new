@@ -341,11 +341,16 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
           .eq('active', true)
           .then(({ data: tickets }) => {
             if (tickets && tickets.length > 0) {
-              const initialTickets = tickets.map(ticket => ({
-                ...ticket, // preserve all fields including ticket_category
-                quantity: adults || 1,
-                packageComponentId: ticketComponents.find(comp => comp.component_id === ticket.id)?.id
-              }));
+              const initialTickets = tickets.map(ticket => {
+                const maxQuantity = Math.min(adults || 1, ticket.quantity_available || 1);
+                return {
+                  id: ticket.id,
+                  quantity: maxQuantity,
+                  price: ticket.price_with_markup ?? ticket.price ?? 0,
+                  category: ticket.ticket_category?.category_name || 'General',
+                  packageComponentId: ticketComponents.find(comp => comp.component_id === ticket.id)?.id
+                };
+              });
               setValue('components.tickets', initialTickets);
             }
           });
@@ -412,7 +417,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
     }
 
     // --- AIRPORT TRANSFERS ---
-    if (airportTransfersEnabled && packageComponents.length > 0 && !components.airportTransfers?.length) {
+    if (airportTransfersEnabled && packageComponents.length > 0 && !components.airportTransfers?.length && !components.noAirportTransfer) {
       const airportTransferComponents = packageComponents.filter(comp => comp.component_type === 'airport_transfer');
       if (airportTransferComponents.length > 0) {
         const transferIds = airportTransferComponents.map(comp => comp.component_id);
@@ -423,15 +428,19 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
           .eq('active', true)
           .then(({ data: transfers }) => {
             if (transfers && transfers.length > 0) {
+              const selectedRooms = components.hotels || [];
               const initialTransfers = transfers.map(transfer => {
                 const maxCapacity = Number(transfer.max_capacity);
-                const neededQty = !isNaN(maxCapacity) && maxCapacity > 0 ? Math.max(1, Math.ceil(adults / maxCapacity)) : adults;
+                const neededQty = !isNaN(maxCapacity) && maxCapacity > 0
+                  ? Math.max(1, Math.ceil(adults / maxCapacity))
+                  : adults;
                 return {
-                  id: transfer.id,
-                  quantity: neededQty, // Set to correct number of vehicles
+                  id: String(transfer.id),
+                  quantity: neededQty,
                   price: transfer.price_per_car_gbp_markup || 0,
-                  transferDirection: 'both' as const, // Default to both (outbound + return)
-                  packageComponentId: airportTransferComponents.find(comp => comp.component_id === transfer.id)?.id
+                  transferDirection: 'both' as const,
+                  packageComponentId: airportTransferComponents.find(comp => comp.component_id === transfer.id)?.id,
+                  hotel_id: transfer.hotel_id || (selectedRooms.length === 1 ? selectedRooms[0].hotelId : null)
                 };
               });
               console.log('[AIRPORT TRANSFER INIT] Setting initial transfers:', initialTransfers);
@@ -481,20 +490,28 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
   const handleTicketChange = (ticketId: string, index: number) => {
     const selectedTicket = availableTickets.find(t => t.id === ticketId);
     if (!selectedTicket) return;
+    const prevQuantity = components.tickets[index]?.quantity || 1;
+    let newQuantity = prevQuantity;
+    const maxQuantity = selectedTicket.is_provisional
+      ? (adults || 1)
+      : Math.min(adults || 1, selectedTicket.quantity_available || 1);
+    newQuantity = Math.max(1, Math.min(prevQuantity, maxQuantity));
     const updatedTickets = [...components.tickets];
     updatedTickets[index] = {
-      ...updatedTickets[index],
-      id: ticketId,
-      quantity: adults || 1,
-      price: selectedTicket.price_with_markup,
-      category: selectedTicket.ticket_category?.category_name || 'General'
+      id: selectedTicket.id,
+      quantity: newQuantity,
+      price: selectedTicket.price_with_markup ?? selectedTicket.price ?? 0,
+      category: selectedTicket.ticket_category?.category_name || 'General',
+      packageComponentId: updatedTickets[index]?.packageComponentId
     };
     setValue('components.tickets', updatedTickets);
   };
 
   const handleQuantityChange = (quantity: number, index: number) => {
     const currentTicket = availableTickets.find(t => t.id === components.tickets[index].id);
-    const maxQuantity = Math.min(adults || 1, currentTicket?.quantity_available || 0);
+    const maxQuantity = currentTicket?.is_provisional
+      ? (adults || 1)
+      : Math.min(adults || 1, currentTicket?.quantity_available || 0);
     const clampedQuantity = Math.max(1, Math.min(quantity, maxQuantity));
     
     const updatedTickets = [...components.tickets];
@@ -697,7 +714,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
       const updatedRooms = components.hotels.map((roomSel: any) => {
         // Find the real room data from allHotelRooms
         const realRoom = allHotelRooms.find((r: any) => r.id === roomSel.roomId);
-        const maxQty = realRoom?.is_provisional ? 1 : (realRoom?.quantity_available ?? roomSel.quantity_available ?? 1);
+        const maxQty = realRoom?.is_provisional ? adults : (realRoom?.quantity_available || 1);
         const maxPeople = realRoom?.max_people ?? roomSel.max_people ?? 1;
         const neededQty = Math.min(maxQty, Math.ceil(remaining / maxPeople));
         const qty = Math.max(1, Math.min(neededQty, remaining > 0 ? neededQty : 0));
@@ -946,9 +963,18 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
                                     .map((t: any) => (
                                       <SelectItem key={t.id} value={t.id}>
                                         <div className="flex items-center justify-between w-full">
-                                          <span>{t.ticket_category?.category_name || 'General'}</span>
+                                          <span>
+                                            {t.ticket_category?.category_name || 'General'}
+                                            {t.is_provisional && (
+                                              <span className="ml-2 text-orange-600 font-semibold">• Provisional</span>
+                                            )}
+                                          </span>
                                           {showPrices && <span className="text-[var(--color-muted-foreground)] ml-2">£{t.price_with_markup.toFixed(2)}</span>}
-                                          {showPrices && <span className="text-xs text-[var(--color-muted-foreground)] ml-2">({t.quantity_available || 0} available)</span>}
+                                          {showPrices && (
+                                            <span className="text-xs text-[var(--color-muted-foreground)] ml-2">
+                                              {t.is_provisional ? 'PTO' : `(${t.quantity_available || 0} available)`}
+                                            </span>
+                                          )}
                                         </div>
                                       </SelectItem>
                                     ))}
@@ -1015,14 +1041,14 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
                                   handleQuantityChange(Number.isFinite(val) && val > 0 ? val : 1, index);
                                 }}
                                 min={1}
-                                max={maxQuantity}
+                                max={ticket.is_provisional ? adults : maxQuantity}
                                 className="w-12 text-center font-bold text-base bg-transparent border-none focus:ring-2 focus:ring-[var(--color-primary)]"
                               />
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleQuantityChange(quantity + 1, index)}
-                                disabled={quantity >= maxQuantity}
+                                disabled={quantity >= (ticket.is_provisional ? adults : maxQuantity)}
                                 className="w-8 h-8 p-0"
                                 tabIndex={-1}
                               >
@@ -1116,7 +1142,7 @@ export function StepComponents({ setCurrentStep, currentStep, showPrices, ticket
                           const newTicket = {
                             id: nextTicket.id,
                             quantity: addQty,
-                            price: nextTicket.price_with_markup || 0,
+                            price: nextTicket.price_with_markup ?? nextTicket.price ?? 0,
                             category: nextTicket.ticket_category?.category_name || 'General',
                             packageComponentId: null
                           };
@@ -1269,7 +1295,8 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices, hotelsWith
     const newSelectedRooms = selectedRooms.map((sel: any, idx: number) => {
       const room = roomDatas[idx];
       if (!room) return sel;
-      const maxQty = room.is_provisional ? 1 : (room.quantity_available || 1);
+      // For provisional rooms, treat as infinite availability. For regular rooms, respect availability.
+      const maxQty = room.is_provisional ? adults : (room.quantity_available || 1);
       const maxPeople = room.max_people || 1;
       // How many rooms do we need of this type?
       const neededQty = Math.min(maxQty, Math.ceil(remaining / maxPeople));
@@ -1348,7 +1375,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices, hotelsWith
       {
         hotelId: nextRoom.hotel_id,
         roomId: nextRoom.id,
-        quantity: nextRoom.is_provisional ? 1 : 1, // Always start with 1, but provisional rooms will be locked to 1
+        quantity: 1, // Always start with 1
         checkIn: nextRoom.check_in,
         checkOut: nextRoom.check_out,
       },
@@ -1412,7 +1439,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices, hotelsWith
     const total = basePrice + extraNights * extraNightPrice;
     // Calculate the max quantity for this room: can't exceed room.quantity_available, and total across all rooms can't exceed adults
     const otherRoomsTotal = selectedRooms.reduce((sum: number, r: any, i: number) => i === idx ? sum : sum + (r.quantity || 0), 0);
-    const maxForThisRoom = room.is_provisional ? 1 : Math.max(1, Math.min(room.quantity_available || 1, adults - otherRoomsTotal));
+    const maxForThisRoom = room.is_provisional ? (adults - otherRoomsTotal) : Math.max(1, Math.min(room.quantity_available || 1, adults - otherRoomsTotal));
     // Use live data if available
     const liveRoom = hotelsWithLiveData?.find((r: any) => r.roomId === room.id || r.id === room.id) || room;
     return (
@@ -1532,7 +1559,7 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices, hotelsWith
                       if (selected.quantity <= 1) return;
                       onChange({ ...selected, quantity: Math.max(1, (selected.quantity || 1) - 1) });
                     }} 
-                    disabled={selected.quantity <= 1 || room.is_provisional}
+                    disabled={selected.quantity <= 1}
                   >
                     -
                   </Button>
@@ -1542,9 +1569,8 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices, hotelsWith
                     max={maxForThisRoom} 
                     value={selected.quantity || 1} 
                     onChange={e => {
-                      if (room.is_provisional) return;
                       const val = parseInt(e.target.value, 10);
-                      const newQty = Math.max(1, Math.min(room.quantity_available || 1, isNaN(val) ? 1 : val));
+                      const newQty = Math.max(1, Math.min(maxForThisRoom, isNaN(val) ? 1 : val));
                       // Calculate what the new total would be if this room's quantity is changed
                       const otherRoomsTotal = selectedRooms.reduce((sum: number, r: any, i: number) => i === idx ? sum : sum + (r.quantity || 0), 0);
                       if (otherRoomsTotal + newQty > adults) {
@@ -1553,27 +1579,26 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices, hotelsWith
                       }
                       onChange({ ...selected, quantity: newQty });
                     }} 
-                    className="w-14 text-center font-bold text-lg" 
-                    disabled={room.is_provisional}
+                    className="w-14 text-center font-bold text-lg"
                   />
                   <Button 
                     size="sm" 
                     variant="outline" 
                     onClick={() => {
-                      if (room.is_provisional) return;
-                      const otherRoomsTotal = selectedRooms.reduce((sum: number, r: any, i: number) => i === idx ? sum : sum + (r.quantity || 0), 0);
-                      if (otherRoomsTotal + (selected.quantity + 1) > adults) {
-                        toast.error('Total number of rooms cannot exceed number of adults.');
-                        return;
-                      }
+                      if (selected.quantity >= maxForThisRoom) return;
                       onChange({ ...selected, quantity: Math.min(maxForThisRoom, (selected.quantity || 1) + 1) });
                     }} 
-                    disabled={selected.quantity >= maxForThisRoom || room.is_provisional}
+                    disabled={selected.quantity >= maxForThisRoom}
                   >
                     +
                   </Button>
                 </div>
-                <div className="text-xs text-[var(--color-muted-foreground)]">Available: {liveRoom.quantity_available ?? 1}</div>
+                <div className="text-xs text-[var(--color-muted-foreground)]">
+                  {room.is_provisional || (liveRoom.quantity_available ?? 0) === 0 
+                    ? "Purchased to order" 
+                    : `Available: ${liveRoom.quantity_available ?? 1}`
+                  }
+                </div>
               </div>
             </div>
             {/* Price Breakdown */}
@@ -1670,8 +1695,10 @@ function HotelRoomsTab({ adults, selectedEvent, setValue, showPrices, hotelsWith
                           {' - £' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           {' - '}
                           {opt.is_provisional
-                            ? <span className="text-orange-600 font-semibold">PTO</span>
-                            : <>Qty: {opt.quantity_available ?? 1}</>
+                            ? <span className="text-orange-600 font-semibold">Purchased to order</span>
+                            : (opt.quantity_available ?? 0) === 0
+                              ? <span className="text-orange-600 font-semibold">Purchased to order</span>
+                              : <>Qty: {opt.quantity_available ?? 1}</>
                           }
                         </SelectItem>
                       );

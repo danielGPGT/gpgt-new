@@ -97,6 +97,9 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
     }
   }, [selectedHotelId, noAirportTransfer]);
 
+  // Helper to get the max allowed vehicles (should not exceed adults)
+  const getMaxVehicles = () => adults;
+
   return (
     <div className="space-y-8">
       <h3 className="text-2xl font-bold text-[var(--color-foreground)] mb-4">
@@ -213,6 +216,7 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
                           <span className="text-base font-semibold text-[var(--color-primary)]">£{((selectedTransfer.price_per_car_gbp_markup || 0) * (value.quantity || adults) * (value.transferDirection === 'both' ? 2 : 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       </div>
+                      {/* Quantity Selector (restored with plus/minus buttons) */}
                       <div className="flex flex-row items-center gap-5 w-full justify-end mt-4">
                         <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Quantity</span>
                         <div className="flex items-center gap-2">
@@ -221,7 +225,6 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
                             size="icon"
                             onClick={() => {
                               const newQty = value.quantity > 1 ? value.quantity - 1 : 1;
-                              console.log('[LOCAL] - button: setting quantity', newQty);
                               onChange({ ...value, quantity: newQty });
                             }}
                             disabled={value.quantity <= 1}
@@ -232,47 +235,46 @@ const AirportTransfersTabV2: React.FC<AirportTransfersTabV2Props> = ({
                           <Input
                             type="number"
                             min={1}
+                            max={getMaxVehicles()}
                             value={value.quantity}
                             onChange={e => {
-                              const qty = Math.max(1, parseInt(e.target.value) || 1);
-                              console.log('[LOCAL] quantity input onChange: setting quantity', qty);
+                              const qty = Math.max(1, Math.min(getMaxVehicles(), parseInt(e.target.value) || 1));
                               onChange({ ...value, quantity: qty });
                             }}
                             className="w-16 text-center"
                             aria-label="Quantity"
-                            onBlur={() => { console.log('[LOCAL] quantity input blur, value:', value.quantity); }}
                           />
                           <Button
                             variant="outline"
                             size="icon"
                             onClick={() => {
-                              const newQty = value.quantity + 1;
-                              console.log('[LOCAL] + button: setting quantity', newQty);
+                              const newQty = value.quantity < getMaxVehicles() ? value.quantity + 1 : getMaxVehicles();
                               onChange({ ...value, quantity: newQty });
                             }}
+                            disabled={value.quantity >= getMaxVehicles()}
                             aria-label="Increase quantity"
                           >
                             +
                           </Button>
                         </div>
                       </div>
-                     {/* Direction Selector */}
-                     <div className="flex flex-row items-center gap-4 mt-4">
-                       <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Direction</span>
-                       <Select
-                         value={value.transferDirection || 'both'}
-                         onValueChange={dir => onChange({ ...value, transferDirection: dir as 'outbound' | 'return' | 'both' })}
-                       >
-                         <SelectTrigger className="w-32">
-                           <SelectValue />
-                         </SelectTrigger>
-                         <SelectContent>
-                           <SelectItem value="outbound">Outbound</SelectItem>
-                           <SelectItem value="return">Return</SelectItem>
-                           <SelectItem value="both">Both Ways</SelectItem>
-                         </SelectContent>
-                       </Select>
-                     </div>
+                      {/* Direction Selector */}
+                      <div className="flex flex-row items-center gap-4 mt-4">
+                        <span className="text-xs font-medium text-[var(--color-muted-foreground)]">Direction</span>
+                        <Select
+                          value={value.transferDirection || 'both'}
+                          onValueChange={dir => onChange({ ...value, transferDirection: dir as 'outbound' | 'return' | 'both' })}
+                        >
+                          <SelectTrigger className="w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="outbound">Outbound</SelectItem>
+                            <SelectItem value="return">Return</SelectItem>
+                            <SelectItem value="both">Both Ways</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     {/* Capacity Warning */}
                     {selectedTransfer.max_capacity && (selectedTransfer.max_capacity * value.quantity < adults) && (
                       <div className="mt-4 text-xs text-orange-600 font-medium text-right">

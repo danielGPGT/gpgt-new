@@ -445,7 +445,7 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
         const airportPrice = component.price_per_car_gbp_markup || component.supplier_quote_per_car_gbp || 0;
         const airportTransferType = component.transport_type;
         const formattedAirportTransferType = airportTransferType?.replace(/_/g, ' ') || 'transfer';
-        return `${formattedAirportTransferType} - £${airportPrice.toFixed(2)}`;
+        return `${formattedAirportTransferType} - £${airportPrice.toFixed(2)} (One Way)`;
       default:
         return component.id;
     }
@@ -526,7 +526,7 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
       if (airportPrice) {
         const basePrice = getComponentPrice(airportPrice.componentData, 'airport_transfer');
         const finalPrice = airportPrice.priceOverride !== undefined ? airportPrice.priceOverride : basePrice;
-        totalForTwo += finalPrice; // 1 transfer
+        totalForTwo += finalPrice * 2; // 2 transfers
       }
     }
 
@@ -833,7 +833,7 @@ export function PackageComponentForm({ open, onOpenChange, component, tierId, ev
                       <div>
                         <p className="font-medium text-sm">Price for 2 People</p>
                         <p className="text-xs text-muted-foreground">
-                          2 tickets • 1 hotel room • 2 circuit transfers • 1 airport transfer
+                          2 tickets • 1 hotel room • 2 circuit transfers • 1 airport transfer (Outbound & Return)
                         </p>
                       </div>
                       <div className="text-right">

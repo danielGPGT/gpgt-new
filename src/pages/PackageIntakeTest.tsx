@@ -294,6 +294,7 @@ function roundUpHundredMinusTwo(n: number) {
   function PriceSummaryCardContent({ isNotB2B }: { isNotB2B: boolean | null }) {
     const { watch, setValue } = useFormContext();
     const components = watch('components') || { tickets: [], hotels: [], circuitTransfers: [], airportTransfers: [], flights: [], loungePass: {}, flightsSource: 'none' };
+    const adults = watch('travelers.adults') || 1;
     const selectedCurrency = watch('summary.currency') || 'GBP';
     const [isConverting, setIsConverting] = useState(false);
     const [convertedTotal, setConvertedTotal] = useState(0);
@@ -440,6 +441,15 @@ function roundUpHundredMinusTwo(n: number) {
                 {selectedCurrency === 'GBP' 
                   ? `£${roundedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : CurrencyService.formatCurrency(convertedTotal, selectedCurrency)
+                }
+              </span>
+            </div>
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Price per person ({adults} adults)</span>
+              <span>
+                {selectedCurrency === 'GBP' 
+                  ? `£${(roundedTotal / adults).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : CurrencyService.formatCurrency(convertedTotal / adults, selectedCurrency)
                 }
               </span>
             </div>

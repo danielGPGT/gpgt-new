@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -1074,6 +1075,27 @@ export function PackageIntakeTest() {
   }
 
   const renderStep = () => {
+    // Show loading skeleton while checking team features
+    if (isNotB2B === null) {
+      return (
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-6 w-1/3" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+        </div>
+      );
+    }
+
     let stepIdx = currentStep;
     if (isNotB2B === false) stepIdx += 1; // shift index if client step is removed
     switch (stepIdx) {
@@ -1168,20 +1190,31 @@ export function PackageIntakeTest() {
             {/* Step Indicator */}
             <Card className="bg-gradient-to-b py-0 from-card/95 to-background/20 border border-border rounded-2xl shadow-sm">
               <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div 
-                    className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg"
-                    style={{ backgroundColor: currentStepConfig.color }}
-                  >
-                    <currentStepConfig.icon className="h-6 w-6" />
+                {isNotB2B === null ? (
+                  // Loading skeleton for step indicator
+                  <div className="flex items-center gap-4">
+                    <Skeleton className="w-12 h-12 rounded-xl" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-6 w-32" />
+                      <Skeleton className="h-4 w-48" />
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h2 className="text-xl font-semibold text-foreground">{currentStepConfig.title}</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {currentStepConfig.description || "Complete this step to continue."}
-                    </p>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <div 
+                      className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg"
+                      style={{ backgroundColor: currentStepConfig.color }}
+                    >
+                      <currentStepConfig.icon className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h2 className="text-xl font-semibold text-foreground">{currentStepConfig.title}</h2>
+                      <p className="text-sm text-muted-foreground">
+                        {currentStepConfig.description || "Complete this step to continue."}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 

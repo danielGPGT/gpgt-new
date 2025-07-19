@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Home,
   FilePlus2,
@@ -56,6 +57,14 @@ interface SidebarProps {
   onCollapsedChange?: (collapsed: boolean) => void;
 }
 
+// Skeleton Navigation Item Component
+const SkeletonNavItem = ({ collapsed }: { collapsed: boolean }) => (
+  <div className="flex items-center gap-3 px-3 py-2 rounded-lg">
+    <Skeleton className="w-5 h-5 rounded" />
+    {!collapsed && <Skeleton className="h-4 flex-1" />}
+  </div>
+);
+
 export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) {
   const { user } = useAuth();
   const location = useLocation();
@@ -87,8 +96,64 @@ export function Sidebar({ collapsed = false, onCollapsedChange }: SidebarProps) 
   ].some(v => v === null || v === undefined);
 
   if (permissionsLoading) {
-    // Optionally, show a spinner or skeleton here
-    return <div className="w-72 h-screen bg-[var(--sidebar)] border-r border-[var(--sidebar-border)] flex items-center justify-center"><span>Loading...</span></div>;
+    return (
+      <aside
+        className={`fixed left-0 top-0 h-screen z-40 flex flex-col transition-all duration-300 ${
+          collapsed ? "w-20" : "w-72"
+        } bg-[var(--sidebar)] border-r border-[var(--sidebar-border)]`}
+      >
+        {/* Branding & Collapse */}
+        <div className="flex items-center justify-between h-16 px-4 border-[var(--sidebar-border)]">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-8 rounded" />
+            {!collapsed && <Skeleton className="h-6 w-24" />}
+          </div>
+        </div>
+
+        {/* Main Navigation Skeleton */}
+        <nav className="flex-1 px-2 py-4">
+          <div className="space-y-1">
+            {Array.from({ length: 7 }, (_, i) => (
+              <SkeletonNavItem key={i} collapsed={collapsed} />
+            ))}
+          </div>
+
+          {/* CRM Section Skeleton */}
+          <div className="mt-6">
+            {!collapsed && <Skeleton className="h-4 w-8 mb-2" />}
+            <div className="space-y-1">
+              {Array.from({ length: 2 }, (_, i) => (
+                <SkeletonNavItem key={`crm-${i}`} collapsed={collapsed} />
+              ))}
+            </div>
+          </div>
+
+          {/* Inventory Section Skeleton */}
+          <div className="mt-6">
+            {!collapsed && <Skeleton className="h-4 w-16 mb-2" />}
+            <div className="space-y-1">
+              {Array.from({ length: 2 }, (_, i) => (
+                <SkeletonNavItem key={`inventory-${i}`} collapsed={collapsed} />
+              ))}
+            </div>
+          </div>
+        </nav>
+
+        {/* Bottom Section Skeleton */}
+        <div className="px-2 py-4 border-t border-[var(--sidebar-border)]">
+          <div className="space-y-1">
+            {Array.from({ length: 3 }, (_, i) => (
+              <SkeletonNavItem key={`bottom-${i}`} collapsed={collapsed} />
+            ))}
+          </div>
+          {/* User Avatar Skeleton */}
+          <div className={`flex items-center mt-4 ${collapsed ? "justify-center" : "justify-start gap-3"}`}>
+            <Skeleton className="w-8 h-8 rounded-full" />
+            {!collapsed && <Skeleton className="h-4 w-20" />}
+          </div>
+        </div>
+      </aside>
+    );
   }
 
   const handleToggleCollapse = () => {
